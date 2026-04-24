@@ -42,7 +42,7 @@ export default function Nominations({ user }: { user: User }) {
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       
-      setAddForm(p => ({ ...p, [fieldId]: data.filename }));
+      setAddForm(p => ({ ...p, [fieldId]: data.url || data.filename }));
     } catch (err: any) {
       alert(err.message || 'Failed to upload file');
     } finally {
@@ -291,7 +291,8 @@ export default function Nominations({ user }: { user: User }) {
                 const customField = activeSettings.nomination_custom_fields?.find((cf: any) => cf.id === key);
                 const label = customField ? customField.label : (key.charAt(0).toUpperCase() + key.slice(1));
                 const isFile = customField?.type === 'file' || (typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val));
-                const fileUrl = isFile ? (import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '') + '/uploads/' + encodeURIComponent(val as string) : '';
+                // Cloudinary returns full https:// URLs; fallback for legacy local filenames
+                const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val as string : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`) : '';
 
                 return (
                   <div key={key} className="p-3 rounded-xl border border-slate-200 dark:border-slate-700">

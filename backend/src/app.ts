@@ -4,8 +4,6 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import { rateLimit } from 'express-rate-limit';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 import authRoutes from './routes/auth.js';
 import formRoutes from './routes/forms.js';
@@ -19,8 +17,7 @@ import userRoutes from './routes/users.js';
 import settingsRoutes from './routes/settings.js';
 import uploadRoutes from './routes/uploads.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+
 
 const app = express();
 
@@ -29,8 +26,11 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   contentSecurityPolicy: false
 }));
+const allowedOrigins = process.env.FRONTEND_URL
+  ? [process.env.FRONTEND_URL]
+  : true; // Allow all in development
 app.use(cors({
-  origin: true, // Allow all origins in development
+  origin: allowedOrigins,
   credentials: true
 }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
@@ -45,8 +45,7 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// Static files
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Note: File uploads now served via Cloudinary — no local static folder needed
 
 // Routes
 app.use('/api/v1/auth', authRoutes);

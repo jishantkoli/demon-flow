@@ -178,7 +178,8 @@ export default function Submissions({ user }: { user: User }) {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {Object.entries(selectedNomination.additional_data).map(([key, val]) => {
                           const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
-                          const fileUrl = isFile ? (import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '') + '/uploads/' + encodeURIComponent(val as string) : '';
+                          // Cloudinary returns full https:// URLs; fallback for legacy local filenames
+                          const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val as string : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`) : '';
 
                           // Find label from form settings
                           let label = key;
@@ -215,7 +216,8 @@ export default function Submissions({ user }: { user: User }) {
                 {Object.keys(responses).length === 0 ? <p className="text-sm text-muted">No response data</p> :
                   Object.entries(responses).map(([key, val]) => {
                     const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
-                    const fileUrl = isFile ? (import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '') + '/uploads/' + encodeURIComponent(val) : '';
+                    // Cloudinary returns full https:// URLs; fallback for legacy local filenames
+                    const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`) : '';
 
                     // Find label from form schema
                     let label = key;

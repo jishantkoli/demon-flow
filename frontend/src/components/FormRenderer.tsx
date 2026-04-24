@@ -251,7 +251,10 @@ export default function FormRenderer({ fields, formType, settings, initialValues
           </div>
         );
       case 'file': {
-        const fileUrl = val ? (import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '') + '/uploads/' + encodeURIComponent(val) : '';
+        // Cloudinary returns full https:// URLs; fallback for legacy local filenames
+        const fileUrl = val
+          ? (val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`)
+          : '';
         return wrap(
           <div className="mt-1">
             {val ? (
@@ -294,7 +297,8 @@ export default function FormRenderer({ fields, formType, settings, initialValues
                       
                       if (!res.ok) throw new Error('Upload failed');
                       const data = await res.json();
-                      set(f.id, data.filename);
+                      // Store the full Cloudinary URL so it can be used directly
+                      set(f.id, data.url || data.filename);
                     } catch (err) {
                       console.error('File upload error:', err);
                       setErrors(p => ({ ...p, [f.id]: 'File upload failed' }));
