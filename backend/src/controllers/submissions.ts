@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { Submission } from '../models/Submission.js';
 import { Form } from '../models/Form.js';
+import { User } from '../models/User.js';
+import { Notification } from '../models/Notification.js';
 import { AuthRequest } from '../middleware/auth.js';
 
 export const submitForm = async (req: AuthRequest, res: Response) => {
@@ -102,6 +104,40 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
         userAgent: req.headers['user-agent']
       }
     });
+
+    const recipientUserIds = new Set<string>();
+
+    const admins = await User.find({ role: 'admin', isActive: true }).select('_id');
+    admins.forEach((admin: any) => recipientUserIds.add(String(admin._id)));
+
+    if (form.adminId) {
+      recipientUserIds.add(String(form.adminId));
+    }
+
+    if (submission.schoolCode) {
+      const functionaries = await User.find({
+        role: 'functionary',
+        isActive: true,
+        'profile.schoolCode': submission.schoolCode
+      }).select('_id');
+      functionaries.forEach((fn: any) => recipientUserIds.add(String(fn._id)));
+    }
+
+    if (req.user?._id) {
+      recipientUserIds.delete(String(req.user._id));
+    }
+
+    if (recipientUserIds.size > 0) {
+      const docs = Array.from(recipientUserIds).map((userId) => ({
+        userId,
+        title: `New submission: ${form.title}`,
+        message: `${submission.userName || submission.userEmail || 'A user'} submitted a response${submission.schoolCode ? ` (${submission.schoolCode})` : ''}.`,
+        type: 'submission',
+        entityType: 'submission',
+        entityId: submission._id
+      }));
+      await Notification.insertMany(docs);
+    }
 
     res.status(201).json({ ...submission.toObject(), id: submission._id, is_draft: submission.isDraft, school_code: submission.schoolCode });
   } catch (err: any) {
