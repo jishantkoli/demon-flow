@@ -39,5 +39,5 @@
     "@types/nodemailer": "^8.0.0",
     "mongodb-memory-server": "^11.0.1",
     "typescript": "^6.0.3"
-  },
+  }
 }
