@@ -44,14 +44,16 @@ export const createUser = async (req: AuthRequest, res: Response) => {
     const passwordHash = await bcrypt.hash(password_hash || 'School@123', salt);
 
     const user = await User.create({
-      name,
+      profile: { 
+        fullName: name || 'User',
+        phone,
+        schoolName: school_name,
+        district
+      },
       email,
       passwordHash,
       role,
-      phone,
-      school_name,
-      district,
-      status
+      isActive: status !== 'inactive'
     });
 
     res.status(201).json({ ...user.toObject(), id: user._id });

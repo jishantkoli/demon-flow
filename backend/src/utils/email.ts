@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { SystemSetting } from '../models/SystemSetting';
+import { SystemSetting } from '../models/SystemSetting.js';
 
 export const sendEmail = async (to: string, subject: string, html: string) => {
   try {
