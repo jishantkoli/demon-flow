@@ -5,7 +5,8 @@ import { api } from '../lib/api';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
-import { UserPlus, Send, Copy, Link2, Upload, RefreshCw, QrCode, MessageSquare } from 'lucide-react';
+import { UserPlus, Send, Copy, Link2, Upload, RefreshCw, QrCode, MessageSquare, Trash2 } from 'lucide-react';
+import { useRef } from 'react';
 
 export default function Nominations({ user }: { user: User }) {
   const [searchParams] = useSearchParams();
@@ -18,24 +19,70 @@ export default function Nominations({ user }: { user: User }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [selectedForm, setSelectedForm] = useState<string>(initialFormId);
-  const [addForm, setAddForm] = useState({ teacher_name: '', teacher_email: '', teacher_phone: '', link_type: 'otp' });
+  const [addForm, setAddForm] = useState<Record<string, any>>({ teacher_name: '', teacher_email: '', teacher_phone: '', link_type: 'otp' });
   const [bulkText, setBulkText] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
+
+  const handleFileUpload = async (fieldId: string, file: File) => {
+    try {
+      setUploading(fieldId);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // We'll create this endpoint in the backend
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1'}/uploads`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: formData
+      });
+
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      
+      setAddForm(p => ({ ...p, [fieldId]: data.filename }));
+    } catch (err: any) {
+      alert(err.message || 'Failed to upload file');
+    } finally {
+      setUploading(null);
+    }
+  };
   const [selectedNom, setSelectedNom] = useState<any>(null);
   const [showDetails, setShowDetails] = useState(false);
+
+  const activeFormObj = forms.find(f => String(f.id) === String(selectedForm));
+  const activeSettings = activeFormObj?.settings ? (typeof activeFormObj.settings === 'string' ? JSON.parse(activeFormObj.settings) : activeFormObj.settings) : {};
 
   const schoolCode = user.school_code || (user.email?.match(/^head\.([a-z0-9]+)@/i)?.[1]?.toUpperCase()) || '';
   const isAdmin = user.role === 'admin';
 
   const fetchData = async () => {
     try {
+      let url = '/nominations?';
+      if (!isAdmin) url += `functionary_id=${user.id}&`;
       const [n, f] = await Promise.all([
-        api.get(`/nominations?functionary_id=${user.id}`),
+        api.get(url),
         api.get('/forms?status=active')
       ]);
       setNominations(n); setForms(f);
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
   useEffect(() => { fetchData(); }, []);
+
+  // Reset addForm when selectedForm changes to ensure we have the right fields
+  useEffect(() => {
+    if (selectedForm) {
+      const initial: Record<string, any> = { teacher_name: '', teacher_email: '', teacher_phone: '', link_type: activeSettings.teacher_login || 'otp' };
+      if (activeSettings.nomination_custom_fields) {
+        activeSettings.nomination_custom_fields.forEach((cf: any) => {
+          initial[cf.id] = '';
+        });
+      }
+      setAddForm(initial);
+    }
+  }, [selectedForm, activeFormObj]);
 
   // Smart filter: if form_id is provided but no nominations exist for it, show all
   useEffect(() => {
@@ -51,18 +98,40 @@ export default function Nominations({ user }: { user: User }) {
 
   const handleAddTeacher = async () => {
     if (!selectedForm) return alert('Select a form first');
-    if (!addForm.teacher_name || !addForm.teacher_email) return alert('Please fill in name and email');
+    
+    // Validation
+    if (!addForm.teacher_name) return alert('Teacher name is required');
+    if (activeSettings.require_email !== false && !addForm.teacher_email) return alert('Email is required');
+    if (activeSettings.require_phone && !addForm.teacher_phone) return alert('Phone number is required');
+    
+    const customFields = activeSettings.nomination_custom_fields || [];
+    for (const cf of customFields) {
+      if (cf.required && !addForm[cf.id]) return alert(`${cf.label} is required`);
+    }
     
     try {
       setLoading(true);
-      await api.post('/nominations', {
-        form_id: selectedForm, functionary_id: user.id, teacher_name: addForm.teacher_name,
-        teacher_email: addForm.teacher_email, teacher_phone: addForm.teacher_phone,
-        school_code: schoolCode, link_type: addForm.link_type,
-        status: 'pending'
+      // Construct additional data from custom fields
+      const additional_data: Record<string, any> = {};
+      customFields.forEach((cf: any) => {
+        additional_data[cf.id] = addForm[cf.id];
       });
-      setShowAdd(false); setAddForm({ teacher_name: '', teacher_email: '', teacher_phone: '', link_type: 'otp' }); 
+
+      await api.post('/nominations', {
+        form_id: selectedForm, 
+        functionary_id: user.id, 
+        teacher_name: addForm.teacher_name,
+        teacher_email: addForm.teacher_email, 
+        teacher_phone: addForm.teacher_phone,
+        school_code: schoolCode, 
+        link_type: addForm.link_type,
+        status: 'pending',
+        additional_data // Send custom fields in additional_data
+      });
+      setShowAdd(false); 
+      alert('Teacher nominated successfully! Email link has been sent.');
       fetchData();
+      setAddForm({ teacher_name: '', teacher_email: '', teacher_phone: '', link_type: 'otp' });
       // Redirect back to forms if we came from there
       if (initialFormId) {
         setTimeout(() => navigate('/forms'), 1000);
@@ -122,7 +191,7 @@ export default function Nominations({ user }: { user: User }) {
   };
 
   const copyLink = (nom: any) => {
-    const link = `${window.location.origin}/form/fill?token=${nom.unique_token}&sc=${nom.school_code}`;
+    const link = `${window.location.origin}/fill/${nom.form_id}?token=${nom.unique_token}&sc=${nom.school_code}`;
     navigator.clipboard.writeText(link).then(() => alert('Link copied!'));
   };
 
@@ -212,6 +281,31 @@ export default function Nominations({ user }: { user: User }) {
                 <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Invited At</p>
                 <p className="text-sm font-semibold">{selectedNom.invited_at ? new Date(selectedNom.invited_at).toLocaleDateString() : 'Not Invited'}</p>
               </div>
+              {selectedNom.teacher_phone && (
+                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Phone</p>
+                  <p className="text-sm font-semibold">{selectedNom.teacher_phone}</p>
+                </div>
+              )}
+              {selectedNom.additional_data && Object.entries(selectedNom.additional_data).map(([key, val]) => {
+                const customField = activeSettings.nomination_custom_fields?.find((cf: any) => cf.id === key);
+                const label = customField ? customField.label : (key.charAt(0).toUpperCase() + key.slice(1));
+                const isFile = customField?.type === 'file' || (typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val));
+                const fileUrl = isFile ? (import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '') + '/uploads/' + encodeURIComponent(val as string) : '';
+
+                return (
+                  <div key={key} className="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">{label}</p>
+                    {isFile ? (
+                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-primary hover:underline flex items-center gap-1 mt-1">
+                        <Link2 size={12} /> View File
+                      </a>
+                    ) : (
+                      <p className="text-sm font-semibold">{String(val)}</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
@@ -229,24 +323,109 @@ export default function Nominations({ user }: { user: User }) {
       {/* Add Teacher Modal */}
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Teacher Nomination">
         <div className="space-y-4">
-          <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Teacher Name</label>
-            <input type="text" value={addForm.teacher_name} onChange={e => setAddForm(p => ({ ...p, teacher_name: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none" placeholder="Full name" /></div>
-          <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Email</label>
-            <input type="email" value={addForm.teacher_email} onChange={e => setAddForm(p => ({ ...p, teacher_email: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none" placeholder="teacher@email.com" /></div>
-          <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Phone</label>
-            <input type="tel" value={addForm.teacher_phone} onChange={e => setAddForm(p => ({ ...p, teacher_phone: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none" placeholder="+91..." /></div>
-          {isAdmin && (
-          <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Access Type</label>
-            <select value={addForm.link_type} onChange={e => setAddForm(p => ({ ...p, link_type: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none">
-              <option value="otp">OTP Required</option><option value="direct">Direct Link (No Login)</option></select></div>
+          {!selectedForm && (
+            <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Select Form First</label>
+              <select value={selectedForm} onChange={e => setSelectedForm(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none">
+                <option value="">Choose a form...</option>
+                {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
+              </select></div>
           )}
-          {!isAdmin && <input type="hidden" value="otp" onChange={() => {}} />}
+
+          {selectedForm && (
+             <>
+               <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Teacher Name *</label>
+                 <input type="text" value={addForm.teacher_name} onChange={e => setAddForm(p => ({ ...p, teacher_name: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none" placeholder="Full name" /></div>
+               
+               <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Email {activeSettings.require_email !== false ? '*' : ''}</label>
+                 <input type="email" value={addForm.teacher_email} onChange={e => setAddForm(p => ({ ...p, teacher_email: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none" placeholder="teacher@email.com" /></div>
+               
+               {activeSettings.require_phone && (
+                  <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Phone *</label>
+                    <input type="tel" value={addForm.teacher_phone} onChange={e => setAddForm(p => ({ ...p, teacher_phone: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none" placeholder="+91..." /></div>
+                )}
+
+                {/* Custom Fields */}
+                {((activeSettings.nomination_custom_fields as any[]) || []).map((cf: any) => (
+                  <div key={cf.id}><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">{cf.label} {cf.required ? '*' : ''}</label>
+                    {cf.type === 'dropdown' ? (
+                      <select value={addForm[cf.id]} onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none">
+                        <option value="">Select Option</option>
+                        {(cf.options || []).map((o: string) => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : cf.type === 'radio' ? (
+                      <div className="flex flex-wrap gap-3 mt-1">
+                        {(cf.options || []).map((o: string) => (
+                          <label key={o} className="flex items-center gap-1.5 cursor-pointer">
+                            <input type="radio" name={cf.id} checked={addForm[cf.id] === o} onChange={() => setAddForm(p => ({ ...p, [cf.id]: o }))} className="w-4 h-4 accent-primary" />
+                            <span className="text-sm">{o}</span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : cf.type === 'checkbox' ? (
+                      <div className="flex flex-wrap gap-3 mt-1">
+                        {(cf.options || []).map((o: string) => {
+                          const values = (addForm[cf.id] || '').split(',').map((v: string) => v.trim()).filter(Boolean);
+                          const checked = values.includes(o);
+                          return (
+                            <label key={o} className="flex items-center gap-1.5 cursor-pointer">
+                              <input type="checkbox" checked={checked} onChange={() => {
+                                const newValues = checked ? values.filter((v: string) => v !== o) : [...values, o];
+                                setAddForm(p => ({ ...p, [cf.id]: newValues.join(', ') }));
+                              }} className="w-4 h-4 rounded accent-primary" />
+                              <span className="text-sm">{o}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : cf.type === 'textarea' ? (
+                      <textarea value={addForm[cf.id]} onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} rows={3} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none resize-none" placeholder={cf.label} />
+                    ) : cf.type === 'file' ? (
+                      <div className="mt-1">
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleFileUpload(cf.id, file);
+                          }}
+                        />
+                        {addForm[cf.id] ? (
+                          <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                            <span className="text-xs flex-1 truncate font-medium">{addForm[cf.id]}</span>
+                            <button onClick={() => setAddForm(p => ({ ...p, [cf.id]: '' }))} className="p-1 text-rose-500 hover:bg-rose-100 rounded-md transition-colors"><Trash2 size={12} /></button>
+                          </div>
+                        ) : (
+                          <div onClick={() => fileInputRef.current?.click()}
+                            className="border border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-3 text-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            {uploading === cf.id ? (
+                              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-1" />
+                            ) : (
+                              <Upload size={16} className="mx-auto text-slate-400 mb-1" />
+                            )}
+                            <p className="text-[10px] text-slate-500">{uploading === cf.id ? 'Uploading...' : 'Click to upload file'}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <input type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'} value={addForm[cf.id]} onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none" />
+                    )}</div>
+                ))}
+
+                {isAdmin && (
+                 <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Access Type</label>
+                   <select value={addForm.link_type} onChange={e => setAddForm(p => ({ ...p, link_type: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none">
+                     <option value="otp">OTP Required</option><option value="direct">Direct Link (No Login)</option></select></div>
+               )}
+             </>
+           )}
+          
           <p className="text-[10px] text-slate-500 dark:text-slate-400">School code <span className="font-bold">{schoolCode}</span> will be auto-attached. Teacher account auto-created if new.</p>
           <div className="flex justify-end gap-3">
             <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:bg-slate-900">Cancel</button>
-            <button onClick={handleAddTeacher} disabled={loading} className="px-6 py-2 bg-primary text-white text-sm rounded-xl font-semibold hover:bg-primary-hover disabled:opacity-50 flex items-center gap-2">
+            <button onClick={handleAddTeacher} disabled={loading || !selectedForm} className="px-6 py-2 bg-primary text-white text-sm rounded-xl font-semibold hover:bg-primary-hover disabled:opacity-50 flex items-center gap-2">
               {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-              {loading ? 'Adding...' : 'Add Teacher'}
+              {loading ? 'Adding...' : 'Add & Send Link'}
             </button>
           </div>
         </div>

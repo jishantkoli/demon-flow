@@ -3,6 +3,7 @@ import { Submission } from '../models/Submission.js';
 import { Level } from '../models/Level.js';
 import { Review } from '../models/Review.js';
 import { User } from '../models/User.js';
+import { Form } from '../models/Form.js';
 import { AuthRequest } from '../middleware/auth.js';
 import mongoose from 'mongoose';
 
@@ -12,7 +13,15 @@ export const getLevels = async (req: AuthRequest, res: Response) => {
   try {
     const { form_id } = req.query;
     const query: any = {};
-    if (form_id) query.formId = form_id;
+    if (form_id) {
+      if (!mongoose.Types.ObjectId.isValid(form_id as string)) {
+        const form = await Form.findOne({ shareableLink: form_id });
+        if (!form) return res.status(200).json([]);
+        query.formId = form._id;
+      } else {
+        query.formId = form_id;
+      }
+    }
     const levels = await Level.find(query).sort({ levelNumber: 1 });
     res.status(200).json(levels.map(l => ({ ...l.toObject(), id: l._id, level_number: l.levelNumber })));
   } catch (err: any) {
@@ -44,6 +53,9 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
     const { form_id, submission_id } = req.query;
 
     if (submission_id) {
+      if (!mongoose.Types.ObjectId.isValid(submission_id as string)) {
+        return res.status(400).json({ error: 'Invalid submission_id format' });
+      }
       const sub = await Submission.findById(submission_id).populate('formId');
       if (!sub) return res.status(404).json({ error: 'Submission not found' });
 
@@ -88,8 +100,22 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
     }
 
     if (form_id) {
-      const submissions = await Submission.find({ formId: form_id, isDraft: false });
-      const levels = await Level.find({ formId: form_id }).sort({ levelNumber: 1 });
+      if (!mongoose.Types.ObjectId.isValid(form_id as string)) {
+        // If not a valid ObjectId, maybe it's a shareableLink? 
+        // Let's try to find the form first
+        const form = await Form.findOne({ shareableLink: form_id });
+        if (!form) {
+          // If still not found, return empty results instead of crashing
+          return res.status(200).json({ submissions: [], levels: [] });
+        }
+        // Use the actual form _id
+        var actualFormId: any = form._id;
+      } else {
+        var actualFormId: any = form_id;
+      }
+
+      const submissions = await Submission.find({ formId: actualFormId, isDraft: false });
+      const levels = await Level.find({ formId: actualFormId }).sort({ levelNumber: 1 });
       const reviews = await Review.find({ submission_id: { $in: submissions.map(s => s._id) } });
 
       const subData = submissions.map(s => {
@@ -137,7 +163,14 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
     const level = await Level.findById(level_id);
     if (!level) return res.status(404).json({ error: 'Level not found' });
 
-    let query: any = { formId: form_id, isDraft: false };
+    let actualFormId = form_id;
+    if (!mongoose.Types.ObjectId.isValid(form_id)) {
+      const form = await Form.findOne({ shareableLink: form_id });
+      if (!form) return res.status(404).json({ error: 'Form not found' });
+      actualFormId = form._id;
+    }
+
+    let query: any = { formId: actualFormId, isDraft: false };
     
     if (filter_type === 'form_score_gte') {
       query['score.percentage'] = { $gte: parseFloat(filter_value) };

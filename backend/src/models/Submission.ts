@@ -5,7 +5,8 @@ const submissionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   userName: String,
   userEmail: String,
-  formTitle: String,
+   schoolCode: String,
+   formTitle: String,
   isDraft: { type: Boolean, default: false },
   responses: [{
     fieldId: String,

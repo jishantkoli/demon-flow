@@ -318,9 +318,10 @@ export default function Forms({ user }: { user: User }) {
                   {/* Actions */}
                   <div className="flex gap-2 mt-4">
                     {canFill && user.role !== 'functionary' && (
-                      <button onClick={() => navigate(`/fill/${row.id}`)}
+                      <button onClick={() => user.role === 'teacher' ? navigate(`/fill/${row.id}`) : openPreviewModal(row)}
                         className="flex-1 py-2.5 bg-accent-green text-white rounded-xl text-sm font-bold hover:bg-accent-green-hover transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm">
-                        <Play size={14} /> Fill Form
+                        {user.role === 'teacher' ? <Play size={14} /> : <Eye size={14} />}
+                        {user.role === 'teacher' ? 'Fill Form' : 'Preview Form'}
                       </button>
                     )}
                     {canFill && user.role === 'functionary' && row.form_type === 'nomination' && (
@@ -339,7 +340,7 @@ export default function Forms({ user }: { user: User }) {
                     {isAdmin && (
                       <button onClick={() => openBuilder(row)}
                         className={`${canFill ? '' : 'flex-1'} py-2.5 px-4 bg-primary/10 text-primary rounded-xl text-sm font-bold hover:bg-primary/20 transition-colors flex items-center justify-center gap-2 min-h-[44px]`}>
-                        <Pencil size={14} /> {canFill ? 'Fields' : 'Edit Fields'}
+                        <Pencil size={14} /> {canFill ? 'Edit' : 'Edit Fields'}
                       </button>
                     )}
                     {!canFill && !isAdmin && (

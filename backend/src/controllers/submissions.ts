@@ -91,6 +91,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       userId: req.user?._id || null,
       userName: req.body.user_name || req.user?.profile?.fullName,
       userEmail: req.body.user_email || req.user?.email,
+      schoolCode: req.body.school_code || req.user?.profile?.schoolCode,
       formTitle: req.body.form_title || form.title,
       responses,
       score,
@@ -102,7 +103,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       }
     });
 
-    res.status(201).json({ ...submission.toObject(), id: submission._id, is_draft: submission.isDraft });
+    res.status(201).json({ ...submission.toObject(), id: submission._id, is_draft: submission.isDraft, school_code: submission.schoolCode });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

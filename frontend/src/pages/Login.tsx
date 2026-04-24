@@ -38,7 +38,7 @@ export default function Login({ onLogin }: { onLogin: (u: any) => void }) {
        const res = await requestOTP(email);
        setOtpSent(true);
        if (res.school_code) setSchoolCode(res.school_code);
-       setSuccess('OTP sent! Use 123456 for localhost testing.');
+       setSuccess('OTP sent! Use 123456 for local testing.');
      } catch (err: any) { setError(err.message); } finally { setLoading(false); }
    };
   
@@ -88,7 +88,7 @@ export default function Login({ onLogin }: { onLogin: (u: any) => void }) {
                 </button>
               ))}
               <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200/60">
-                <p className="text-[11px] text-amber-700 font-medium flex items-center gap-1.5"><Key size={12} /> Localhost OTP: <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono font-bold">123456</code></p>
+                <p className="text-[11px] text-amber-700 font-medium flex items-center gap-1.5"><Key size={12} /> Development OTP: <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono font-bold">123456</code></p>
               </div>
               <div className="p-3 bg-blue-50 rounded-xl border border-blue-200/60">
                 <p className="text-[11px] text-blue-700 font-medium flex items-center gap-1.5"><Info size={12} /> Functionary: 30min session · Admin: 24h session</p>

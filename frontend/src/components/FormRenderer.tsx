@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Save, Send, ChevronRight, CheckCircle, AlertCircle, Upload, X, FileText } from 'lucide-react';
+import { Clock, Save, Send, ChevronRight, CheckCircle, AlertCircle, Upload, X, FileText, ExternalLink } from 'lucide-react';
 
 /* ─── Field schema ─── */
 export interface FormField {
@@ -250,18 +250,60 @@ export default function FormRenderer({ fields, formType, settings, initialValues
             })}
           </div>
         );
-      case 'file':
+      case 'file': {
+        const fileUrl = val ? (import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '') + '/uploads/' + encodeURIComponent(val) : '';
         return wrap(
           <div className="mt-1">
             {val ? (
               <div className="flex items-center gap-3 p-3.5 bg-slate-50 dark:bg-slate-700 rounded-xl border-2 border-slate-200 dark:border-slate-600">
                 <FileText size={18} className="text-blue-600 flex-shrink-0" />
                 <span className="text-sm flex-1 truncate font-medium text-slate-800 dark:text-slate-100">{val}</span>
-                {!dis && <button onClick={() => set(f.id, null)} className="text-slate-400 hover:text-red-500 flex-shrink-0"><X size={16} /></button>}
+                <div className="flex items-center gap-2">
+                  <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
+                    className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                    title="View File">
+                    <ExternalLink size={16} />
+                  </a>
+                  {!dis && <button onClick={() => set(f.id, null)} className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg transition-colors"><X size={16} /></button>}
+                </div>
               </div>
             ) : (
               <div className={`border-2 border-dashed rounded-xl p-8 text-center ${dis ? 'border-slate-300 opacity-60' : 'border-slate-300 dark:border-slate-600 hover:border-blue-500 cursor-pointer bg-white dark:bg-slate-800'}`}
-                onClick={() => !dis && set(f.id, `file_${Date.now()}.pdf`)}>
+                onClick={() => {
+                  if (dis) return;
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  if (f.allowedFormats) input.accept = f.allowedFormats.map(fmt => `.${fmt.toLowerCase()}`).join(',');
+                  input.onchange = async (e: any) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    try {
+                      setSubmitting(true);
+                      const uploadUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1') + '/uploads';
+                      const res = await fetch(uploadUrl, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                        }
+                      });
+                      
+                      if (!res.ok) throw new Error('Upload failed');
+                      const data = await res.json();
+                      set(f.id, data.filename);
+                    } catch (err) {
+                      console.error('File upload error:', err);
+                      setErrors(p => ({ ...p, [f.id]: 'File upload failed' }));
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  };
+                  input.click();
+                }}>
                 <Upload size={28} className="mx-auto text-slate-400 mb-2" />
                 <p className="text-sm text-slate-600 dark:text-slate-300 font-semibold">Click to upload</p>
                 {f.allowedFormats && <p className="text-[11px] text-slate-500 mt-1">Allowed: <span className="font-semibold">{f.allowedFormats.join(', ').toUpperCase()}</span></p>}
@@ -270,6 +312,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
             )}
           </div>
         );
+      }
       case 'rating':
         return wrap(
           <div className="flex gap-2 mt-1">

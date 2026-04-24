@@ -16,6 +16,8 @@ import notificationRoutes from './routes/notifications.js';
 import nominationRoutes from './routes/nominations.js';
 import reviewRoutes from './routes/reviews.js';
 import userRoutes from './routes/users.js';
+import settingsRoutes from './routes/settings.js';
+import uploadRoutes from './routes/uploads.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,7 +46,7 @@ const limiter = rateLimit({
 app.use('/api', limiter);
 
 // Static files
-app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Routes
 app.use('/api/v1/auth', authRoutes);
@@ -56,6 +58,8 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/nominations', nominationRoutes);
 app.use('/api/v1', reviewRoutes); // Handles /review-levels, /shortlist, /reviews, /review-scores
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/settings', settingsRoutes);
+app.use('/api/v1/uploads', uploadRoutes);
 
 // Health check
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));

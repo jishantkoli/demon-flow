@@ -1,8 +1,10 @@
 import express from 'express';
-import { getNominations, createNomination, updateNomination, deleteNomination } from '../controllers/nominations.js';
+import { getNominations, createNomination, updateNomination, deleteNomination, getNominationByToken } from '../controllers/nominations.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
+
+router.get('/token/:token', getNominationByToken);
 
 router.use(authenticate);
 

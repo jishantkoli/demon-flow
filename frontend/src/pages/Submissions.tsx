@@ -12,6 +12,8 @@ export default function Submissions({ user }: { user: User }) {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<any>(null);
+  const [selectedFormObj, setSelectedFormObj] = useState<any>(null);
+  const [selectedNomination, setSelectedNomination] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -34,7 +36,35 @@ export default function Submissions({ user }: { user: User }) {
 
   const openDetail = async (sub: any) => {
     setSelected(sub);
-    try { setComments(await api.get(`/comments?submission_id=${sub.id}`)); } catch { setComments([]); }
+    setSelectedNomination(null);
+    setSelectedFormObj(null);
+    try { 
+      // 1. Fetch form object to get schema/settings
+      const formRes = await api.get(`/forms?id=${sub.form_id}`);
+      if (formRes) setSelectedFormObj(formRes);
+
+      // 2. Fetch comments
+      const comms = await api.get(`/comments?submission_id=${sub.id}`);
+      setComments(comms);
+
+      // 3. Fetch nomination data using email
+      // We try the email from submission first
+      if (sub.user_email && sub.user_email !== 'N/A') {
+        // Try specific form first
+        let noms = await api.get(`/nominations?form_id=${sub.form_id}&teacher_email=${sub.user_email}`);
+        if (!noms || noms.length === 0) {
+          // Fallback to any nomination for this teacher email
+          noms = await api.get(`/nominations?teacher_email=${sub.user_email}`);
+        }
+        
+        if (noms && noms.length > 0) {
+          setSelectedNomination(noms[0]);
+        }
+      }
+    } catch (err) { 
+      console.error("Error loading submission details:", err);
+      setComments([]); 
+    }
   };
 
   const addComment = async () => {
@@ -115,14 +145,108 @@ export default function Submissions({ user }: { user: User }) {
               <ExternalLink size={13} /> View Full Response (with form layout{canSeeScore ? ' + scoring' : ''})
             </button>
 
+            {/* Nomination Data (Filled by Head/Functionary) */}
+            {selectedNomination && (
+              <div>
+                <h4 className="text-sm font-bold mb-2 flex items-center gap-2">
+                  <Inbox size={14} className="text-primary" /> Nomination Details (Filled by {selectedNomination.functionary_name || 'Head'})
+                </h4>
+                <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-muted uppercase font-bold">Nominated Name</p>
+                      <p className="text-sm font-semibold">{selectedNomination.teacher_name}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-muted uppercase font-bold">Nominated Email</p>
+                      <p className="text-sm font-semibold">{selectedNomination.teacher_email}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-muted uppercase font-bold">Nominated By</p>
+                      <p className="text-sm font-semibold text-primary">{selectedNomination.functionary_name || 'School Head'}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-muted uppercase font-bold">School Code</p>
+                      <p className="text-sm font-semibold font-mono">{selectedNomination.school_code}</p>
+                    </div>
+                  </div>
+
+                  {/* Custom fields from nomination */}
+                  {selectedNomination.additional_data && Object.keys(selectedNomination.additional_data).length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-primary/10 space-y-2">
+                      <p className="text-[10px] text-muted uppercase font-bold mb-2">Form Data Filled by Functionary</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {Object.entries(selectedNomination.additional_data).map(([key, val]) => {
+                          const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+                          const fileUrl = isFile ? (import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '') + '/uploads/' + encodeURIComponent(val as string) : '';
+
+                          // Find label from form settings
+                          let label = key;
+                          if (selectedFormObj?.settings) {
+                            const settings = typeof selectedFormObj.settings === 'string' ? JSON.parse(selectedFormObj.settings) : selectedFormObj.settings;
+                            const customField = settings.nomination_custom_fields?.find((cf: any) => cf.id === key);
+                            if (customField) label = customField.label;
+                          }
+
+                          return (
+                            <div key={key} className="space-y-1">
+                              <p className="text-[10px] text-muted font-bold">{label}</p>
+                              {isFile ? (
+                                <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
+                                  className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
+                                  <ExternalLink size={10} /> View File ({val as string})
+                                </a>
+                              ) : (
+                                <p className="text-sm font-semibold">{String(val)}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Raw responses */}
             <div><h4 className="text-sm font-bold mb-2">Response Data</h4>
               <div className="bg-surface rounded-xl p-4 space-y-2">
                 {Object.keys(responses).length === 0 ? <p className="text-sm text-muted">No response data</p> :
-                  Object.entries(responses).map(([key, val]) => (<div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 py-1.5 border-b border-border/30 last:border-0">
-                    <span className="text-xs font-semibold text-muted min-w-[160px] shrink-0">{key}:</span>
-                    <span className="text-sm break-words">{Array.isArray(val) ? (val as any[]).join(', ') : typeof val === 'object' ? JSON.stringify(val) : String(val)}</span>
-                  </div>))}
+                  Object.entries(responses).map(([key, val]) => {
+                    const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+                    const fileUrl = isFile ? (import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '') + '/uploads/' + encodeURIComponent(val) : '';
+
+                    // Find label from form schema
+                    let label = key;
+                    const schema = selectedFormObj?.form_schema || selectedFormObj?.schema;
+                    if (schema) {
+                      const schemaObj = typeof schema === 'string' ? JSON.parse(schema) : schema;
+                      schemaObj.sections?.forEach((s: any) => {
+                        const field = s.fields?.find((f: any) => f.id === key);
+                        if (field) label = field.label;
+                      });
+                    }
+
+                    return (
+                      <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 py-1.5 border-b border-border/30 last:border-0">
+                        <span className="text-xs font-semibold text-muted min-w-[160px] shrink-0">{label}:</span>
+                        <span className="text-sm break-words flex flex-wrap items-center gap-2">
+                          {isFile ? (
+                            <>
+                              <span className="font-medium text-primary">{val as string}</span>
+                              <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-bold hover:bg-primary/20 transition-colors">
+                                <ExternalLink size={10} /> View File
+                              </a>
+                            </>
+                          ) : (
+                            Array.isArray(val) ? (val as any[]).join(', ') : typeof val === 'object' ? JSON.stringify(val) : String(val)
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
 

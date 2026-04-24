@@ -13,10 +13,28 @@ export default function Dashboard({ user }: { user: User }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([api.get('/stats'), api.get('/submissions'), api.get('/audit-logs?limit=10')])
-      .then(([s, subs, logs]) => { setStats(s); setRecentSubs(Array.isArray(subs) ? subs.slice(0, 6) : []); setRecentLogs(Array.isArray(logs) ? logs.slice(0, 10) : []); })
-      .catch(console.error).finally(() => setLoading(false));
-  }, []);
+    const fetchStats = async () => {
+      try {
+        const [s, subs] = await Promise.all([api.get('/stats'), api.get('/submissions')]);
+        setStats(s);
+        setRecentSubs(Array.isArray(subs) ? subs.slice(0, 6) : []);
+      } catch (err) {
+        console.error('Error fetching dashboard stats:', err);
+      }
+    };
+
+    const fetchLogs = async () => {
+      if (user.role !== 'admin') return;
+      try {
+        const logs = await api.get('/audit-logs?limit=10');
+        setRecentLogs(Array.isArray(logs) ? logs.slice(0, 10) : []);
+      } catch (err) {
+        console.error('Error fetching audit logs:', err);
+      }
+    };
+
+    Promise.all([fetchStats(), fetchLogs()]).finally(() => setLoading(false));
+  }, [user.role]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div>;
   const s = stats || {};

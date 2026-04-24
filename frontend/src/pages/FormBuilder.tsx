@@ -4,6 +4,7 @@ import {
   Save, Plus, Trash2, GripVertical, ArrowLeft, Eye, Settings2,
   Type, AlignLeft, Hash, Mail, Phone, CalendarDays, ListChecks, CheckSquare, Radio, Upload, HelpCircle,
   Link2, QrCode, Copy, ChevronDown, ChevronRight,
+  LayoutDashboard, Pencil, Settings, History, Download, Trash, AlertCircle, PlusCircle, Check
 } from 'lucide-react';
 import { api } from '../lib/api';
 
@@ -384,8 +385,7 @@ export default function FormBuilder() {
 
             <div className="mt-3">
               <label className="text-xs block"><span className="text-muted">Access Mode</span>
-                <select className="select mt-1" value={(form.settings.auth_mode as string) || 'login'} onChange={e => patchSettings({ auth_mode: e.target.value })}>
-                  <option value="login">Login Required</option>
+                <select className="select mt-1" value={(form.settings.auth_mode as string) || 'otp'} onChange={e => patchSettings({ auth_mode: e.target.value })}>
                   <option value="otp">OTP based (Email)</option>
                   <option value="anonymous">No Login (Anonymous)</option>
                 </select></label>
@@ -411,8 +411,70 @@ export default function FormBuilder() {
                     <option value="otp">OTP via Link</option>
                     <option value="direct">Direct Access (Link only)</option>
                   </select></label>
-                <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Email</span><Toggle checked={form.settings.require_email !== false} onChange={v => patchSettings({ require_email: v })} /></div>
-                <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Phone</span><Toggle checked={!!form.settings.require_phone} onChange={v => patchSettings({ require_phone: v })} /></div>
+                
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between opacity-60"><span className="text-sm">Require Teacher Name</span><div className="w-8 h-4 rounded-full bg-mint relative"><div className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-white shadow" /></div></div>
+                  <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Email</span><Toggle checked={form.settings.require_email !== false} onChange={v => patchSettings({ require_email: v })} /></div>
+                  <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Phone</span><Toggle checked={!!form.settings.require_phone} onChange={v => patchSettings({ require_phone: v })} /></div>
+                </div>
+
+                <div className="pt-2 border-t border-border mt-2">
+                  <div className="text-[10px] font-bold uppercase text-muted mb-2">Custom Nomination Fields</div>
+                  <div className="space-y-2">
+                    {((form.settings.nomination_custom_fields as any[]) || []).map((cf, cfi) => (
+                      <div key={cfi} className="flex flex-col gap-1.5 p-2 bg-canvas rounded-lg border border-border">
+                        <div className="flex items-center gap-2">
+                          <input className="input !py-1 flex-1" placeholder="Field Label (e.g. Employee ID)" value={cf.label} 
+                            onChange={e => {
+                              const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                              newFields[cfi] = { ...cf, label: e.target.value };
+                              patchSettings({ nomination_custom_fields: newFields });
+                            }} />
+                          <button onClick={() => {
+                            const newFields = (form.settings.nomination_custom_fields as any[]).filter((_, i) => i !== cfi);
+                            patchSettings({ nomination_custom_fields: newFields });
+                          }} className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg"><Trash2 size={12} /></button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select className="select !py-1 flex-1" value={cf.type} 
+                            onChange={e => {
+                              const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                              newFields[cfi] = { ...cf, type: e.target.value };
+                              patchSettings({ nomination_custom_fields: newFields });
+                            }}>
+                            <option value="text">Short Text</option>
+                            <option value="textarea">Paragraph (Long Text)</option>
+                            <option value="number">Number</option>
+                            <option value="date">Date</option>
+                            <option value="dropdown">Dropdown</option>
+                            <option value="radio">Radio Buttons</option>
+                            <option value="checkbox">Checkboxes</option>
+                            <option value="file">File Upload (PDF, JPG, PNG)</option>
+                          </select>
+                          <Toggle checked={!!cf.required} onChange={v => {
+                            const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                            newFields[cfi] = { ...cf, required: v };
+                            patchSettings({ nomination_custom_fields: newFields });
+                          }} label="Req" />
+                        </div>
+                        {['dropdown', 'radio', 'checkbox'].includes(cf.type) && (
+                          <input className="input !py-1" placeholder="Options (comma separated)" value={cf.options?.join(', ') || ''} 
+                            onChange={e => {
+                              const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                              newFields[cfi] = { ...cf, options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) };
+                              patchSettings({ nomination_custom_fields: newFields });
+                            }} />
+                        )}
+                      </div>
+                    ))}
+                    <button onClick={() => {
+                      const newFields = [...((form.settings.nomination_custom_fields as any[]) || []), { id: `cf_${Date.now()}`, label: '', type: 'text', required: false }];
+                      patchSettings({ nomination_custom_fields: newFields });
+                    }} className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline">
+                      <Plus size={10} /> Add Custom Field
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </Card>

@@ -71,6 +71,7 @@ export default function FormFill({ user }: { user: User }) {
   // OTP states
   const [otpSent, setOtpSent] = useState(false);
   const [email, setEmail] = useState('');
+  const [schoolCode, setSchoolCode] = useState('');
   const [otp, setOtp] = useState('');
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
@@ -93,10 +94,30 @@ export default function FormFill({ user }: { user: User }) {
       return;
     }
 
+    const query = new URLSearchParams(window.location.search);
+    const token = query.get('token');
+
+    const verifyNomination = async () => {
+      if (!token) return null;
+      try {
+        const res: any = await api.get(`/nominations/token/${token}`);
+        if (res.success && res.data) {
+          setEmail(res.data.teacher_email);
+          setSchoolCode(res.data.school_code || '');
+          setOtpVerified(true);
+          return res.data;
+        }
+      } catch (e) {
+        console.error("Token verification failed", e);
+      }
+      return null;
+    };
+
     Promise.all([
       api.get(`/forms?id=${id}`),
-      api.get(`/submissions?form_id=${id}`)
-    ]).then(([res, subs]: any[]) => {
+      api.get(`/submissions?form_id=${id}`),
+      verifyNomination()
+    ]).then(([res, subs, nomination]: any[]) => {
       if (!res || res.error) { setStep('error'); setError('Form not found'); return; }
 
       // Normalize schema: form_schema/schema/fields
@@ -126,7 +147,7 @@ export default function FormFill({ user }: { user: User }) {
       const authMode = res.settings.auth_mode || 'login';
       const isAnon = user.id === 'anon';
 
-      if (authMode === 'login' && isAnon) {
+      if (authMode === 'login' && isAnon && !token) {
         setStep('error');
         setError('Login required to fill this form.');
         return;
@@ -137,7 +158,7 @@ export default function FormFill({ user }: { user: User }) {
       if (res.expires_at && new Date(res.expires_at) < new Date()) { setStep('error'); setError('This form has closed.'); return; }
 
       // If OTP mode and not verified yet, wait for OTP
-      if (authMode === 'otp' && isAnon && !otpVerified) {
+      if (authMode === 'otp' && isAnon && !otpVerified && !token) {
         setStep('filling'); // We stay in filling step but render OTP UI
         return;
       }
@@ -212,20 +233,32 @@ export default function FormFill({ user }: { user: User }) {
     if (!email || !email.includes('@')) { setError('Please enter a valid email.'); return; }
     setOtpLoading(true);
     setError('');
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const res: any = await api.post('/auth/otp/send', { email });
       setOtpSent(true);
+      if (res.school_code) setSchoolCode(res.school_code);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send OTP');
+    } finally {
       setOtpLoading(false);
-      alert('SIMULATION: OTP sent to ' + email + '. Use 123456 to verify.');
-    }, 1000);
+    }
   };
 
   const handleVerifyOtp = async () => {
-    if (otp === '123456') {
+    if (!otp) { setError('Please enter OTP'); return; }
+    setOtpLoading(true);
+    setError('');
+    try {
+      const res: any = await api.post('/auth/otp/verify', { email, otp });
+      if (res.accessToken) {
+        localStorage.setItem('auth_token', res.accessToken);
+        localStorage.setItem('auth_user', JSON.stringify(res.user));
+      }
       setOtpVerified(true);
-      setError('');
-    } else {
-      setError('Invalid OTP. Use 123456 for simulation.');
+    } catch (err: any) {
+      setError(err.message || 'Invalid OTP');
+    } finally {
+      setOtpLoading(false);
     }
   };
 
@@ -254,7 +287,8 @@ export default function FormFill({ user }: { user: User }) {
       const payload = { 
       form_id: form._id || form.id, responses: answers, status: 'draft', is_draft: true,
       user_email: user.id === 'anon' ? email : user.email,
-      user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name
+      user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
+      school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
     };
       if (submissionId) {
         await api.put('/submissions', { id: submissionId, ...payload });
@@ -288,7 +322,8 @@ export default function FormFill({ user }: { user: User }) {
       status: 'submitted', is_draft: false,
       score: sc?.score ?? null,
       user_email: user.id === 'anon' ? email : user.email,
-      user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name
+      user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
+      school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
     };
     try {
       let saved: any;

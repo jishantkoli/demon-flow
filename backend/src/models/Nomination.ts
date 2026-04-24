@@ -13,6 +13,7 @@ const nominationSchema = new mongoose.Schema({
   invited_at: { type: Date },
   reminder_count: { type: Number, default: 0 },
   last_reminder_at: { type: Date },
+  additional_data: { type: mongoose.Schema.Types.Mixed },
 }, { timestamps: true });
 
 // Generate unique token before saving

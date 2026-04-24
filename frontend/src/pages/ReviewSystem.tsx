@@ -15,7 +15,7 @@ import {
 export default function ReviewSystem({ user }: { user: User }) {
   const navigate = useNavigate();
   const [forms, setForms] = useState<any[]>([]);
-  const [selectedFormId, setSelectedFormId] = useState<number>(0);
+  const [selectedFormId, setSelectedFormId] = useState<string>('');
   const [shortlistData, setShortlistData] = useState<any>(null);
   const [levels, setLevels] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
@@ -26,8 +26,8 @@ export default function ReviewSystem({ user }: { user: User }) {
   // Shortlist creation
   const [showCreateLevel, setShowCreateLevel] = useState(false);
   const [showShortlist, setShowShortlist] = useState(false);
-  const [levelForm, setLevelForm] = useState({ name: '', level_number: 1, scoring_type: 'form_level', grade_scale: 'A,B,C,D', blind_review: false, reviewer_ids: [] as number[] });
-  const [shortlistFilter, setShortlistFilter] = useState({ filter_type: 'all', filter_value: '0', source_level_id: 0, field_id: '', field_value: '' });
+  const [levelForm, setLevelForm] = useState({ name: '', level_number: 1, scoring_type: 'form_level', grade_scale: 'A,B,C,D', blind_review: false, reviewer_ids: [] as string[] });
+  const [shortlistFilter, setShortlistFilter] = useState({ filter_type: 'all', filter_value: '0', source_level_id: '', field_id: '', field_value: '' });
   const [shortlistResult, setShortlistResult] = useState<any>(null);
 
   // Reviewer modal
@@ -60,7 +60,7 @@ export default function ReviewSystem({ user }: { user: User }) {
     }
   }, [user]);
 
-  const loadFormData = async (formId: number) => {
+  const loadFormData = async (formId: string) => {
     setSelectedFormId(formId);
     setLoadingSubs(true);
     try {
@@ -72,7 +72,7 @@ export default function ReviewSystem({ user }: { user: User }) {
     finally { setLoadingSubs(false); }
   };
 
-  const openProfile = async (submissionId: number) => {
+  const openProfile = async (submissionId: string) => {
     setProfileLoading(true); setShowProfile(true);
     try {
       const data = await api.get(`/shortlist?submission_id=${submissionId}`);
@@ -191,9 +191,9 @@ export default function ReviewSystem({ user }: { user: User }) {
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
           <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 block">Select Form to Review</label>
           <div className="flex gap-3 items-end">
-            <select value={selectedFormId} onChange={e => { const id = parseInt(e.target.value); if (id) loadFormData(id); else { setSelectedFormId(0); setShortlistData(null); } }}
+            <select value={selectedFormId} onChange={e => { const id = e.target.value; if (id) loadFormData(id); else { setSelectedFormId(''); setShortlistData(null); } }}
               className="flex-1 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none focus:border-primary">
-              <option value={0}>Choose a form...</option>
+              <option value="">Choose a form...</option>
               {forms.map(f => <option key={f.id} value={f.id}>{f.title} ({f.form_type}) — {f.status}</option>)}
             </select>
           </div>
@@ -201,13 +201,13 @@ export default function ReviewSystem({ user }: { user: User }) {
 
         {loadingSubs && <div className="flex justify-center py-8"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div>}
 
-        {selectedFormId > 0 && shortlistData && !loadingSubs && (
+        {selectedFormId && shortlistData && !loadingSubs && (
           <>
             {/* Level pipeline */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-bold font-heading flex items-center gap-2"><Layers size={15} className="text-primary" /> Review Pipeline</h3>
-                <button onClick={() => { setLevelForm(p => ({ ...p, level_number: formLevels.length + 1, name: `Level ${formLevels.length + 1}`, reviewer_ids: [] })); setShortlistFilter({ filter_type: formLevels.length > 0 ? 'review_avg_gte' : 'all', filter_value: '0', source_level_id: formLevels.length > 0 ? formLevels[formLevels.length - 1].id : 0, field_id: '', field_value: '' }); setShortlistResult(null); setShowShortlist(true); }}
+                <button onClick={() => { setLevelForm(p => ({ ...p, level_number: formLevels.length + 1, name: `Level ${formLevels.length + 1}`, reviewer_ids: [] })); setShortlistFilter({ filter_type: formLevels.length > 0 ? 'review_avg_gte' : 'all', filter_value: '0', source_level_id: formLevels.length > 0 ? formLevels[formLevels.length - 1].id : '', field_id: '', field_value: '' }); setShortlistResult(null); setShowShortlist(true); }}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-primary-hover min-h-[40px]"><Zap size={14} /> Create Shortlist / Next Level</button>
               </div>
 
@@ -274,8 +274,8 @@ export default function ReviewSystem({ user }: { user: User }) {
                 )}
                 {shortlistFilter.filter_type === 'review_avg_gte' && (
                   <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">From Level</label>
-                    <select value={shortlistFilter.source_level_id} onChange={e => setShortlistFilter(p => ({ ...p, source_level_id: parseInt(e.target.value) }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none">
-                      <option value={0}>Select source level</option>
+                    <select value={shortlistFilter.source_level_id} onChange={e => setShortlistFilter(p => ({ ...p, source_level_id: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none">
+                      <option value="">Select source level</option>
                       {(shortlistData?.levels || []).map((l: any) => <option key={l.id} value={l.id}>L{l.level_number}: {l.name}</option>)}
                     </select></div>
                 )}
