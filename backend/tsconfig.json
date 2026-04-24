@@ -12,7 +12,8 @@
     "skipLibCheck": true,
     "moduleDetection": "force",
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "types": ["node"]
   },
   "include": ["src/**/*"]
 }
