@@ -21,6 +21,7 @@ import uploadRoutes from './routes/uploads.js';
 
 
 const app = express();
+app.set('trust proxy', 1);
 
 // Security Middlewares
 app.use(helmet({
@@ -41,7 +42,7 @@ app.use(morgan('dev'));
 // Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'development' ? 10000 : 100, // Relaxed for development
+  max: process.env.NODE_ENV === 'development' ? 10000 : 300, // Higher in production to avoid shared-proxy false positives
   message: 'Too many requests from this IP, please try again after 15 minutes'
 });
 app.use('/api', limiter);
