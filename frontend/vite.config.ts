@@ -10,5 +10,19 @@ export default defineConfig(async () => {
     const m = await import('./.vite-source-tags.js');
     plugins.push(m.sourceTags());
   } catch {}
-  return { plugins };
+  return { 
+    plugins,
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              return id.toString().split('node_modules/')[1].split('/')[0].toString();
+            }
+          }
+        }
+      }
+    }
+  };
 })
