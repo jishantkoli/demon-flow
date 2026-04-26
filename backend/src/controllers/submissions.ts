@@ -190,6 +190,7 @@ export const getSubmissionById = async (req: AuthRequest, res: Response) => {
       if (req.user.role === 'teacher' && submission.userId?.toString() !== req.user._id.toString()) {
         return res.status(403).json({ error: 'Access denied' });
       }
+      // Admins and Reviewers are allowed to see any submission
     } else {
       // Anonymous users can only see anonymous submissions
       if (submission.userId) {

@@ -15,6 +15,7 @@ type Field = {
   id: string; type: FieldType; label: string; required?: boolean; placeholder?: string;
   options?: string[]; maxLength?: number; fileTypes?: string; maxSizeMB?: number;
   correct?: number | string; marks?: number; negative?: number;
+  reviewer_max_marks?: number;
   visibleIf?: { fieldId: string; op: 'eq' | 'neq'; value: string };
 };
 
@@ -330,6 +331,13 @@ export default function FormBuilder() {
                               <input type="number" step="0.25" className="input !py-1.5 mt-1" value={f.negative || 0} onChange={e => updateField(activeSection, f.id, { negative: +e.target.value })} /></label>
                           </div>
                         )}
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/30 mt-2">
+                          <label className="text-xs"><span className="text-muted font-bold text-primary">Reviewer Max Marks</span>
+                            <input type="number" className="input !py-1.5 mt-1 border-primary/30 focus:border-primary" 
+                              placeholder="Max score reviewer can give"
+                              value={f.reviewer_max_marks || ''} 
+                              onChange={e => updateField(activeSection, f.id, { reviewer_max_marks: +e.target.value || 0 })} /></label>
+                        </div>
                         {f.type === 'file' && (
                           <div className="grid grid-cols-2 gap-2">
                             <label className="text-xs"><span className="text-muted">Allowed types</span>

@@ -18,6 +18,7 @@ const fieldSchema = new mongoose.Schema({
   correct: mongoose.Schema.Types.Mixed,
   marks: Number,
   negative: Number,
+  reviewer_max_marks: { type: Number, default: 0 },
   // branching
   visibleIf: {
     fieldId: String,

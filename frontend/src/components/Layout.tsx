@@ -52,12 +52,16 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
   const location = useLocation();
   const nav = getNav(user.role);
 
-  useEffect(() => {
+  const loadNotifications = () => {
     if (!user?.id || user.id === 'anon') {
       setNotifications([]);
       return;
     }
     api.get(`/notifications?user_id=${user.id}`).then(setNotifications).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadNotifications();
   }, [user?.id]);
 
   useEffect(() => {
@@ -181,7 +185,7 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
           <div className="flex-1" />
 
           <div className="relative">
-            <button onClick={() => { setShowNotif(!showNotif); setShowProfile(false); }} className="p-2 rounded-xl hover:bg-surface text-muted relative" aria-label="Notifications">
+            <button onClick={() => { if (!showNotif) loadNotifications(); setShowNotif(!showNotif); setShowProfile(false); }} className="p-2 rounded-xl hover:bg-surface text-muted relative" aria-label="Notifications">
               <Bell size={17} />
               {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-danger text-white text-[8px] font-bold rounded-full flex items-center justify-center">{unreadCount}</span>}
             </button>

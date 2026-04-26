@@ -156,7 +156,7 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
 
 export const createShortlist = async (req: AuthRequest, res: Response) => {
   try {
-    const { action, form_id, level_id, filter_type, filter_value, reviewer_ids } = req.body;
+    const { action, form_id, level_id, filter_type, filter_value, reviewer_ids, field_id, field_value, field_filters, submission_ids } = req.body;
     
     if (action !== 'create-shortlist') return res.status(400).json({ error: 'Invalid action' });
 
@@ -172,17 +172,49 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
 
     let query: any = { formId: actualFormId, isDraft: false };
     
-    if (filter_type === 'form_score_gte') {
-      query['score.percentage'] = { $gte: parseFloat(filter_value) };
+    // NEW: If explicit submission_ids are provided, use them
+    if (Array.isArray(submission_ids) && submission_ids.length > 0) {
+      query._id = { $in: submission_ids };
+    } else {
+      // Fallback to existing filter logic
+      if (filter_type === 'form_score_gte') {
+        query['score.percentage'] = { $gte: parseFloat(filter_value) };
+      }
     }
-    // prev level avg filter would require more complex aggregation, 
-    // for now we'll just fetch all and filter in memory or simplify.
     
     const submissions = await Submission.find(query);
+    const normalize = (value: any) => String(value ?? '').trim().toLowerCase();
+    
+    // If we used submission_ids, we don't need to re-apply field filters (they were already applied on frontend)
+    const skipFieldFilters = Array.isArray(submission_ids) && submission_ids.length > 0;
+
+    const requestedFieldFilters = Array.isArray(field_filters) && field_filters.length > 0
+      ? field_filters
+      : (field_id && field_value !== undefined ? [{ field_id, field_value }] : []);
+
+    const matchesFieldFilters = (sub: any) => {
+      if (skipFieldFilters) return true;
+      if (filter_type !== 'field_value' || requestedFieldFilters.length === 0) return true;
+      const responseMap = new Map<string, any>();
+      for (const response of sub.responses || []) {
+        responseMap.set(String(response.fieldId), response.value);
+      }
+
+      return requestedFieldFilters.every((filter: any) => {
+        const actualValue = responseMap.get(String(filter.field_id));
+        if (Array.isArray(actualValue)) {
+          return actualValue.some((item: any) => normalize(item) === normalize(filter.field_value));
+        }
+        return normalize(actualValue) === normalize(filter.field_value);
+      });
+    };
+
     let shortlistedCount = 0;
     let reviewsCreated = 0;
 
     for (const sub of submissions) {
+      if (!matchesFieldFilters(sub)) continue;
+
       // Check if already shortlisted for this level
       const existing = await Review.findOne({ submission_id: sub._id, level_id });
       if (existing) continue;
@@ -224,12 +256,13 @@ export const getReviews = async (req: AuthRequest, res: Response) => {
       query.reviewer_id = req.user._id;
     }
 
-    const reviews = await Review.find(query).sort({ createdAt: -1 });
+    const reviews = await Review.find(query).populate('level_id', 'scoringType').sort({ createdAt: -1 });
     res.status(200).json(reviews.map(r => ({
       ...r.toObject(),
       id: r._id,
       submission_id: r.submission_id,
-      reviewer_name: req.user.name // Simple fallback
+      reviewer_name: req.user.name, // Simple fallback
+      scoring_type: (r.level_id as any)?.scoringType === 'question' ? 'question_level' : 'form_level'
     })));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -249,18 +282,55 @@ export const updateReview = async (req: AuthRequest, res: Response) => {
 
 export const saveReviewScore = async (req: AuthRequest, res: Response) => {
   try {
-    const { review_id, overall_score, grade, comments, recommendation, is_draft } = req.body;
+    const { review_id, overall_score, grade, comments, recommendation, is_draft, question_scores } = req.body;
+    const existingReview = await Review.findById(review_id);
+    if (!existingReview) return res.status(404).json({ error: 'Review not found' });
+
+    let normalizedQuestionScores = Array.isArray(question_scores) ? question_scores : [];
+    if (normalizedQuestionScores.length > 0) {
+      const submission = await Submission.findById(existingReview.submission_id).populate('formId');
+      const formSchema = (submission?.formId as any)?.form_schema;
+      const reviewerMaxByField: Record<string, number> = {};
+      if (formSchema?.sections) {
+        formSchema.sections.forEach((section: any) => {
+          section.fields?.forEach((field: any) => {
+            const maxMarks = Math.max(0, Number(field?.reviewer_max_marks) || 0);
+            reviewerMaxByField[String(field?.id)] = maxMarks;
+          });
+        });
+      }
+
+      for (const entry of normalizedQuestionScores) {
+        const fieldId = String(entry?.field_id || '');
+        const score = Number(entry?.score) || 0;
+        const allowedMax = reviewerMaxByField[fieldId] || 0;
+        if (score < 0) {
+          return res.status(400).json({ error: `Negative score is not allowed for field ${fieldId}` });
+        }
+        if (allowedMax > 0 && score > allowedMax) {
+          return res.status(400).json({ error: `Score for field ${fieldId} cannot be more than ${allowedMax}` });
+        }
+      }
+
+      normalizedQuestionScores = normalizedQuestionScores
+        .map((entry: any) => ({
+          field_id: String(entry?.field_id || ''),
+          score: Number(entry?.score) || 0,
+        }))
+        .filter((entry: any) => entry.field_id);
+    }
+
     const review = await Review.findByIdAndUpdate(review_id, {
       overall_score,
       grade,
       comments,
       recommendation,
       is_draft,
+      question_scores: normalizedQuestionScores,
       status: is_draft ? 'pending' : (recommendation === 'reject' ? 'rejected' : 'approved'),
       reviewed_at: is_draft ? null : new Date()
     }, { new: true });
-    
-    if (!review) return res.status(404).json({ error: 'Review not found' });
+
     res.status(200).json(review);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

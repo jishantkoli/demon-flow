@@ -11,6 +11,10 @@ const reviewSchema = new mongoose.Schema({
   grade: { type: String },
   recommendation: { type: String, enum: ['approve', 'reject', 'next_level'] },
   is_draft: { type: Boolean, default: false },
+  question_scores: [{
+    field_id: String,
+    score: Number
+  }],
   reviewed_at: { type: Date }
 }, { timestamps: true });
 
