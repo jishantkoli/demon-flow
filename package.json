@@ -9,7 +9,8 @@
     "dev:backend": "cd backend && npm run dev",
     "dev:test:backend": "cd backend && npm run dev:test",
     "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install",
-    "build": "concurrently \"cd frontend && npm run build\" \"cd backend && npm run build\"",
+    "build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "build:fullstack": "npm --prefix frontend install && npm --prefix backend install && concurrently \"cd frontend && npm run build\" \"cd backend && npm run build\"",
     "seed": "cd backend && npm run seed"
   },
   "devDependencies": {
