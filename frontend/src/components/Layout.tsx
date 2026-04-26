@@ -57,7 +57,13 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
       setNotifications([]);
       return;
     }
-    api.get(`/notifications?user_id=${user.id}`).then(setNotifications).catch(() => {});
+    api.get(`/notifications?user_id=${user.id}`)
+      .then(res => {
+        setNotifications(Array.isArray(res) ? res : []);
+      })
+      .catch(() => {
+        setNotifications([]);
+      });
   };
 
   useEffect(() => {
@@ -97,14 +103,16 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const safeNotifications = Array.isArray(notifications) ? notifications : [];
+  const unreadCount = safeNotifications.filter(n => !n.is_read).length;
   const markAllRead = async () => {
     if (!user?.id || user.id === 'anon') return;
     await api.put('/notifications', { id: 'all', user_id: user.id, is_read: true }).catch(() => {});
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    setNotifications(prev => (Array.isArray(prev) ? prev : []).map(n => ({ ...n, is_read: true })));
   };
   const breadcrumbs = location.pathname.split('/').filter(Boolean);
-  const schoolCode = user.school_code || (user.email?.match(/^head\.([a-z0-9]+)@/i)?.[1]?.toUpperCase());
+  const match = user.email ? user.email.match(/^head\.([a-z0-9]+)@/i) : null;
+  const schoolCode = user.school_code || (match ? match[1]?.toUpperCase() : undefined);
 
   return (
     <div className="min-h-screen bg-surface text-fg flex">
@@ -196,11 +204,11 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
                   <button onClick={markAllRead} className="text-[10px] text-primary hover:underline font-bold">Mark all read</button>
                 </div>
                 <div className="max-h-72 overflow-y-auto">
-                  {notifications.length === 0 ? <p className="p-6 text-center text-sm text-muted">No notifications</p> : notifications.slice(0, 10).map(n => (
+                  {safeNotifications.length === 0 ? <p className="p-6 text-center text-sm text-muted">No notifications</p> : safeNotifications.slice(0, 10).map(n => (
                     <div key={n.id} className={`px-4 py-3 border-b border-border/50 ${!n.is_read ? 'bg-blue-50/60' : ''}`}>
-                      <p className="font-bold text-xs">{n.title}</p>
-                      <p className="text-muted text-[11px] mt-0.5">{n.message}</p>
-                      <p className="text-[9px] text-muted/60 mt-1">{n.created_at ? new Date(n.created_at).toLocaleString() : ''}</p>
+                      <p className="text-xs font-medium">{n.title || 'New Notification'}</p>
+                      <p className="text-[11px] text-muted mt-0.5">{n.message}</p>
+                      <p className="text-[9px] text-muted mt-1">{new Date(n.created_at).toLocaleString()}</p>
                     </div>
                   ))}
                 </div>

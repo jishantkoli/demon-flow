@@ -16,8 +16,17 @@ export default function UserManagement() {
   const [importText, setImportText] = useState('');
 
   const fetchUsers = async () => {
-    try { const params = roleFilter ? `?role=${roleFilter}` : ''; const data = await api.get(`/users${params}`); setUsers(data); }
-    catch (err) { console.error(err); } finally { setLoading(false); }
+    try { 
+      const params = roleFilter ? `?role=${roleFilter}` : ''; 
+      const data = await api.get(`/users${params}`).catch(() => []); 
+      setUsers(Array.isArray(data) ? data : []); 
+    }
+    catch (err) { 
+      console.error('Error fetching users:', err); 
+      setUsers([]);
+    } finally { 
+      setLoading(false); 
+    }
   };
   useEffect(() => { fetchUsers(); }, [roleFilter]);
 

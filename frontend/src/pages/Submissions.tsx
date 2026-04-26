@@ -28,9 +28,19 @@ export default function Submissions({ user }: { user: User }) {
       if (user.role === 'teacher' || user.role === 'functionary') url += `user_id=${user.id}&`;
       if (statusFilter) url += `status=${statusFilter}&`;
       if (formFilter) url += `form_id=${formFilter}&`;
-      const [subs, f] = await Promise.all([api.get(url), api.get('/forms')]);
-      setSubmissions(subs); setForms(f);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+      const [subs, f] = await Promise.all([
+        api.get(url).catch(() => []),
+        api.get('/forms').catch(() => [])
+      ]);
+      setSubmissions(Array.isArray(subs) ? subs : []);
+      setForms(Array.isArray(f) ? f : []);
+    } catch (err) { 
+      console.error('Error fetching submissions:', err);
+      setSubmissions([]);
+      setForms([]);
+    } finally { 
+      setLoading(false); 
+    }
   };
   useEffect(() => { fetchData(); }, [statusFilter, formFilter]);
 
@@ -84,7 +94,7 @@ export default function Submissions({ user }: { user: User }) {
 
   const exportCSV = () => {
     const headers = ['ID', 'Form', 'User', 'Email', 'Status', 'Score', 'Date'];
-    const rows = submissions.map(s => [s.id, s.form_title || '', s.user_name || '', s.user_email || '', s.status, s.score || '', s.submitted_at || '']);
+    const rows = submissions.map(s => [s.id, s.form_title || '', s.user_name || '', s.user_email || '', s.status, typeof s.score === 'object' ? s.score?.percentage ?? '' : (s.score ?? ''), s.submitted_at || '']);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' }); const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `submissions-${new Date().toISOString().split('T')[0]}.csv`; a.click();
@@ -113,7 +123,7 @@ export default function Submissions({ user }: { user: User }) {
     { key: 'user_name', label: 'Submitted By', sortable: true, render: (v: string, row: any) => (<div><p className="text-sm">{v || 'Anonymous'}</p><p className="text-[10px] text-muted">{row.user_email}</p></div>) },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
     // Score column: hidden for teacher/functionary — they should NEVER see quiz scores
-    { key: 'score', label: 'Score', sortable: true, hidden: !canSeeScore, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{v}%</span> : <span className="text-muted">—</span> },
+    { key: 'score', label: 'Score', sortable: true, hidden: !canSeeScore, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{typeof v === 'object' ? v?.percentage : v}%</span> : <span className="text-muted">—</span> },
     { key: 'submitted_at', label: 'Date', sortable: true, render: (v: string) => v ? <span className="text-xs text-muted">{new Date(v).toLocaleDateString()}</span> : '—' },
   ];
 
@@ -144,7 +154,7 @@ export default function Submissions({ user }: { user: User }) {
               <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Submitted By</p><p className="text-sm font-bold mt-0.5">{selected.user_name || 'Anonymous'}</p></div>
               <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Status</p><div className="mt-0.5"><StatusBadge status={selected.status} /></div></div>
               {canSeeScore && (
-                <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Score</p><p className="text-sm font-bold mt-0.5">{selected.score != null ? `${selected.score}%` : 'N/A'}</p></div>
+                <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Score</p><p className="text-sm font-bold mt-0.5">{selected.score != null ? `${typeof selected.score === 'object' ? selected.score?.percentage : selected.score}%` : 'N/A'}</p></div>
               )}
             </div>
 

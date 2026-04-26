@@ -18,7 +18,6 @@ export function getStoredUser(): User | null {
     const u = localStorage.getItem('auth_user');
     if (!u || u === 'undefined') return null;
     const user = JSON.parse(u);
-    console.log('getStoredUser:', user); // Debug log
     return user;
   } catch (e) {
     console.error('Error getting stored user:', e); // Debug log
@@ -45,7 +44,6 @@ export async function loginWithPassword(email: string, password: string) {
   const res = await api.post('/auth', { action: 'login-password', email, password });
   localStorage.setItem('auth_user', JSON.stringify(res.user));
   localStorage.setItem('auth_token', res.token);
-  console.log('loginWithPassword success, user stored:', res.user); // Debug log
   return res;
 }
 
@@ -59,7 +57,6 @@ export async function verifyOTP(emailOrPhone: string, otp: string) {
   const res = await api.post('/auth', { action: 'verify-otp', otp, ...(isPhone ? { phone: emailOrPhone } : { email: emailOrPhone }) });
   localStorage.setItem('auth_user', JSON.stringify(res.user));
   localStorage.setItem('auth_token', res.token);
-  console.log('verifyOTP success, user stored:', res.user); // Debug log
   return res;
 }
 
@@ -69,7 +66,6 @@ export async function verifyToken(): Promise<User | null> {
   try {
     const res = await api.post('/auth', { action: 'verify-token', token });
     localStorage.setItem('auth_user', JSON.stringify(res.user));
-    console.log('verifyToken success, user stored:', res.user); // Debug log
     return res.user;
   } catch (e) {
     console.error('verifyToken failed:', e); // Debug log

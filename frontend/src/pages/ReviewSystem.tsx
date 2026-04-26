@@ -52,17 +52,36 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [reviewTab, setReviewTab] = useState<'pending' | 'completed'>('pending');
 
   useEffect(() => {
-    Promise.all([api.get('/forms'), api.get('/users?role=reviewer'), api.get('/review-levels')])
-      .then(([f, u, l]) => { setForms(f.filter((fm: any) => fm.status === 'active' || fm.status === 'expired')); setReviewers(u); setLevels(l); })
-      .catch(console.error).finally(() => setLoading(false));
+    Promise.all([
+      api.get('/forms').catch(() => []),
+      api.get('/users?role=reviewer').catch(() => []),
+      api.get('/review-levels').catch(() => [])
+    ])
+      .then(([f, u, l]) => { 
+        setForms(Array.isArray(f) ? f.filter((fm: any) => fm.status === 'active' || fm.status === 'expired') : []); 
+        setReviewers(Array.isArray(u) ? u : []); 
+        setLevels(Array.isArray(l) ? l : []); 
+      })
+      .catch(err => {
+        console.error('Error initializing ReviewSystem:', err);
+        setForms([]);
+        setReviewers([]);
+        setLevels([]);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   // Load reviews for reviewer
   useEffect(() => {
     if (user.role === 'reviewer') {
-      api.get(`/reviews?reviewer_id=${user.id}`).then(setReviews).catch(console.error);
+      api.get(`/reviews?reviewer_id=${user.id}`)
+        .then(res => setReviews(Array.isArray(res) ? res : []))
+        .catch(err => {
+          console.error('Error fetching reviewer reviews:', err);
+          setReviews([]);
+        });
     }
-  }, [user]);
+  }, [user.id, user.role]);
 
   const loadFormData = async (formId: string) => {
     setSelectedFormId(formId);
@@ -131,7 +150,10 @@ export default function ReviewSystem({ user }: { user: User }) {
     // Filter by Score
     if (shortlistFilter.filter_type === 'form_score_gte') {
       const val = parseFloat(shortlistFilter.filter_value);
-      results = results.filter(s => (s.score || 0) >= val);
+      results = results.filter(s => {
+        const scoreVal = typeof s.score === 'object' ? s.score?.percentage : s.score;
+        return (scoreVal || 0) >= val;
+      });
     }
 
     // Filter by Level Avg

@@ -4,32 +4,40 @@ async function request(url: string, options?: RequestInit) {
   const token = localStorage.getItem('auth_token');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token && token !== 'undefined' && token !== 'null') headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE}${url}`, { 
-    ...options, 
-    credentials: 'include',
-    headers: { ...headers, ...options?.headers } 
-  });
-  if (!res.ok) {
-    let errMessage = `Request failed (${res.status})`;
-    try {
-      const err = await res.json();
-      errMessage = err.error || err.message || errMessage;
-    } catch (e) {
-      // If not JSON, use the status text
-      errMessage = res.statusText || errMessage;
-    }
-    console.error(`API Error [${res.status}] ${url}:`, errMessage);
+  
+  try {
+    const res = await fetch(`${API_BASE}${url}`, { 
+      ...options, 
+      credentials: 'include',
+      headers: { ...headers, ...options?.headers } 
+    });
     
-    // Auto-logout if user no longer exists or token is invalid
-    if (res.status === 401 && (errMessage === 'User no longer exists' || errMessage === 'Invalid token')) {
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('auth_user');
-      window.location.href = '/login';
+    if (!res.ok) {
+      let errMessage = `Request failed (${res.status})`;
+      try {
+        const err = await res.json();
+        errMessage = err.error || err.message || errMessage;
+      } catch (e) {
+        errMessage = res.statusText || errMessage;
+      }
+      console.error(`API Error [${res.status}] ${url}:`, errMessage);
+      
+      if (res.status === 401 && (errMessage === 'User no longer exists' || errMessage === 'Invalid token')) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        window.location.href = '/login';
+      }
+      
+      throw new Error(errMessage);
     }
-    
-    throw new Error(errMessage);
+    return res.json();
+  } catch (e: any) {
+    if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
+      console.error('Network error or CORS issue. Check if API_URL is correct:', API_BASE);
+      throw new Error('Network error: Unable to reach the server. Please check your internet or API configuration.');
+    }
+    throw e;
   }
-  return res.json();
 }
 
 export const api = {

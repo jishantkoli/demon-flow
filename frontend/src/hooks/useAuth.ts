@@ -11,9 +11,8 @@ export function useAuth() {
       setUser(u);
       setSessionExpiry(getSessionExpiry());
       setLoading(false);
-      console.log('useAuth useEffect - user after verifyToken:', u); // Debug log
     }).catch((e) => {
-      console.error('useAuth useEffect - verifyToken failed:', e); // Debug log
+      console.error('verifyToken failed:', e);
       setLoading(false);
     });
   }, []);
@@ -23,7 +22,6 @@ export function useAuth() {
     const refreshedUser = newUser || getStoredUser();
     setUser(refreshedUser);
     setSessionExpiry(getSessionExpiry());
-    console.log('refreshUser called, user set to:', refreshedUser); // Debug log
   }, []);
 
   return { user, loading, logout, refreshUser, sessionExpiry };
