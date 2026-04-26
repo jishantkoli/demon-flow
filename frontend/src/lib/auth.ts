@@ -16,11 +16,11 @@ export interface User {
 export function getStoredUser(): User | null {
   try {
     const u = localStorage.getItem('auth_user');
-    if (!u || u === 'undefined') return null;
+    if (!u || u === 'undefined' || u === 'null') return null;
     const user = JSON.parse(u);
     return user;
   } catch (e) {
-    console.error('Error getting stored user:', e); // Debug log
+    console.error('Error getting stored user:', e);
     return null;
   }
 }

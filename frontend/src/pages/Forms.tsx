@@ -125,28 +125,33 @@ export default function Forms({ user }: { user: User }) {
   };
 
   const openPreviewModal = (row: any) => {
+    if (!row) return;
     setActiveForm(row);
     let f: FormField[] = [];
     try {
       const schema = row.form_schema || row.schema;
       if (schema) {
         const parsed = typeof schema === 'string' ? JSON.parse(schema) : schema;
-        if (parsed.sections) {
+        if (parsed && parsed.sections) {
           // Map backend sections to FormRenderer sections
           f = parsed.sections.map((s: any) => ({
-            id: s.id,
+            id: s.id || Math.random().toString(36).substr(2, 9),
             type: 'section',
-            label: s.title,
+            label: s.title || s.label || 'Section',
             children: s.fields || [],
             section_type: row.form_type || row.formType || 'normal'
           }));
         }
       }
       
-      if (f.length === 0) {
-        f = typeof row.fields === 'string' ? JSON.parse(row.fields) : (row.fields || []);
+      if (f.length === 0 && row.fields) {
+        const fields = typeof row.fields === 'string' ? JSON.parse(row.fields) : row.fields;
+        f = Array.isArray(fields) ? fields : [];
       }
-    } catch {}
+    } catch (err) {
+      console.error('Error parsing form preview data:', err);
+      f = [];
+    }
     setBuilderFields(f);
     setShowPreview(true);
     setOpenMenu(null);
