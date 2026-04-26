@@ -71,12 +71,12 @@ export default function EmailCenter({ user }: { user: User }) {
       )}
 
       {/* API Configuration */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><Server size={20} className="text-primary" /> API Configuration</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-500 uppercase">Email Service Provider</label>
-            <select className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-none"
+            <select className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
               value={settings.service} onChange={e => setSettings({ ...settings, service: e.target.value })}>
               <option value="SendGrid">SendGrid</option>
               <option value="Resend">Resend</option>
@@ -86,12 +86,12 @@ export default function EmailCenter({ user }: { user: User }) {
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-500 uppercase">API Key / Password</label>
-            <input type="password" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-none"
+            <input type="password" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
               value={settings.apiKey} onChange={e => setSettings({ ...settings, apiKey: e.target.value })} placeholder="Enter your API key" />
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-500 uppercase">From Email Address</label>
-            <input type="email" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-none"
+            <input type="email" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
               value={settings.fromEmail} onChange={e => setSettings({ ...settings, fromEmail: e.target.value })} placeholder="noreply@yourdomain.com" />
           </div>
         </div>
@@ -100,18 +100,18 @@ export default function EmailCenter({ user }: { user: User }) {
       {/* Templates */}
       <div className="grid grid-cols-1 gap-6">
         {/* Teacher Template */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><Mail size={20} className="text-primary" /> Teacher Nomination Template</h2>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase">Subject</label>
-              <input className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-none font-semibold"
+              <input className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none font-semibold"
                 value={settings.templates.teacher_template.subject} 
                 onChange={e => setSettings({ ...settings, templates: { ...settings.templates, teacher_template: { ...settings.templates.teacher_template, subject: e.target.value } } })} />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase">Email Body</label>
-              <textarea rows={6} className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-none resize-none font-sans"
+              <textarea rows={6} className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 outline-none resize-none font-sans"
                 value={settings.templates.teacher_template.body}
                 onChange={e => setSettings({ ...settings, templates: { ...settings.templates, teacher_template: { ...settings.templates.teacher_template, body: e.target.value } } })} />
             </div>
@@ -119,18 +119,18 @@ export default function EmailCenter({ user }: { user: User }) {
         </div>
 
         {/* Head Template */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><FileText size={20} className="text-primary" /> Head Confirmation Template</h2>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase">Subject</label>
-              <input className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-none font-semibold"
+              <input className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none font-semibold"
                 value={settings.templates.head_template.subject}
                 onChange={e => setSettings({ ...settings, templates: { ...settings.templates, head_template: { ...settings.templates.head_template, subject: e.target.value } } })} />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase">Email Body</label>
-              <textarea rows={4} className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-none resize-none font-sans"
+              <textarea rows={4} className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 outline-none resize-none font-sans"
                 value={settings.templates.head_template.body}
                 onChange={e => setSettings({ ...settings, templates: { ...settings.templates, head_template: { ...settings.templates.head_template, body: e.target.value } } })} />
             </div>
@@ -139,11 +139,11 @@ export default function EmailCenter({ user }: { user: User }) {
       </div>
 
       {/* Variables Help */}
-      <div className="p-4 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700">
+      <div className="p-4 bg-slate-100 rounded-2xl border border-slate-200">
         <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Available Variables</h4>
         <div className="flex flex-wrap gap-2">
           {VARIABLES.map(v => (
-            <span key={v} className="px-2 py-1 bg-white dark:bg-slate-800 rounded-lg text-[10px] font-mono font-bold text-primary border border-slate-200 dark:border-slate-700">{v}</span>
+            <span key={v} className="px-2 py-1 bg-white rounded-lg text-[10px] font-mono font-bold text-primary border border-slate-200">{v}</span>
           ))}
         </div>
       </div>

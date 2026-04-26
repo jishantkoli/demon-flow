@@ -47,19 +47,28 @@ export default function Submissions({ user }: { user: User }) {
       const comms = await api.get(`/comments?submission_id=${sub.id}`);
       setComments(comms);
 
-      // 3. Fetch nomination data using email
-      // We try the email from submission first
-      if (sub.user_email && sub.user_email !== 'N/A') {
-        // Try specific form first
-        let noms = await api.get(`/nominations?form_id=${sub.form_id}&teacher_email=${sub.user_email}`);
-        if (!noms || noms.length === 0) {
-          // Fallback to any nomination for this teacher email
-          noms = await api.get(`/nominations?teacher_email=${sub.user_email}`);
+      // 3. Fetch nomination data with robust matching inside same form
+      const formNoms: any[] = await api.get(`/nominations?form_id=${sub.form_id}`);
+      if (formNoms && formNoms.length > 0) {
+        const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const userEmail = norm(sub.user_email);
+        const userName = norm(sub.user_name);
+
+        let matched = formNoms.find((n: any) => norm(n.teacher_email) === userEmail);
+        if (!matched && userName) {
+          matched = formNoms.find((n: any) => norm(n.teacher_name) === userName);
         }
-        
-        if (noms && noms.length > 0) {
-          setSelectedNomination(noms[0]);
+        if (!matched && userName) {
+          matched = formNoms.find((n: any) => {
+            const t = norm(n.teacher_name);
+            return t.includes(userName) || userName.includes(t);
+          });
         }
+        if (!matched && formNoms.length === 1) {
+          matched = formNoms[0];
+        }
+
+        if (matched) setSelectedNomination(matched);
       }
     } catch (err) { 
       console.error("Error loading submission details:", err);
@@ -169,6 +178,12 @@ export default function Submissions({ user }: { user: User }) {
                       <p className="text-[10px] text-muted uppercase font-bold">School Code</p>
                       <p className="text-sm font-semibold font-mono">{selectedNomination.school_code}</p>
                     </div>
+                    {selectedNomination.teacher_phone ? (
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-muted uppercase font-bold">Nominated Phone</p>
+                        <p className="text-sm font-semibold">{selectedNomination.teacher_phone}</p>
+                      </div>
+                    ) : null}
                   </div>
 
                   {/* Custom fields from nomination */}

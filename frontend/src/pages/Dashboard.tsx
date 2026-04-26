@@ -43,7 +43,7 @@ export default function Dashboard({ user }: { user: User }) {
   return (
     <div className="space-y-6">
       <div><h1 className="text-2xl font-bold font-heading">Welcome back, {user.name?.split(' ')[0]}</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{user.role === 'admin' ? 'System overview and real-time analytics' : user.role === 'functionary' ? `Managing nominations for school ${user.school_code || ''}` : 'Your portal overview'}</p></div>
+        <p className="text-sm text-slate-500 mt-1">{user.role === 'admin' ? 'System overview and real-time analytics' : user.role === 'functionary' ? `Managing nominations for school ${user.school_code || ''}` : 'Your portal overview'}</p></div>
 
       <motion.div {...anim(0)} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {user.role === 'admin' && <>
@@ -73,36 +73,36 @@ export default function Dashboard({ user }: { user: User }) {
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <motion.div {...anim(1)} className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <motion.div {...anim(1)} className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm">
+          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
             <h3 className="font-semibold font-heading text-sm">Recent Submissions</h3>
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded-full">{recentSubs.length} latest</span>
+            <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{recentSubs.length} latest</span>
           </div>
           <div className="divide-y divide-border/50">
-            {recentSubs.length === 0 ? <div className="p-10 text-center text-sm text-slate-500 dark:text-slate-400">No submissions yet</div> : recentSubs.map(sub => (
-              <div key={sub.id} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-100 dark:bg-slate-900/50 transition-colors">
+            {recentSubs.length === 0 ? <div className="p-10 text-center text-sm text-slate-500">No submissions yet</div> : recentSubs.map(sub => (
+              <div key={sub.id} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors">
                 <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{(sub.user_name || 'U').charAt(0)}</div>
-                <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{sub.form_title || `Form #${sub.form_id}`}</p><p className="text-[11px] text-slate-500 dark:text-slate-400">{sub.user_name || sub.user_email || 'Anonymous'}</p></div>
+                <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{sub.form_title || `Form #${sub.form_id}`}</p><p className="text-[11px] text-slate-500">{sub.user_name || sub.user_email || 'Anonymous'}</p></div>
                 <StatusBadge status={sub.status} />
                 {sub.score != null && <span className="text-xs font-bold text-primary">{sub.score}%</span>}
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 hidden sm:block">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : ''}</span>
+                <span className="text-[10px] text-slate-500 hidden sm:block">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : ''}</span>
               </div>
             ))}
           </div>
         </motion.div>
 
-        <motion.div {...anim(2)} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700"><h3 className="font-semibold font-heading text-sm flex items-center gap-2"><Activity size={14} className="text-accent-green" /> Activity Timeline</h3></div>
+        <motion.div {...anim(2)} className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+          <div className="px-5 py-4 border-b border-slate-200"><h3 className="font-semibold font-heading text-sm flex items-center gap-2"><Activity size={14} className="text-accent-green" /> Activity Timeline</h3></div>
           <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
-            {recentLogs.length === 0 ? <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-6">No activity yet</p> : recentLogs.map(log => (
+            {recentLogs.length === 0 ? <p className="text-center text-sm text-slate-500 py-6">No activity yet</p> : recentLogs.map(log => (
               <div key={log.id} className="flex gap-3">
                 <div className="w-2 h-2 rounded-full bg-primary mt-1.5 flex-shrink-0" />
                 <div><p className="text-xs font-medium capitalize">{log.action?.replace(/_/g, ' ')}</p>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">{log.created_at ? new Date(log.created_at).toLocaleString() : ''}</p>
+                  <p className="text-[10px] text-slate-500">{log.created_at ? new Date(log.created_at).toLocaleString() : ''}</p>
                   {log.details && (() => { 
                     try { 
                       const d = typeof log.details === 'string' ? JSON.parse(log.details) : log.details; 
-                      return d.ip ? <p className="text-[9px] text-slate-500 dark:text-slate-400/60">IP: {d.ip}</p> : null; 
+                      return d.ip ? <p className="text-[9px] text-slate-500/60">IP: {d.ip}</p> : null; 
                     } catch { return null; } 
                   })()}
                 </div>
@@ -114,7 +114,7 @@ export default function Dashboard({ user }: { user: User }) {
 
       {user.role === 'admin' && stats && (
         <motion.div {...anim(3)} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <h3 className="font-semibold font-heading text-sm mb-4">Submission Status</h3>
             <div className="space-y-3">
               {[{ label: 'Submitted', value: s.submissionsByStatus?.submitted || 0, color: 'bg-blue-500' },
@@ -122,13 +122,13 @@ export default function Dashboard({ user }: { user: User }) {
                 { label: 'Approved', value: s.submissionsByStatus?.approved || 0, color: 'bg-emerald-500' },
                 { label: 'Rejected', value: s.submissionsByStatus?.rejected || 0, color: 'bg-red-500' }]
                 .map(st => { const total = Math.max(s.totalSubmissions || 1, 1); return (
-                  <div key={st.label}><div className="flex justify-between text-xs mb-1"><span className="font-medium">{st.label}</span><span className="text-slate-500 dark:text-slate-400">{st.value} ({Math.round(st.value / total * 100)}%)</span></div>
-                    <div className="h-2 bg-slate-100 dark:bg-slate-900 rounded-full overflow-hidden"><motion.div initial={{ width: 0 }} animate={{ width: `${(st.value / total) * 100}%` }} transition={{ delay: 0.3, duration: 0.8 }} className={`h-full rounded-full ${st.color}`} /></div>
+                  <div key={st.label}><div className="flex justify-between text-xs mb-1"><span className="font-medium">{st.label}</span><span className="text-slate-500">{st.value} ({Math.round(st.value / total * 100)}%)</span></div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><motion.div initial={{ width: 0 }} animate={{ width: `${(st.value / total) * 100}%` }} transition={{ delay: 0.3, duration: 0.8 }} className={`h-full rounded-full ${st.color}`} /></div>
                   </div>
                 ); })}
             </div>
           </div>
-          <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <h3 className="font-semibold font-heading text-sm mb-4">Users by Role</h3>
             <div className="grid grid-cols-2 gap-3">
               {[{ role: 'Admin', count: s.usersByRole?.admin || 0, color: 'from-accent-blue/80 to-accent-blue', plural: 'Admins' },

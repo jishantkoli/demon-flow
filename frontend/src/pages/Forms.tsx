@@ -16,11 +16,11 @@ import {
 const typeIcons: Record<string, any> = { normal: FileText, nomination: Award, branching: GitBranch, quiz: HelpCircle, multi: Layers };
 const typeLabels: Record<string, string> = { normal: 'Normal Form', nomination: 'Nomination', branching: 'Branching', quiz: 'Quiz', multi: 'Multi-Form' };
 const typeColors: Record<string, { bg: string; text: string; border: string }> = {
-  normal: { bg: 'bg-accent-blue/10 dark:bg-accent-blue/20', text: 'text-accent-blue', border: 'border-accent-blue/30' },
-  nomination: { bg: 'bg-success/10 dark:bg-success/20', text: 'text-success', border: 'border-success/30' },
-  branching: { bg: 'bg-accent-purple/10 dark:bg-accent-purple/20', text: 'text-accent-purple', border: 'border-accent-purple/30' },
-  quiz: { bg: 'bg-accent-orange/10 dark:bg-accent-orange/20', text: 'text-accent-orange', border: 'border-accent-orange/30' },
-  multi: { bg: 'bg-accent-red/10 dark:bg-accent-red/20', text: 'text-accent-red', border: 'border-accent-red/30' },
+  normal: { bg: 'bg-accent-blue/10', text: 'text-accent-blue', border: 'border-accent-blue/30' },
+  nomination: { bg: 'bg-success/10', text: 'text-success', border: 'border-success/30' },
+  branching: { bg: 'bg-accent-purple/10', text: 'text-accent-purple', border: 'border-accent-purple/30' },
+  quiz: { bg: 'bg-accent-orange/10', text: 'text-accent-orange', border: 'border-accent-orange/30' },
+  multi: { bg: 'bg-accent-red/10', text: 'text-accent-red', border: 'border-accent-red/30' },
 };
 
 export default function Forms({ user }: { user: User }) {
@@ -56,7 +56,11 @@ export default function Forms({ user }: { user: User }) {
 
   // Filter
   const filtered = forms.filter(f => {
-    if (f.status !== tab) return false;
+    const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
+    let effectiveStatus = f.status;
+    if (isExpired) effectiveStatus = 'expired';
+
+    if (effectiveStatus !== tab) return false;
     if (typeFilter && f.form_type !== typeFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -176,7 +180,7 @@ export default function Forms({ user }: { user: User }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold font-heading">{isAdmin ? 'Form Builder' : 'Available Forms'}</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{isAdmin ? 'Create, configure fields, set branching & quiz logic' : 'Select a form to fill'}</p>
+          <p className="text-sm text-slate-500">{isAdmin ? 'Create, configure fields, set branching & quiz logic' : 'Select a form to fill'}</p>
         </div>
         {isAdmin && (
           <button onClick={() => openCreateModal()} className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover shadow-sm min-h-[44px]">
@@ -196,8 +200,8 @@ export default function Forms({ user }: { user: User }) {
               <button key={key} onClick={() => openCreateModal(key)}
                 className={`p-3.5 rounded-2xl border-2 ${c.border} ${c.bg} hover:shadow-md transition-all text-left group`}>
                 <Icon size={20} className={`${c.text} mb-1.5 group-hover:scale-110 transition-transform`} />
-                <p className="text-xs font-bold text-slate-900 dark:text-white">{label}</p>
-                <p className="text-lg font-bold mt-1 text-slate-900 dark:text-white">{count}</p>
+                <p className="text-xs font-bold text-slate-900">{label}</p>
+                <p className="text-lg font-bold mt-1 text-slate-900">{count}</p>
               </button>
             );
           })}
@@ -206,27 +210,38 @@ export default function Forms({ user }: { user: User }) {
 
       {/* Tabs + Search + Filter */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex gap-1 bg-slate-100 dark:bg-slate-900 rounded-xl p-1">
+        <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
           {(['active', 'draft', 'expired'] as const)
             .filter(t => !((user.role === 'functionary' || user.role === 'teacher') && t === 'draft'))
             .map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${
-                tab === t ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white'
+                tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
               }`}>
-              {t} <span className="ml-1 opacity-60">({forms.filter(f => f.status === t).length})</span>
+              {t} <span className="ml-1 opacity-60">({
+                forms.filter(f => {
+                  const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
+                  let effectiveStatus = f.status;
+                  if (isExpired) effectiveStatus = t === 'expired' ? 'expired' : f.status; // Correctly count for the tab
+                  
+                  // Re-apply the same logic as the filter for consistency
+                  let finalStatus = f.status;
+                  if (isExpired) finalStatus = 'expired';
+                  return finalStatus === t;
+                }).length
+              })</span>
             </button>
           ))}
         </div>
         <div className="flex-1" />
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 min-w-[180px]">
-            <Search size={14} className="text-slate-500 dark:text-slate-400 flex-shrink-0" />
+          <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 min-w-[180px]">
+            <Search size={14} className="text-slate-500 flex-shrink-0" />
             <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search forms..."
-              className="bg-transparent text-sm outline-none w-full placeholder-muted text-slate-900 dark:text-white" />
+              className="bg-transparent text-sm outline-none w-full placeholder-muted text-slate-900" />
           </div>
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-            className="text-xs bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 outline-none">
+            className="text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 outline-none">
             <option value="">All Types</option>
             {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
@@ -235,10 +250,10 @@ export default function Forms({ user }: { user: User }) {
 
       {/* Form Cards Grid */}
       {filtered.length === 0 ? (
-        <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
-          <FileText size={40} className="mx-auto text-slate-500 dark:text-slate-400/30 mb-3" />
-          <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">No {tab} forms found</p>
-          {isAdmin && tab === 'active' && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Create a form and set status to Active</p>}
+        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
+          <FileText size={40} className="mx-auto text-slate-500 mb-3" />
+          <p className="text-sm text-slate-500 font-medium">No {tab} forms found</p>
+          {isAdmin && tab === 'active' && <p className="text-xs text-slate-500 mt-1">Create a form and set status to Active</p>}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -251,7 +266,7 @@ export default function Forms({ user }: { user: User }) {
 
             return (
               <div key={row.id}
-                className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col group">
+                className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col group">
 
                 {/* Color bar top */}
                 <div className={`h-1.5 ${
@@ -269,22 +284,22 @@ export default function Forms({ user }: { user: User }) {
                       <Icon size={13} /> {typeLabels[row.form_type]}
                     </div>
                     <div className="flex items-center gap-1">
-                      <StatusBadge status={row.status} size="xs" />
+                      <StatusBadge status={isExpired ? 'expired' : row.status} size="xs" />
                       {isAdmin && (
                         <div className="relative">
                           <button onClick={e => { e.stopPropagation(); setOpenMenu(openMenu === row.id ? null : row.id); }}
-                            className="p-1 rounded-lg hover:bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                            className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity">
                             <MoreHorizontal size={16} />
                           </button>
                           {openMenu === row.id && (
-                            <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-30 py-1" onClick={e => e.stopPropagation()}>
-                              <button onClick={() => openEditModal(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 dark:bg-slate-900 flex items-center gap-2.5"><Settings size={13} className="text-slate-500 dark:text-slate-400" /> Settings</button>
-                              <button onClick={() => openBuilder(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 dark:bg-slate-900 flex items-center gap-2.5"><Pencil size={13} className="text-slate-500 dark:text-slate-400" /> Edit Fields</button>
-                              <button onClick={() => openPreviewModal(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 dark:bg-slate-900 flex items-center gap-2.5"><Eye size={13} className="text-slate-500 dark:text-slate-400" /> Preview</button>
-                              <button onClick={() => viewVersions(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 dark:bg-slate-900 flex items-center gap-2.5"><History size={13} className="text-slate-500 dark:text-slate-400" /> Versions</button>
-                              <button onClick={() => handleClone(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 dark:bg-slate-900 flex items-center gap-2.5"><Copy size={13} className="text-slate-500 dark:text-slate-400" /> Clone</button>
-                              <div className="border-t border-slate-200 dark:border-slate-700 my-1" />
-                              <button onClick={() => handleDelete(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center gap-2.5 text-danger"><Trash2 size={13} /> Delete</button>
+                            <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-xl border border-slate-200 z-30 py-1" onClick={e => e.stopPropagation()}>
+                              <button onClick={() => openEditModal(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Settings size={13} className="text-slate-500" /> Settings</button>
+                              <button onClick={() => openBuilder(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Pencil size={13} className="text-slate-500" /> Edit Fields</button>
+                              <button onClick={() => openPreviewModal(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Eye size={13} className="text-slate-500" /> Preview</button>
+                              <button onClick={() => viewVersions(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><History size={13} className="text-slate-500" /> Versions</button>
+                              <button onClick={() => handleClone(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Copy size={13} className="text-slate-500" /> Clone</button>
+                              <div className="border-t border-slate-200 my-1" />
+                              <button onClick={() => handleDelete(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-red-50 flex items-center gap-2.5 text-danger"><Trash2 size={13} /> Delete</button>
                             </div>
                           )}
                         </div>
@@ -293,19 +308,19 @@ export default function Forms({ user }: { user: User }) {
                   </div>
 
                   {/* Title */}
-                  <h3 className="text-base font-bold font-heading text-slate-900 dark:text-white leading-snug mb-1.5 line-clamp-2">
+                  <h3 className="text-base font-bold font-heading text-slate-900 leading-snug mb-1.5 line-clamp-2">
                     {row.title || '(Untitled)'}
                   </h3>
 
                   {/* Description */}
                   {row.description && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-3 line-clamp-2">{row.description}</p>
+                    <p className="text-xs text-slate-500 leading-relaxed mb-3 line-clamp-2">{row.description}</p>
                   )}
 
                   <div className="flex-1" />
 
                   {/* Meta */}
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700/50">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500 mt-3 pt-3 border-t border-slate-200">
                     <span className="flex items-center gap-1"><Hash size={11} /> {fieldCount} fields</span>
                     <span className="flex items-center gap-1"><Calendar size={11} /> {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : row.created_at ? new Date(row.created_at).toLocaleDateString() : '—'}</span>
                     {row.expires_at && (
@@ -344,7 +359,7 @@ export default function Forms({ user }: { user: User }) {
                       </button>
                     )}
                     {!canFill && !isAdmin && (
-                      <div className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-900 rounded-xl text-sm text-slate-500 dark:text-slate-400 font-medium text-center min-h-[44px] flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700">
+                      <div className="flex-1 py-2.5 bg-slate-100 rounded-xl text-sm text-slate-500 font-medium text-center min-h-[44px] flex items-center justify-center gap-2 border border-slate-200">
                         <Clock size={14} /> {row.status === 'draft' ? 'Not yet active' : 'Form closed'}
                       </div>
                     )}
@@ -360,56 +375,56 @@ export default function Forms({ user }: { user: User }) {
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title={editForm ? 'Form Settings' : `Create ${typeLabels[form.form_type] || 'Form'}`} size="xl">
         <div className="space-y-5">
           <div>
-            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Form Title *</label>
+            <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Form Title *</label>
             <input type="text" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-slate-900 dark:text-white"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-slate-900"
               placeholder="e.g. Annual Teacher Performance Survey 2024" autoFocus />
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Description</label>
+            <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Description</label>
             <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none focus:border-primary h-20 resize-none text-slate-900 dark:text-white"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none focus:border-primary h-20 resize-none text-slate-900"
               placeholder="Describe the purpose of this form..." />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Form Type</label>
+              <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Form Type</label>
               <select value={form.form_type} onChange={e => setForm(p => ({ ...p, form_type: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none text-slate-900 dark:text-white">
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none text-slate-900">
                 {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Status</label>
+              <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Status</label>
               <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none text-slate-900 dark:text-white">
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none text-slate-900">
                 <option value="draft">Draft</option><option value="active">Active</option><option value="expired">Expired</option>
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Expiry Date</label>
+              <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Expiry Date</label>
               <input type="datetime-local" value={form.expires_at ? form.expires_at.slice(0, 16) : ''}
                 onChange={e => setForm(p => ({ ...p, expires_at: e.target.value ? new Date(e.target.value).toISOString() : '' }))}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none text-slate-900 dark:text-white" />
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none text-slate-900" />
             </div>
           </div>
 
           {/* Settings */}
-          <div className="p-4 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+          <div className="p-4 bg-slate-100 rounded-xl border border-slate-200 space-y-3">
             <h4 className="text-sm font-bold flex items-center gap-2"><Settings size={14} className="text-primary" /> Settings</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Login Type</label>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Login Type</label>
                 <select value={form.settings.login_type || 'otp'} onChange={e => setForm(p => ({ ...p, settings: { ...p.settings, login_type: e.target.value } }))}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm outline-none text-slate-900 dark:text-white">
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm outline-none text-slate-900">
                   <option value="otp">OTP Required</option><option value="direct">Direct Link (no login)</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Review Type</label>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Review Type</label>
                 <select value={form.settings.review_type || 'marks'} onChange={e => setForm(p => ({ ...p, settings: { ...p.settings, review_type: e.target.value } }))}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm outline-none text-slate-900 dark:text-white">
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm outline-none text-slate-900">
                   <option value="marks">Marks (numeric)</option><option value="grade">Grade (A/B/C/D)</option>
                 </select>
               </div>
@@ -418,32 +433,32 @@ export default function Forms({ user }: { user: User }) {
 
           {/* Type-specific settings */}
           {form.form_type === 'nomination' && (
-            <div className="p-4 bg-teal-50 dark:bg-teal-900/10 rounded-xl border border-teal-200 dark:border-teal-800 space-y-3">
-              <h4 className="text-sm font-bold text-teal-800 dark:text-teal-300 flex items-center gap-2"><Award size={16} /> Nomination</h4>
+            <div className="p-4 bg-teal-50 rounded-xl border border-teal-200 space-y-3">
+              <h4 className="text-sm font-bold text-teal-800 flex items-center gap-2"><Award size={16} /> Nomination</h4>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs font-semibold text-teal-600 mb-1 block">Max Teachers per Functionary</label>
                   <input type="number" value={form.settings.max_nominations || ''} onChange={e => setForm(p => ({ ...p, settings: { ...p.settings, max_nominations: parseInt(e.target.value) || 0 } }))}
-                    className="w-full px-3 py-2 rounded-xl border border-teal-200 bg-white dark:bg-gray-800 text-sm outline-none" placeholder="5" /></div>
+                    className="w-full px-3 py-2 rounded-xl border border-teal-200 bg-white text-sm outline-none" placeholder="5" /></div>
                 <div><label className="text-xs font-semibold text-teal-600 mb-1 block">Teacher Access</label>
                   <select value={form.settings.teacher_login || 'otp'} onChange={e => setForm(p => ({ ...p, settings: { ...p.settings, teacher_login: e.target.value } }))}
-                    className="w-full px-3 py-2 rounded-xl border border-teal-200 bg-white dark:bg-gray-800 text-sm outline-none">
+                    className="w-full px-3 py-2 rounded-xl border border-teal-200 bg-white text-sm outline-none">
                     <option value="otp">OTP</option><option value="direct">Direct Link</option></select></div>
               </div>
             </div>
           )}
           {form.form_type === 'quiz' && (
-            <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800 space-y-3">
-              <h4 className="text-sm font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2"><HelpCircle size={16} /> Quiz</h4>
+            <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 space-y-3">
+              <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2"><HelpCircle size={16} /> Quiz</h4>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div><label className="text-xs font-semibold text-amber-600 mb-1 block">Time (min)</label>
                   <input type="number" value={form.settings.time_limit || ''} onChange={e => setForm(p => ({ ...p, settings: { ...p.settings, time_limit: parseInt(e.target.value) || 0 } }))}
-                    className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white dark:bg-gray-800 text-sm outline-none" /></div>
+                    className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white text-sm outline-none" /></div>
                 <div><label className="text-xs font-semibold text-amber-600 mb-1 block">Pass %</label>
                   <input type="number" value={form.settings.passing_score || ''} onChange={e => setForm(p => ({ ...p, settings: { ...p.settings, passing_score: parseInt(e.target.value) || 0 } }))}
-                    className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white dark:bg-gray-800 text-sm outline-none" /></div>
+                    className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white text-sm outline-none" /></div>
                 <div><label className="text-xs font-semibold text-amber-600 mb-1 block">Negative</label>
                   <select value={form.settings.negative_marking ? 'yes' : 'no'} onChange={e => setForm(p => ({ ...p, settings: { ...p.settings, negative_marking: e.target.value === 'yes' } }))}
-                    className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white dark:bg-gray-800 text-sm outline-none">
+                    className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white text-sm outline-none">
                     <option value="no">No</option><option value="yes">Yes (−25%)</option></select></div>
                 <div className="flex items-end pb-1"><label className="flex items-center gap-2 text-xs cursor-pointer">
                   <input type="checkbox" checked={form.settings.shuffle_options || false} onChange={e => setForm(p => ({ ...p, settings: { ...p.settings, shuffle_options: e.target.checked } }))} className="rounded accent-primary" /> Shuffle</label></div>
@@ -452,18 +467,18 @@ export default function Forms({ user }: { user: User }) {
             </div>
           )}
           {form.form_type === 'branching' && (
-            <div className="p-4 bg-sky-50 dark:bg-sky-900/10 rounded-xl border border-sky-200 dark:border-sky-800">
-              <p className="text-xs text-sky-700 dark:text-sky-400"><strong>Branching:</strong> After creating, click <strong>Fields</strong> to add a trigger dropdown + conditional sections with IF-THEN rules.</p>
+            <div className="p-4 bg-sky-50 rounded-xl border border-sky-200">
+              <p className="text-xs text-sky-700"><strong>Branching:</strong> After creating, click <strong>Fields</strong> to add a trigger dropdown + conditional sections with IF-THEN rules.</p>
             </div>
           )}
           {form.form_type === 'multi' && (
-            <div className="p-4 bg-pink-50 dark:bg-pink-900/10 rounded-xl border border-pink-200 dark:border-pink-800">
-              <p className="text-xs text-pink-700 dark:text-pink-400"><strong>Multi-Form:</strong> Combine Normal + Branching + Quiz. Click <strong>Fields</strong> after creation to build.</p>
+            <div className="p-4 bg-pink-50 rounded-xl border border-pink-200">
+              <p className="text-xs text-pink-700"><strong>Multi-Form:</strong> Combine Normal + Branching + Quiz. Click <strong>Fields</strong> after creation to build.</p>
             </div>
           )}
         </div>
-        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-          <button onClick={() => setShowCreate(false)} className="px-5 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:bg-slate-900 font-medium">Cancel</button>
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200">
+          <button onClick={() => setShowCreate(false)} className="px-5 py-2.5 text-sm rounded-xl border border-slate-200 hover:bg-slate-100 font-medium">Cancel</button>
           <button onClick={handleSave} className="px-6 py-2.5 bg-primary text-white text-sm rounded-xl font-semibold hover:bg-primary-hover shadow-sm">
             {editForm ? 'Save Settings' : 'Create Form'}
           </button>
@@ -474,10 +489,10 @@ export default function Forms({ user }: { user: User }) {
       <Modal open={showFieldBuilder} onClose={() => setShowFieldBuilder(false)} title={`Edit Fields — ${activeForm?.title || ''}`} size="2xl">
         <div className="space-y-4">
           <div className={`p-3 rounded-xl border text-xs font-medium ${
-            activeForm?.form_type === 'quiz' ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/10 dark:border-amber-800 dark:text-amber-400' :
-            activeForm?.form_type === 'branching' ? 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-900/10 dark:border-sky-800 dark:text-sky-400' :
-            activeForm?.form_type === 'multi' ? 'bg-pink-50 border-pink-200 text-pink-700 dark:bg-pink-900/10 dark:border-pink-800 dark:text-pink-400' :
-            'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
+            activeForm?.form_type === 'quiz' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+            activeForm?.form_type === 'branching' ? 'bg-sky-50 border-sky-200 text-sky-700' :
+            activeForm?.form_type === 'multi' ? 'bg-pink-50 border-pink-200 text-pink-700' :
+            'bg-slate-100 border-slate-200 text-slate-500'
           }`}>
             {activeForm?.form_type === 'quiz' ? '🎯 Add MCQ → set correct answer → set points. Hidden from users & reviewers.' :
              activeForm?.form_type === 'branching' ? '🔀 Add trigger dropdown → add Sections with IF-THEN rules → only visible sections submitted.' :
@@ -486,10 +501,10 @@ export default function Forms({ user }: { user: User }) {
           </div>
           <FormFieldBuilder fields={builderFields} onChange={setBuilderFields} formType={activeForm?.form_type || 'normal'} />
         </div>
-        <div className="flex justify-between gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-          <button onClick={() => setShowPreview(true)} className="px-4 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:bg-slate-900 font-medium flex items-center gap-2"><Eye size={14} /> Preview</button>
+        <div className="flex justify-between gap-3 mt-6 pt-4 border-t border-slate-200">
+          <button onClick={() => setShowPreview(true)} className="px-4 py-2.5 text-sm rounded-xl border border-slate-200 hover:bg-slate-100 font-medium flex items-center gap-2"><Eye size={14} /> Preview</button>
           <div className="flex gap-3">
-            <button onClick={() => setShowFieldBuilder(false)} className="px-5 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:bg-slate-900 font-medium">Cancel</button>
+            <button onClick={() => setShowFieldBuilder(false)} className="px-5 py-2.5 text-sm rounded-xl border border-slate-200 hover:bg-slate-100 font-medium">Cancel</button>
             <button onClick={saveFields} className="px-6 py-2.5 bg-primary text-white text-sm rounded-xl font-semibold hover:bg-primary-hover shadow-sm">Save Fields</button>
           </div>
         </div>
@@ -497,23 +512,23 @@ export default function Forms({ user }: { user: User }) {
 
       {/* ═══ Preview ═══ */}
       <Modal open={showPreview} onClose={() => setShowPreview(false)} title={`Preview — ${activeForm?.title || ''}`} size="xl">
-        <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800 mb-4">
-          <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">👁 Preview — this is how users see the form.</p>
+        <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 mb-4">
+          <p className="text-xs text-amber-700 font-medium">👁 Preview — this is how users see the form.</p>
         </div>
         {builderFields.length > 0 ? (
           <FormRenderer fields={builderFields} formType={(activeForm?.form_type || 'normal') as any}
             settings={(() => { try { return typeof activeForm?.settings === 'string' ? JSON.parse(activeForm.settings) : (activeForm?.settings || {}); } catch { return {}; } })()}
             onSubmit={() => alert('Preview mode — submission disabled')} />
-        ) : <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-10">No fields. Add fields first.</p>}
+        ) : <p className="text-center text-sm text-slate-500 py-10">No fields. Add fields first.</p>}
       </Modal>
 
       {/* ═══ Versions ═══ */}
       <Modal open={showVersions} onClose={() => setShowVersions(false)} title="Version History" size="lg">
-        {versions.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-8">No versions yet</p> : (
+        {versions.length === 0 ? <p className="text-sm text-slate-500 text-center py-8">No versions yet</p> : (
           <div className="space-y-3">{versions.map(v => (
-            <div key={v.id} className="p-4 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-              <div className="flex items-center justify-between mb-1"><span className="text-sm font-bold">v{v.version}</span><span className="text-xs text-slate-500 dark:text-slate-400">{new Date(v.created_at).toLocaleString()}</span></div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{v.change_notes || 'No notes'}</p>
+            <div key={v.id} className="p-4 bg-slate-100 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between mb-1"><span className="text-sm font-bold">v{v.version}</span><span className="text-xs text-slate-500">{new Date(v.created_at).toLocaleString()}</span></div>
+              <p className="text-xs text-slate-500">{v.change_notes || 'No notes'}</p>
             </div>
           ))}</div>
         )}

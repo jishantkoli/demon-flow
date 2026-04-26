@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { User } from '../lib/auth';
+import { User, getSessionExpiry } from '../lib/auth';
 import { api } from '../lib/api';
-import { getSessionExpiry } from '../lib/auth';
 import {
   LayoutDashboard, Users, FileText, Inbox, CheckSquare, BarChart3,
   Shield, Download, Bell, Menu, X, ChevronRight, Sun, Moon, LogOut,
-  Settings, ChevronDown, Clock, AlertTriangle, UserPlus, Mail
+  Settings, ChevronDown, AlertTriangle, UserPlus, Mail
 } from 'lucide-react';
 
 const adminNav = [
@@ -48,11 +47,18 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
   const [showProfile, setShowProfile] = useState(false);
   const [sessionWarning, setSessionWarning] = useState(false);
   const [timeLeft, setTimeLeft] = useState('');
+  const [extending, setExtending] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const nav = getNav(user.role);
 
-  useEffect(() => { api.get(`/notifications?user_id=${user.id}`).then(setNotifications).catch(() => {}); }, [user.id]);
+  useEffect(() => {
+    if (!user?.id || user.id === 'anon') {
+      setNotifications([]);
+      return;
+    }
+    api.get(`/notifications?user_id=${user.id}`).then(setNotifications).catch(() => {});
+  }, [user?.id]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -65,13 +71,34 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
         const mins = Math.floor(remaining / 60000);
         const secs = Math.floor((remaining % 60000) / 1000);
         setTimeLeft(`${mins}:${secs.toString().padStart(2, '0')}`);
-      } else { setSessionWarning(false); }
+      } else {
+        setSessionWarning(false);
+      }
     }, 1000);
     return () => clearInterval(interval);
   }, [onLogout]);
 
+  const handleExtendSession = async () => {
+    setExtending(true);
+    try {
+      const res: any = await api.post('/auth/refresh', {});
+      const nextToken = res?.token || res?.accessToken;
+      if (nextToken) localStorage.setItem('auth_token', nextToken);
+      if (res?.user) localStorage.setItem('auth_user', JSON.stringify(res.user));
+      setSessionWarning(false);
+    } catch {
+      onLogout();
+    } finally {
+      setExtending(false);
+    }
+  };
+
   const unreadCount = notifications.filter(n => !n.is_read).length;
-  const markAllRead = async () => { await api.put('/notifications', { id: 'all', user_id: user.id, is_read: true }).catch(() => {}); setNotifications(prev => prev.map(n => ({ ...n, is_read: true }))); };
+  const markAllRead = async () => {
+    if (!user?.id || user.id === 'anon') return;
+    await api.put('/notifications', { id: 'all', user_id: user.id, is_read: true }).catch(() => {});
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+  };
   const breadcrumbs = location.pathname.split('/').filter(Boolean);
   const schoolCode = user.school_code || (user.email?.match(/^head\.([a-z0-9]+)@/i)?.[1]?.toUpperCase());
 
@@ -82,7 +109,13 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
       {sessionWarning && (
         <div className="fixed top-0 left-0 right-0 z-[200] bg-warning text-white px-4 py-2 text-center text-sm font-bold flex items-center justify-center gap-2">
           <AlertTriangle size={16} /> Session expires in {timeLeft}
-          <button onClick={() => window.location.reload()} className="ml-3 px-3 py-0.5 bg-white/25 rounded-lg text-xs hover:bg-white/40">Extend</button>
+          <button
+            onClick={handleExtendSession}
+            disabled={extending}
+            className="ml-3 px-3 py-0.5 bg-white/25 rounded-lg text-xs hover:bg-white/40 disabled:opacity-60"
+          >
+            {extending ? 'Extending...' : 'Extend'}
+          </button>
         </div>
       )}
 
@@ -160,7 +193,7 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
                 </div>
                 <div className="max-h-72 overflow-y-auto">
                   {notifications.length === 0 ? <p className="p-6 text-center text-sm text-muted">No notifications</p> : notifications.slice(0, 10).map(n => (
-                    <div key={n.id} className={`px-4 py-3 border-b border-border/50 ${!n.is_read ? 'bg-blue-50/60 dark:bg-blue-900/10' : ''}`}>
+                    <div key={n.id} className={`px-4 py-3 border-b border-border/50 ${!n.is_read ? 'bg-blue-50/60' : ''}`}>
                       <p className="font-bold text-xs">{n.title}</p>
                       <p className="text-muted text-[11px] mt-0.5">{n.message}</p>
                       <p className="text-[9px] text-muted/60 mt-1">{n.created_at ? new Date(n.created_at).toLocaleString() : ''}</p>

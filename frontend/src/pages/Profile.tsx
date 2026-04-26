@@ -8,7 +8,7 @@ export default function Profile({ user }: { user: User }) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <div><h1 className="text-xl font-bold font-heading">Profile Settings</h1><p className="text-sm text-slate-500 dark:text-slate-400">Manage your account and session information</p></div>
+      <div><h1 className="text-xl font-bold font-heading">Profile Settings</h1><p className="text-sm text-slate-500">Manage your account and session information</p></div>
       <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
         <div className="bg-gradient-to-r from-sidebar to-sidebar-light p-6 flex items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-white/20 text-white flex items-center justify-center text-2xl font-bold backdrop-blur-sm">{user.name?.charAt(0)?.toUpperCase()}</div>
@@ -22,17 +22,17 @@ export default function Profile({ user }: { user: User }) {
               { label: 'Role', icon: Shield, value: user.role, editable: false },
               { label: 'School', icon: Building, value: user.school_name || 'Not set', editable: false },
               { label: 'District', icon: MapPin, value: user.district || 'Not set', editable: false }]
-              .map(f => (<div key={f.label}><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1"><f.icon size={12} /> {f.label}</label>
+              .map(f => (<div key={f.label}><label className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1"><f.icon size={12} /> {f.label}</label>
                 <input type="text" defaultValue={f.value || ''} disabled={!f.editable}
-                  className={`w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm outline-none ${f.editable ? 'bg-slate-100 dark:bg-slate-900' : 'bg-slate-100 dark:bg-slate-900/50 opacity-60'}`} /></div>))}
+                  className={`w-full px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none ${f.editable ? 'bg-slate-100' : 'bg-slate-100 opacity-60'}`} /></div>))}
           </div>
-          <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+          <div className="pt-4 border-t border-slate-200">
             <h3 className="text-sm font-bold mb-3">Session & Security</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 p-2 bg-slate-100 dark:bg-slate-900 rounded-xl"><Clock size={12} /> Timeout: {user.role === 'functionary' ? '30 minutes' : '24 hours'}</div>
-              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 p-2 bg-slate-100 dark:bg-slate-900 rounded-xl"><Key size={12} /> Auth: {user.role === 'admin' || user.role === 'reviewer' ? 'Password' : 'OTP'}</div>
-              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 p-2 bg-slate-100 dark:bg-slate-900 rounded-xl"><Shield size={12} /> All logins tracked with IP</div>
-              {schoolCode && <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 p-2 bg-slate-100 dark:bg-slate-900 rounded-xl"><Building size={12} /> School: {schoolCode}</div>}
+              <div className="flex items-center gap-2 text-slate-500 p-2 bg-slate-100 rounded-xl"><Clock size={12} /> Timeout: {user.role === 'functionary' ? '30 minutes' : '24 hours'}</div>
+              <div className="flex items-center gap-2 text-slate-500 p-2 bg-slate-100 rounded-xl"><Key size={12} /> Auth: {user.role === 'admin' || user.role === 'reviewer' ? 'Password' : 'OTP'}</div>
+              <div className="flex items-center gap-2 text-slate-500 p-2 bg-slate-100 rounded-xl"><Shield size={12} /> All logins tracked with IP</div>
+              {schoolCode && <div className="flex items-center gap-2 text-slate-500 p-2 bg-slate-100 rounded-xl"><Building size={12} /> School: {schoolCode}</div>}
             </div>
           </div>
           <button onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2000); }}

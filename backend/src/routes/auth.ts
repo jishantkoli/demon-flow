@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { login, requestOTP, verifyOTP, logout, verifySession } from '../controllers/auth.js';
+import { login, requestOTP, verifyOTP, logout, verifySession, refreshSession } from '../controllers/auth.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -16,6 +16,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 router.post('/logout', logout);
+router.post('/refresh', refreshSession);
 router.get('/me', authenticate, (req: any, res) => res.json({ user: req.user }));
 
 export default router;

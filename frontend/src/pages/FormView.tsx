@@ -40,7 +40,7 @@ export default function FormView({ user }: { user: User }) {
   }, [submissionId]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div>;
-  if (!submission || !form) return <div className="text-center py-16 text-slate-500 dark:text-slate-400">Submission not found</div>;
+  if (!submission || !form) return <div className="text-center py-16 text-slate-500">Submission not found</div>;
 
   let fields: FormField[] = [];
   try { 
@@ -88,11 +88,11 @@ export default function FormView({ user }: { user: User }) {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white mb-4">
+      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 mb-4">
         <ArrowLeft size={16} /> Back
       </button>
 
-      <div className="bg-slate-100 dark:bg-slate-900-card rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div className="bg-slate-100 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="bg-gradient-to-r from-sidebar to-sidebar-light p-6 text-white">
           <h1 className="text-lg font-bold font-heading">{form.title}</h1>
           <div className="flex flex-wrap gap-3 mt-3 text-[11px]">

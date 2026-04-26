@@ -28,11 +28,11 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-[3px] border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold">Loading SchoolData Portal...</p>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Verifying session...</p>
+          <p className="text-sm text-slate-500 font-semibold">Loading SchoolData Portal...</p>
+          <p className="text-[10px] text-slate-500 mt-1">Verifying session...</p>
         </div>
       </div>
     );
@@ -64,7 +64,7 @@ function AppContent() {
         {user?.role === 'admin' && <Route path="/audit-logs" element={<AuditLogs />} />}
         {user?.role === 'admin' && <Route path="/exports" element={<Exports />} />}
         <Route path="/profile" element={user ? <Profile user={user} /> : <Navigate to="/login" />} />
-        <Route path="/login" element={<Login onLogin={refreshUser} />} />
+        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login onLogin={refreshUser} />} />
         <Route path="*" element={<Navigate to={user ? "/" : "/login"} replace />} />
       </Routes>
     </Layout>

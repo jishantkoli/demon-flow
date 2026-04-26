@@ -166,16 +166,16 @@ export default function FormRenderer({ fields, formType, settings, initialValues
     // High-contrast input styling
     const ic = [
       "w-full px-3.5 py-2.5 rounded-xl border text-sm outline-none transition-colors",
-      "text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500",
+      "text-slate-900 placeholder-slate-400",
       err
-        ? "border-red-500 bg-red-50 dark:bg-red-950/30"
-        : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20",
-      dis ? "opacity-60 pointer-events-none bg-slate-100 dark:bg-slate-900" : ""
+        ? "border-red-500 bg-red-50"
+        : "border-slate-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20",
+      dis ? "opacity-60 pointer-events-none bg-slate-100" : ""
     ].join(" ");
 
     // High-contrast label
     const labelEl = (
-      <label className="text-[13px] font-bold text-slate-800 dark:text-slate-100 mb-2 block" htmlFor={f.id}>
+      <label className="text-[13px] font-bold text-slate-800 mb-2 block" htmlFor={f.id}>
         {f.label}
         {f.required && <span className="text-red-500 ml-1">*</span>}
         {f.type === 'mcq' && f.points != null && viewMode === 'admin' && (
@@ -185,7 +185,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
     );
 
     const errEl = err && (
-      <p className="text-[12px] text-red-600 dark:text-red-400 mt-1.5 flex items-center gap-1 font-semibold">
+      <p className="text-[12px] text-red-600 mt-1.5 flex items-center gap-1 font-semibold">
         <AlertCircle size={12} />{err}
       </p>
     );
@@ -203,8 +203,8 @@ export default function FormRenderer({ fields, formType, settings, initialValues
     const optCls = (selected: boolean) => [
       "flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all min-h-[48px]",
       selected
-        ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-sm"
-        : "border-slate-200 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-800",
+        ? "border-blue-500 bg-blue-50 shadow-sm"
+        : "border-slate-200 hover:border-slate-400 bg-white",
       dis ? "pointer-events-none opacity-70" : ""
     ].join(" ");
 
@@ -231,7 +231,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
             {(f.options || []).map(o => (
               <label key={o} className={optCls(val === o)}>
                 <input type="radio" name={f.id} value={o} checked={val === o} onChange={() => set(f.id, o)} className="accent-blue-600 w-4 h-4" disabled={dis} />
-                <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{o}</span>
+                <span className="text-sm font-medium text-slate-800">{o}</span>
               </label>
             ))}
           </div>
@@ -244,7 +244,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
               return (
                 <label key={o} className={optCls(ck)}>
                   <input type="checkbox" checked={ck} onChange={() => { const a = Array.isArray(val) ? [...val] : []; ck ? set(f.id, a.filter(v => v !== o)) : set(f.id, [...a, o]); }} className="accent-blue-600 rounded w-4 h-4" disabled={dis} />
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{o}</span>
+                  <span className="text-sm font-medium text-slate-800">{o}</span>
                 </label>
               );
             })}
@@ -258,12 +258,12 @@ export default function FormRenderer({ fields, formType, settings, initialValues
         return wrap(
           <div className="mt-1">
             {val ? (
-              <div className="flex items-center gap-3 p-3.5 bg-slate-50 dark:bg-slate-700 rounded-xl border-2 border-slate-200 dark:border-slate-600">
+              <div className="flex items-center gap-3 p-3.5 bg-slate-50 rounded-xl border-2 border-slate-200">
                 <FileText size={18} className="text-blue-600 flex-shrink-0" />
-                <span className="text-sm flex-1 truncate font-medium text-slate-800 dark:text-slate-100">{val}</span>
+                <span className="text-sm flex-1 truncate font-medium text-slate-800">{val}</span>
                 <div className="flex items-center gap-2">
                   <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
-                    className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                     title="View File">
                     <ExternalLink size={16} />
                   </a>
@@ -271,7 +271,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
                 </div>
               </div>
             ) : (
-              <div className={`border-2 border-dashed rounded-xl p-8 text-center ${dis ? 'border-slate-300 opacity-60' : 'border-slate-300 dark:border-slate-600 hover:border-blue-500 cursor-pointer bg-white dark:bg-slate-800'}`}
+              <div className={`border-2 border-dashed rounded-xl p-8 text-center ${dis ? 'border-slate-300 opacity-60' : 'border-slate-300 hover:border-blue-500 cursor-pointer bg-white'}`}
                 onClick={() => {
                   if (dis) return;
                   const input = document.createElement('input');
@@ -309,7 +309,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
                   input.click();
                 }}>
                 <Upload size={28} className="mx-auto text-slate-400 mb-2" />
-                <p className="text-sm text-slate-600 dark:text-slate-300 font-semibold">Click to upload</p>
+                <p className="text-sm text-slate-600 font-semibold">Click to upload</p>
                 {f.allowedFormats && <p className="text-[11px] text-slate-500 mt-1">Allowed: <span className="font-semibold">{f.allowedFormats.join(', ').toUpperCase()}</span></p>}
                 {f.maxSizeMB && <p className="text-[11px] text-slate-500">Max size: <span className="font-semibold">{f.maxSizeMB} MB</span></p>}
               </div>
@@ -322,7 +322,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
           <div className="flex gap-2 mt-1">
             {Array.from({ length: f.max || 5 }, (_, i) => i + 1).map(n => (
               <button key={n} type="button" onClick={() => !dis && set(f.id, n)}
-                className={`w-11 h-11 rounded-xl border-2 text-sm font-bold transition-all ${val === n ? 'border-blue-500 bg-blue-600 text-white scale-110 shadow-md' : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800'} ${dis ? 'pointer-events-none' : ''}`}>
+                className={`w-11 h-11 rounded-xl border-2 text-sm font-bold transition-all ${val === n ? 'border-blue-500 bg-blue-600 text-white scale-110 shadow-md' : 'border-slate-300 hover:border-blue-400 text-slate-700 bg-white'} ${dis ? 'pointer-events-none' : ''}`}>
                 {n}
               </button>
             ))}
@@ -340,18 +340,18 @@ export default function FormRenderer({ fields, formType, settings, initialValues
               let cls = optCls(false);
               if (sel && !readOnly) cls = optCls(true);
               if (readOnly && showCorrect && isCorr)
-                cls = "flex items-center gap-3 p-3.5 rounded-xl border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 shadow-sm min-h-[48px] pointer-events-none";
+                cls = "flex items-center gap-3 p-3.5 rounded-xl border-2 border-emerald-500 bg-emerald-50 shadow-sm min-h-[48px] pointer-events-none";
               if (readOnly && showCorrect && sel && !isCorr)
-                cls = "flex items-center gap-3 p-3.5 rounded-xl border-2 border-red-500 bg-red-50 dark:bg-red-900/30 shadow-sm min-h-[48px] pointer-events-none";
+                cls = "flex items-center gap-3 p-3.5 rounded-xl border-2 border-red-500 bg-red-50 shadow-sm min-h-[48px] pointer-events-none";
               if (readOnly && !showCorrect && sel)
-                cls = "flex items-center gap-3 p-3.5 rounded-xl border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/30 min-h-[48px] pointer-events-none";
+                cls = "flex items-center gap-3 p-3.5 rounded-xl border-2 border-blue-500 bg-blue-50 min-h-[48px] pointer-events-none";
               if (readOnly && !showCorrect && !sel)
-                cls = "flex items-center gap-3 p-3.5 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 min-h-[48px] pointer-events-none";
+                cls = "flex items-center gap-3 p-3.5 rounded-xl border-2 border-slate-200 bg-white min-h-[48px] pointer-events-none";
 
               return (
                 <label key={o} className={cls}>
                   <input type="radio" name={f.id} value={o} checked={sel} onChange={() => set(f.id, o)} className="accent-blue-600 w-4 h-4" disabled={dis} />
-                  <span className="text-sm flex-1 font-medium text-slate-800 dark:text-slate-100">{o}</span>
+                  <span className="text-sm flex-1 font-medium text-slate-800">{o}</span>
                   {readOnly && showCorrect && isCorr && <CheckCircle size={18} className="text-emerald-600 flex-shrink-0" />}
                   {readOnly && showCorrect && sel && !isCorr && <AlertCircle size={18} className="text-red-600 flex-shrink-0" />}
                 </label>
@@ -369,8 +369,8 @@ export default function FormRenderer({ fields, formType, settings, initialValues
       case 'section':
         return (
           <motion.div key={f.id} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.3 }} layout
-            className="border-l-4 border-blue-500 pl-5 py-4 my-4 bg-blue-50/60 dark:bg-blue-900/15 rounded-r-xl">
-            <h3 className="text-[15px] font-bold font-heading text-blue-800 dark:text-blue-200 mb-5 flex items-center gap-2">
+            className="border-l-4 border-blue-500 pl-5 py-4 my-4 bg-blue-50/60 rounded-r-xl">
+            <h3 className="text-[15px] font-bold font-heading text-blue-800 mb-5 flex items-center gap-2">
               <ChevronRight size={18} className="text-blue-600" />{f.label}
               {f.section_type && (
                 <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${
@@ -409,11 +409,11 @@ export default function FormRenderer({ fields, formType, settings, initialValues
   if (hasQuiz && !quizStarted && !readOnly && settings?.time_limit) {
     return (
       <div className="text-center py-12">
-        <div className="w-20 h-20 rounded-2xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 flex items-center justify-center mx-auto mb-4"><Clock size={36} /></div>
-        <h2 className="text-xl font-bold font-heading text-slate-900 dark:text-white mb-2">{formType === 'quiz' ? 'Quiz Ready' : 'Form Ready'}</h2>
-        <p className="text-sm text-slate-600 dark:text-slate-300 mb-1"><span className="font-bold text-slate-900 dark:text-white">{quizQCount}</span> quiz questions · <span className="font-bold text-slate-900 dark:text-white">{quizTotal}</span> total marks</p>
-        <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">Time limit: <span className="font-bold text-slate-900 dark:text-white">{settings.time_limit} min</span></p>
-        {settings.passing_score && <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">Passing score: <span className="font-bold text-slate-900 dark:text-white">{settings.passing_score}%</span></p>}
+        <div className="w-20 h-20 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-4"><Clock size={36} /></div>
+        <h2 className="text-xl font-bold font-heading text-slate-900 mb-2">{formType === 'quiz' ? 'Quiz Ready' : 'Form Ready'}</h2>
+        <p className="text-sm text-slate-600 mb-1"><span className="font-bold text-slate-900">{quizQCount}</span> quiz questions · <span className="font-bold text-slate-900">{quizTotal}</span> total marks</p>
+        <p className="text-sm text-slate-600 mb-1">Time limit: <span className="font-bold text-slate-900">{settings.time_limit} min</span></p>
+        {settings.passing_score && <p className="text-sm text-slate-600 mb-1">Passing score: <span className="font-bold text-slate-900">{settings.passing_score}%</span></p>}
         {settings.negative_marking && <p className="text-sm text-red-600 font-bold mb-1">⚠ Negative marking enabled (25% deduction for wrong answers)</p>}
         <p className="text-xs text-slate-500 mb-6">Timer starts when you click Begin. Auto-submits when time runs out.</p>
         <button onClick={() => setQuizStarted(true)} className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 shadow-lg min-h-[48px]">
@@ -427,22 +427,22 @@ export default function FormRenderer({ fields, formType, settings, initialValues
     <div className="space-y-5">
       {/* Progress */}
       <div className="flex items-center gap-3">
-        <div className="flex-1 h-2.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+        <div className="flex-1 h-2.5 bg-slate-200 rounded-full overflow-hidden">
           <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} className={`h-full rounded-full ${pct === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`} />
         </div>
-        <span className="text-xs font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap">{pct}% done</span>
+        <span className="text-xs font-bold text-slate-600 whitespace-nowrap">{pct}% done</span>
       </div>
 
       {/* Timer */}
       {quizTimeLeft != null && quizStarted && (
-        <div className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold ${quizTimeLeft <= 60 ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 animate-pulse' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
+        <div className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold ${quizTimeLeft <= 60 ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-amber-100 text-amber-800'}`}>
           <Clock size={16} />{Math.floor(quizTimeLeft / 60).toString().padStart(2, '0')}:{(quizTimeLeft % 60).toString().padStart(2, '0')} remaining
         </div>
       )}
 
       {/* Auto-save indicator */}
       {lastSaved && !readOnly && (
-        <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+        <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 font-bold">
           <Save size={11} /> Auto-saved at {lastSaved}
         </div>
       )}
@@ -454,17 +454,17 @@ export default function FormRenderer({ fields, formType, settings, initialValues
 
       {/* Score display for admin/reviewer in read-only */}
       {readOnly && hasQuiz && (viewMode === 'admin' || viewMode === 'reviewer') && (
-        <div className="mt-6 p-5 bg-slate-100 dark:bg-slate-700 rounded-xl border-2 border-slate-200 dark:border-slate-600">
-          <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Quiz Score</h4>
+        <div className="mt-6 p-5 bg-slate-100 rounded-xl border-2 border-slate-200">
+          <h4 className="text-sm font-bold text-slate-900 mb-3">Quiz Score</h4>
           <div className="flex items-center gap-5">
             <div className="text-4xl font-black text-blue-600">{calcScore()}%</div>
             <div className="text-sm">
               {viewMode === 'admin' && (
-                <p className="text-slate-700 dark:text-slate-200 font-medium">
+                <p className="text-slate-700 font-medium">
                   {(() => { let c = 0; const w = (l: FormField[]) => l.forEach(f => { if (f.type === 'mcq' && values[f.id] === f.correct) c++; if (f.children) w(f.children); }); w(fields); return c; })()}/{quizQCount} correct answers
                 </p>
               )}
-              {viewMode === 'reviewer' && <p className="text-slate-600 dark:text-slate-300">Score calculated automatically by system</p>}
+              {viewMode === 'reviewer' && <p className="text-slate-600">Score calculated automatically by system</p>}
               {settings?.passing_score && (
                 <p className={`font-bold text-sm mt-1 ${calcScore() >= settings.passing_score ? 'text-emerald-600' : 'text-red-600'}`}>
                   {calcScore() >= settings.passing_score ? '✓ PASSED' : '✗ FAILED'}
@@ -478,10 +478,10 @@ export default function FormRenderer({ fields, formType, settings, initialValues
 
       {/* Submit / Draft buttons */}
       {!readOnly && (
-        <div className="flex flex-col sm:flex-row gap-3 pt-5 border-t-2 border-slate-200 dark:border-slate-700">
+        <div className="flex flex-col sm:flex-row gap-3 pt-5 border-t-2 border-slate-200">
           {onSaveDraft && (
             <button type="button" onClick={() => { onSaveDraft(valuesRef.current); setLastSaved(new Date().toLocaleTimeString()); }}
-              className="px-5 py-3 bg-white dark:bg-slate-700 border-2 border-slate-300 dark:border-slate-600 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 flex items-center justify-center gap-2 min-h-[48px]">
+              className="px-5 py-3 bg-white border-2 border-slate-300 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-2 min-h-[48px]">
               <Save size={16} /> Save Draft
             </button>
           )}

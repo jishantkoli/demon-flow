@@ -27,8 +27,8 @@ export default function Analytics() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div><h1 className="text-xl font-bold font-heading">Analytics</h1><p className="text-sm text-slate-500 dark:text-slate-400">Comprehensive data insights and reporting</p></div>
-        <select value={selectedForm} onChange={e => { setSelectedForm(e.target.value); setLoading(true); }} className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 outline-none min-w-[200px]" aria-label="Select form">
+        <div><h1 className="text-xl font-bold font-heading">Analytics</h1><p className="text-sm text-slate-500">Comprehensive data insights and reporting</p></div>
+        <select value={selectedForm} onChange={e => { setSelectedForm(e.target.value); setLoading(true); }} className="text-xs bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none min-w-[200px]" aria-label="Select form">
           <option value="">All Forms (Overview)</option>
           {forms.map((f: any) => <option key={f.id} value={f.id}>{f.title} ({f.status})</option>)}
         </select>
@@ -54,16 +54,16 @@ export default function Analytics() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Submission Timeline Chart */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-          className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+          className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
           <h3 className="font-semibold font-heading text-sm mb-4 flex items-center gap-2"><Calendar size={14} className="text-primary" /> Submission Timeline</h3>
-          {timeline.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-8">No timeline data</p> : (
+          {timeline.length === 0 ? <p className="text-sm text-slate-500 text-center py-8">No timeline data</p> : (
             <div className="flex items-end gap-1 h-40">
               {timeline.map(([date, count], i) => (
                 <div key={date} className="flex-1 flex flex-col items-center gap-1" title={`${date}: ${count} submissions`}>
                   <motion.div initial={{ height: 0 }} animate={{ height: `${((count as number) / maxTimeline) * 100}%` }}
                     transition={{ delay: 0.3 + i * 0.03, duration: 0.5 }}
                     className="w-full bg-gradient-to-t from-primary to-accent-blue rounded-t-lg min-h-[4px]" />
-                  <span className="text-[8px] text-slate-500 dark:text-slate-400 -rotate-45 origin-left whitespace-nowrap">{date.slice(5)}</span>
+                  <span className="text-[8px] text-slate-500 -rotate-45 origin-left whitespace-nowrap">{date.slice(5)}</span>
                 </div>
               ))}
             </div>
@@ -72,7 +72,7 @@ export default function Analytics() {
 
         {/* Status Distribution */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-          className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+          className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
           <h3 className="font-semibold font-heading text-sm mb-4">Submission Status</h3>
           <div className="space-y-3">
             {[{ label: 'Submitted', value: s.submissionsByStatus?.submitted || 0, color: 'bg-blue-500' },
@@ -80,22 +80,22 @@ export default function Analytics() {
               { label: 'Approved', value: s.submissionsByStatus?.approved || 0, color: 'bg-emerald-500' },
               { label: 'Rejected', value: s.submissionsByStatus?.rejected || 0, color: 'bg-red-500' }]
               .map(st => { const total = Math.max(s.totalSubmissions || 1, 1); return (
-                <div key={st.label}><div className="flex justify-between text-xs mb-1"><span className="font-medium">{st.label}</span><span className="text-slate-500 dark:text-slate-400">{st.value} ({Math.round(st.value / total * 100)}%)</span></div>
-                  <div className="h-2.5 bg-slate-100 dark:bg-slate-900 rounded-full overflow-hidden"><motion.div initial={{ width: 0 }} animate={{ width: `${(st.value / total) * 100}%` }} transition={{ delay: 0.4, duration: 0.8 }} className={`h-full rounded-full ${st.color}`} /></div>
+                <div key={st.label}><div className="flex justify-between text-xs mb-1"><span className="font-medium">{st.label}</span><span className="text-slate-500">{st.value} ({Math.round(st.value / total * 100)}%)</span></div>
+                  <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden"><motion.div initial={{ width: 0 }} animate={{ width: `${(st.value / total) * 100}%` }} transition={{ delay: 0.4, duration: 0.8 }} className={`h-full rounded-full ${st.color}`} /></div>
                 </div>); })}
           </div>
         </motion.div>
 
         {/* Score Distribution */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-          className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+          className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
           <h3 className="font-semibold font-heading text-sm mb-4 flex items-center gap-2"><BarChart3 size={14} className="text-primary" /> Score Distribution</h3>
           <div className="space-y-2">
             {Object.entries(s.scoreDistribution || {}).map(([range, count]) => {
               const total = Object.values(s.scoreDistribution || {}).reduce((a: number, b: any) => a + (b as number), 0) as number || 1;
               return (
-                <div key={range}><div className="flex justify-between text-xs mb-1"><span className="font-medium">{range}%</span><span className="text-slate-500 dark:text-slate-400">{count as number}</span></div>
-                  <div className="h-2 bg-slate-100 dark:bg-slate-900 rounded-full overflow-hidden"><motion.div initial={{ width: 0 }} animate={{ width: `${((count as number) / total) * 100}%` }} transition={{ delay: 0.5, duration: 0.6 }} className="h-full rounded-full bg-gradient-to-r from-primary to-accent-green" /></div>
+                <div key={range}><div className="flex justify-between text-xs mb-1"><span className="font-medium">{range}%</span><span className="text-slate-500">{count as number}</span></div>
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><motion.div initial={{ width: 0 }} animate={{ width: `${((count as number) / total) * 100}%` }} transition={{ delay: 0.5, duration: 0.6 }} className="h-full rounded-full bg-gradient-to-r from-primary to-accent-green" /></div>
                 </div>);
             })}
           </div>
@@ -103,16 +103,16 @@ export default function Analytics() {
 
         {/* Nominations */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
-          className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+          className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
           <h3 className="font-semibold font-heading text-sm mb-4">Nomination Status</h3>
           <div className="grid grid-cols-3 gap-3">
-            {[{ label: 'Invited', count: s.nominationsByStatus?.invited || 0, color: 'bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-400' },
-              { label: 'In Progress', count: s.nominationsByStatus?.in_progress || 0, color: 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400' },
-              { label: 'Completed', count: s.nominationsByStatus?.completed || 0, color: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' }]
+            {[{ label: 'Invited', count: s.nominationsByStatus?.invited || 0, color: 'bg-sky-50 text-sky-700' },
+              { label: 'In Progress', count: s.nominationsByStatus?.in_progress || 0, color: 'bg-indigo-50 text-indigo-700' },
+              { label: 'Completed', count: s.nominationsByStatus?.completed || 0, color: 'bg-emerald-50 text-emerald-700' }]
               .map(n => (<div key={n.label} className={`${n.color} rounded-xl p-3 text-center`}><p className="text-xl font-bold">{n.count}</p><p className="text-[10px] font-semibold">{n.label}</p></div>))}
           </div>
           {s.schoolCodes && s.schoolCodes.length > 0 && (
-            <div className="mt-4"><p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Active School Codes</p>
+            <div className="mt-4"><p className="text-xs font-semibold text-slate-500 mb-2">Active School Codes</p>
               <div className="flex flex-wrap gap-1">{s.schoolCodes.map((c: string) => <span key={c} className="text-[10px] font-mono font-bold px-2 py-0.5 bg-primary/10 text-primary rounded-full">{c}</span>)}</div>
             </div>
           )}

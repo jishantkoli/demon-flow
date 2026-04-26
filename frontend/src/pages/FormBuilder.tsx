@@ -98,6 +98,7 @@ export default function FormBuilder() {
   const [activeField, setActiveField] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -163,13 +164,13 @@ export default function FormBuilder() {
         settings: JSON.stringify(form.settings),
       };
       if (isNew) {
-        const r: any = await api.post('/forms', payload);
-        const newFormId = r.data?.id || r.data?._id || r.id;
-        if (newFormId) nav(`/forms/${newFormId}/builder`, { replace: true });
+        await api.post('/forms', payload);
       } else {
         const { id: _formId, ...formWithoutId } = form;
         await api.put('/forms', { id, ...formWithoutId, form_schema: form.schema, settings: JSON.stringify(form.settings) });
       }
+      alert('Changes saved successfully.');
+      nav('/forms');
     } catch (err: any) {
       alert(err.message);
     } finally { setSaving(false); }
@@ -190,6 +191,15 @@ export default function FormBuilder() {
   ];
 
   const publicUrl = `${location.origin}/fill/${id || 'unsaved'}`;
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (e) {
+      console.error('Failed to copy link', e);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -359,9 +369,9 @@ export default function FormBuilder() {
             <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm p-4 md:p-10 overflow-y-auto">
               <div className="max-w-4xl mx-auto">
                 <div className="flex justify-end mb-4">
-                  <button 
+                  <button
                     onClick={() => setShowPreview(false)}
-                    className="bg-white dark:bg-slate-800 p-2 rounded-full shadow-lg hover:scale-110 transition-transform"
+                    className="bg-white p-2 rounded-full shadow-lg hover:scale-110 transition-transform"
                   >
                     <ArrowLeft size={24} />
                   </button>
@@ -484,7 +494,10 @@ export default function FormBuilder() {
             <div className="text-xs text-muted mb-2">Public link</div>
             <div className="flex items-center gap-1 text-xs font-mono bg-canvas rounded-lg px-2 py-2 break-all">
               <Link2 size={12}/><span className="flex-1 break-all">{publicUrl}</span>
-              <button onClick={() => navigator.clipboard.writeText(publicUrl)} className="p-1 rounded hover:bg-white"><Copy size={12}/></button>
+              <button onClick={handleCopyLink} className="p-1 rounded hover:bg-white inline-flex items-center gap-1.5">
+                <Copy size={12}/>
+                {copied && <span className="text-[10px] font-semibold text-primary">Copied</span>}
+              </button>
             </div>
             <div className="mt-3 text-xs text-muted mb-2 flex items-center gap-1"><QrCode size={12}/> QR code</div>
             <div className="flex items-center justify-center bg-white rounded-xl border border-border p-3">
@@ -546,7 +559,7 @@ function PreviewPane({ form }: { form: FormState }) {
             </div>
             <div className="space-y-5">
               {s.fields.map(f => (
-                <div key={f.id} className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-border shadow-sm">
+                <div key={f.id} className="bg-white p-5 rounded-2xl border border-border shadow-sm">
                   <label className="block text-sm font-semibold text-ink mb-3">
                     {f.label}{f.required && <span className="text-rose-500 ml-1">*</span>}
                   </label>

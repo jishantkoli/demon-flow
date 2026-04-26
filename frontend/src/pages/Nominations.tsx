@@ -197,26 +197,26 @@ export default function Nominations({ user }: { user: User }) {
 
   const columns = [
     { key: 'teacher_name', label: 'Teacher', sortable: true, render: (v: string, row: any) => (
-      <div><p className="font-medium text-sm">{v}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">{row.teacher_email}</p></div>) },
+      <div><p className="font-medium text-sm">{v}</p><p className="text-[10px] text-slate-500">{row.teacher_email}</p></div>) },
     { key: 'school_code', label: 'School', render: (v: string) => <span className="text-xs font-mono font-bold text-primary">{v}</span> },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
-    { key: 'link_type', label: 'Access', render: (v: string) => <span className="text-xs capitalize px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">{v}</span> },
-    { key: 'reminder_count', label: 'Reminders', render: (v: number) => <span className="text-xs text-slate-500 dark:text-slate-400">{v || 0} sent</span> },
-    { key: 'invited_at', label: 'Invited', sortable: true, render: (v: string) => v ? <span className="text-xs text-slate-500 dark:text-slate-400">{new Date(v).toLocaleDateString()}</span> : '—' },
+    { key: 'link_type', label: 'Access', render: (v: string) => <span className="text-xs capitalize px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">{v}</span> },
+    { key: 'reminder_count', label: 'Reminders', render: (v: number) => <span className="text-xs text-slate-500">{v || 0} sent</span> },
+    { key: 'invited_at', label: 'Invited', sortable: true, render: (v: string) => v ? <span className="text-xs text-slate-500">{new Date(v).toLocaleDateString()}</span> : '—' },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div><h1 className="text-xl font-bold font-heading">Nominations</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Manage teacher nominations for school <span className="font-bold text-primary">{schoolCode}</span></p></div>
+          <p className="text-sm text-slate-500">Manage teacher nominations for school <span className="font-bold text-primary">{schoolCode}</span></p></div>
         <div className="flex items-center gap-2">
           <select value={selectedForm} onChange={e => setSelectedForm(e.target.value)}
-            className="text-sm border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 outline-none transition-all min-w-[200px]">
+            className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all min-w-[200px]">
             <option value="">All Active Forms</option>
             {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
           </select>
-          <button onClick={() => setShowBulk(true)} className="inline-flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-100 dark:bg-slate-900"><Upload size={14} /> CSV Import</button>
+          <button onClick={() => setShowBulk(true)} className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold hover:bg-slate-100"><Upload size={14} /> CSV Import</button>
           <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover min-h-[44px]"><UserPlus size={16} /> Add Teacher</button>
         </div>
       </div>
@@ -228,13 +228,13 @@ export default function Nominations({ user }: { user: User }) {
         try { const s = typeof f.settings === 'string' ? JSON.parse(f.settings) : f.settings; maxNom = s?.max_nominations || 5; } catch {}
         return (
           <div key={f.id} onClick={() => { setSelectedForm(f.id); setShowAdd(true); }}
-            className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm cursor-pointer hover:border-primary transition-all group">
+            className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm cursor-pointer hover:border-primary transition-all group">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-bold group-hover:text-primary transition-colors">{f.title}</h3>
               <span className={`text-xs font-bold ${noms.length >= maxNom ? 'text-danger' : 'text-accent-green'}`}>{noms.length}/{maxNom} nominations</span>
             </div>
-            <div className="h-2 bg-slate-100 dark:bg-slate-900 rounded-full overflow-hidden"><div className={`h-full rounded-full ${noms.length >= maxNom ? 'bg-danger' : 'bg-accent-green'}`} style={{ width: `${Math.min((noms.length / maxNom) * 100, 100)}%` }} /></div>
-            <div className="flex gap-4 mt-2 text-xs text-slate-500 dark:text-slate-400">
+            <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${noms.length >= maxNom ? 'bg-danger' : 'bg-accent-green'}`} style={{ width: `${Math.min((noms.length / maxNom) * 100, 100)}%` }} /></div>
+            <div className="flex gap-4 mt-2 text-xs text-slate-500">
               <span>✓ {noms.filter(n => n.status === 'completed').length} completed</span>
               <span>○ {noms.filter(n => n.status === 'in_progress').length} in progress</span>
             </div>
@@ -246,9 +246,9 @@ export default function Nominations({ user }: { user: User }) {
         onRowClick={(row) => { setSelectedNom(row); setShowDetails(true); }}
         actions={(row: any) => (
           <div className="flex items-center gap-1">
-            <button onClick={e => { e.stopPropagation(); copyLink(row); }} className="p-1.5 rounded-lg hover:bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-primary" title="Copy Link"><Link2 size={14} /></button>
-            {row.status === 'pending' && <button onClick={e => { e.stopPropagation(); sendInvite(row); }} className="p-1.5 rounded-lg hover:bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-green-500" title="Send Invitation"><Send size={14} /></button>}
-            {row.status === 'invited' && <button onClick={e => { e.stopPropagation(); resendInvite(row); }} className="p-1.5 rounded-lg hover:bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-amber-500" title="Resend"><RefreshCw size={14} /></button>}
+            <button onClick={e => { e.stopPropagation(); copyLink(row); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-primary" title="Copy Link"><Link2 size={14} /></button>
+            {row.status === 'pending' && <button onClick={e => { e.stopPropagation(); sendInvite(row); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-green-500" title="Send Invitation"><Send size={14} /></button>}
+            {row.status === 'invited' && <button onClick={e => { e.stopPropagation(); resendInvite(row); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-amber-500" title="Resend"><RefreshCw size={14} /></button>}
           </div>)}
       />
 
@@ -256,7 +256,7 @@ export default function Nominations({ user }: { user: User }) {
       <Modal open={showDetails} onClose={() => setShowDetails(false)} title="Nomination Details">
         {selectedNom && (
           <div className="space-y-6">
-            <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
               <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-bold">{selectedNom.teacher_name?.[0]}</div>
               <div>
                 <h3 className="font-bold text-lg">{selectedNom.teacher_name}</h3>
@@ -265,24 +265,24 @@ export default function Nominations({ user }: { user: User }) {
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="p-3 rounded-xl border border-slate-200">
                 <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Status</p>
                 <StatusBadge status={selectedNom.status} />
               </div>
-              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="p-3 rounded-xl border border-slate-200">
                 <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Access Type</p>
                 <p className="text-sm font-semibold capitalize">{selectedNom.link_type}</p>
               </div>
-              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="p-3 rounded-xl border border-slate-200">
                 <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">School Code</p>
                 <p className="text-sm font-semibold font-mono">{selectedNom.school_code}</p>
               </div>
-              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="p-3 rounded-xl border border-slate-200">
                 <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Invited At</p>
                 <p className="text-sm font-semibold">{selectedNom.invited_at ? new Date(selectedNom.invited_at).toLocaleDateString() : 'Not Invited'}</p>
               </div>
               {selectedNom.teacher_phone && (
-                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div className="p-3 rounded-xl border border-slate-200">
                   <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Phone</p>
                   <p className="text-sm font-semibold">{selectedNom.teacher_phone}</p>
                 </div>
@@ -295,7 +295,7 @@ export default function Nominations({ user }: { user: User }) {
                 const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val as string : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`) : '';
 
                 return (
-                  <div key={key} className="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div key={key} className="p-3 rounded-xl border border-slate-200">
                     <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">{label}</p>
                     {isFile ? (
                       <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-primary hover:underline flex items-center gap-1 mt-1">
@@ -310,7 +310,7 @@ export default function Nominations({ user }: { user: User }) {
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
-              <button onClick={() => setShowDetails(false)} className="px-4 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:bg-slate-900">Close</button>
+              <button onClick={() => setShowDetails(false)} className="px-4 py-2 text-sm rounded-xl border border-slate-200 hover:bg-slate-100">Close</button>
               {selectedNom.status === 'pending' && (
                 <button onClick={() => { sendInvite(selectedNom); setShowDetails(false); }} className="px-6 py-2 bg-primary text-white text-sm rounded-xl font-semibold hover:bg-primary-hover flex items-center gap-2">
                   <Send size={14} /> Send Invitation
@@ -325,8 +325,8 @@ export default function Nominations({ user }: { user: User }) {
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Teacher Nomination">
         <div className="space-y-4">
           {!selectedForm && (
-            <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Select Form First</label>
-              <select value={selectedForm} onChange={e => setSelectedForm(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none">
+            <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Select Form First</label>
+              <select value={selectedForm} onChange={e => setSelectedForm(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
                 <option value="">Choose a form...</option>
                 {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
               </select></div>
@@ -334,22 +334,22 @@ export default function Nominations({ user }: { user: User }) {
 
           {selectedForm && (
              <>
-               <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Teacher Name *</label>
-                 <input type="text" value={addForm.teacher_name} onChange={e => setAddForm(p => ({ ...p, teacher_name: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none" placeholder="Full name" /></div>
+               <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Teacher Name *</label>
+                 <input type="text" value={addForm.teacher_name} onChange={e => setAddForm(p => ({ ...p, teacher_name: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none" placeholder="Full name" /></div>
                
-               <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Email {activeSettings.require_email !== false ? '*' : ''}</label>
-                 <input type="email" value={addForm.teacher_email} onChange={e => setAddForm(p => ({ ...p, teacher_email: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none" placeholder="teacher@email.com" /></div>
+               <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Email {activeSettings.require_email !== false ? '*' : ''}</label>
+                 <input type="email" value={addForm.teacher_email} onChange={e => setAddForm(p => ({ ...p, teacher_email: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none" placeholder="teacher@email.com" /></div>
                
                {activeSettings.require_phone && (
-                  <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Phone *</label>
-                    <input type="tel" value={addForm.teacher_phone} onChange={e => setAddForm(p => ({ ...p, teacher_phone: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none" placeholder="+91..." /></div>
+                  <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Phone *</label>
+                    <input type="tel" value={addForm.teacher_phone} onChange={e => setAddForm(p => ({ ...p, teacher_phone: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none" placeholder="+91..." /></div>
                 )}
 
                 {/* Custom Fields */}
                 {((activeSettings.nomination_custom_fields as any[]) || []).map((cf: any) => (
-                  <div key={cf.id}><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">{cf.label} {cf.required ? '*' : ''}</label>
+                  <div key={cf.id}><label className="text-xs font-semibold text-slate-500 mb-1.5 block">{cf.label} {cf.required ? '*' : ''}</label>
                     {cf.type === 'dropdown' ? (
-                      <select value={addForm[cf.id]} onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none">
+                      <select value={addForm[cf.id]} onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
                         <option value="">Select Option</option>
                         {(cf.options || []).map((o: string) => <option key={o} value={o}>{o}</option>)}
                       </select>
@@ -379,7 +379,7 @@ export default function Nominations({ user }: { user: User }) {
                         })}
                       </div>
                     ) : cf.type === 'textarea' ? (
-                      <textarea value={addForm[cf.id]} onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} rows={3} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none resize-none" placeholder={cf.label} />
+                      <textarea value={addForm[cf.id]} onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} rows={3} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none resize-none" placeholder={cf.label} />
                     ) : cf.type === 'file' ? (
                       <div className="mt-1">
                         <input
@@ -392,13 +392,13 @@ export default function Nominations({ user }: { user: User }) {
                           }}
                         />
                         {addForm[cf.id] ? (
-                          <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                          <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg border border-blue-100">
                             <span className="text-xs flex-1 truncate font-medium">{addForm[cf.id]}</span>
                             <button onClick={() => setAddForm(p => ({ ...p, [cf.id]: '' }))} className="p-1 text-rose-500 hover:bg-rose-100 rounded-md transition-colors"><Trash2 size={12} /></button>
                           </div>
                         ) : (
                           <div onClick={() => fileInputRef.current?.click()}
-                            className="border border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-3 text-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            className="border border-dashed border-slate-300 rounded-xl p-3 text-center cursor-pointer hover:bg-slate-50 transition-colors">
                             {uploading === cf.id ? (
                               <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-1" />
                             ) : (
@@ -409,21 +409,21 @@ export default function Nominations({ user }: { user: User }) {
                         )}
                       </div>
                     ) : (
-                      <input type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'} value={addForm[cf.id]} onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none" />
+                      <input type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'} value={addForm[cf.id]} onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none" />
                     )}</div>
                 ))}
 
                 {isAdmin && (
-                 <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Access Type</label>
-                   <select value={addForm.link_type} onChange={e => setAddForm(p => ({ ...p, link_type: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none">
+                 <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Access Type</label>
+                   <select value={addForm.link_type} onChange={e => setAddForm(p => ({ ...p, link_type: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
                      <option value="otp">OTP Required</option><option value="direct">Direct Link (No Login)</option></select></div>
                )}
              </>
            )}
           
-          <p className="text-[10px] text-slate-500 dark:text-slate-400">School code <span className="font-bold">{schoolCode}</span> will be auto-attached. Teacher account auto-created if new.</p>
+          <p className="text-[10px] text-slate-500">School code <span className="font-bold">{schoolCode}</span> will be auto-attached. Teacher account auto-created if new.</p>
           <div className="flex justify-end gap-3">
-            <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:bg-slate-900">Cancel</button>
+            <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-sm rounded-xl border border-slate-200 hover:bg-slate-100">Cancel</button>
             <button onClick={handleAddTeacher} disabled={loading || !selectedForm} className="px-6 py-2 bg-primary text-white text-sm rounded-xl font-semibold hover:bg-primary-hover disabled:opacity-50 flex items-center gap-2">
               {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
               {loading ? 'Adding...' : 'Add & Send Link'}
@@ -435,13 +435,13 @@ export default function Nominations({ user }: { user: User }) {
       {/* Bulk Import */}
       <Modal open={showBulk} onClose={() => setShowBulk(false)} title="Bulk Import Teachers" size="lg">
         <div className="space-y-4">
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
-            <p className="text-xs text-blue-700 dark:text-blue-400 font-medium">CSV Format: Teacher Name, Email, Phone (optional)</p>
+          <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+            <p className="text-xs text-blue-700 font-medium">CSV Format: Teacher Name, Email, Phone (optional)</p>
             <p className="text-[10px] text-blue-600 mt-1">Example: Anita Singh, anita@school.edu, +919876543216</p>
           </div>
-          <textarea value={bulkText} onChange={e => setBulkText(e.target.value)} rows={8} placeholder="Paste CSV data..." className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-sm outline-none font-mono resize-none" />
+          <textarea value={bulkText} onChange={e => setBulkText(e.target.value)} rows={8} placeholder="Paste CSV data..." className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none font-mono resize-none" />
           <div className="flex justify-end gap-3">
-            <button onClick={() => setShowBulk(false)} className="px-4 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:bg-slate-900">Cancel</button>
+            <button onClick={() => setShowBulk(false)} className="px-4 py-2 text-sm rounded-xl border border-slate-200 hover:bg-slate-100">Cancel</button>
             <button onClick={handleBulkAdd} disabled={!bulkText.trim()} className="px-6 py-2 bg-primary text-white text-sm rounded-xl font-semibold hover:bg-primary-hover disabled:opacity-50">Import Teachers</button>
           </div>
         </div>

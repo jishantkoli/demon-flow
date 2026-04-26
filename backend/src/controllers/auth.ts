@@ -96,6 +96,40 @@ export const verifySession = async (req: Request, res: Response) => {
   }
 };
 
+export const refreshSession = async (req: Request, res: Response) => {
+  try {
+    const refreshToken = req.cookies?.refreshToken;
+    if (!refreshToken) return res.status(401).json({ error: 'Refresh token required' });
+
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET!) as any;
+    const user = await User.findById(decoded.id);
+    if (!user) return res.status(401).json({ error: 'User not found' });
+
+    const { accessToken, refreshToken: nextRefreshToken } = generateTokens(user);
+
+    res.cookie('refreshToken', nextRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    res.status(200).json({
+      token: accessToken,
+      accessToken,
+      user: {
+        id: user._id,
+        name: user.profile.fullName,
+        email: user.email,
+        role: user.role,
+        school_code: user.profile.schoolCode
+      }
+    });
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid refresh token' });
+  }
+};
+
 export const requestOTP = async (req: Request, res: Response) => {
   try {
     const { email, phone } = req.body;

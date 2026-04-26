@@ -1,18 +1,18 @@
 import React from 'react';
 
 const styles: Record<string, string> = {
-  active: 'bg-emerald-50 text-emerald-700 ring-emerald-500/20 dark:bg-emerald-900/30 dark:text-emerald-400',
-  approved: 'bg-emerald-50 text-emerald-700 ring-emerald-500/20 dark:bg-emerald-900/30 dark:text-emerald-400',
-  completed: 'bg-emerald-50 text-emerald-700 ring-emerald-500/20 dark:bg-emerald-900/30 dark:text-emerald-400',
-  submitted: 'bg-blue-50 text-blue-700 ring-blue-500/20 dark:bg-blue-900/30 dark:text-blue-400',
-  pending: 'bg-amber-50 text-amber-700 ring-amber-500/20 dark:bg-amber-900/30 dark:text-amber-400',
-  in_progress: 'bg-sky-50 text-sky-700 ring-sky-500/20 dark:bg-sky-900/30 dark:text-sky-400',
-  under_review: 'bg-sky-50 text-sky-700 ring-sky-500/20 dark:bg-sky-900/30 dark:text-sky-400',
-  draft: 'bg-slate-100 text-slate-500 ring-slate-400/20 dark:bg-slate-700 dark:text-slate-300',
-  rejected: 'bg-rose-50 text-rose-700 ring-rose-500/20 dark:bg-rose-900/30 dark:text-rose-400',
-  expired: 'bg-slate-100 text-slate-400 ring-slate-300/20 dark:bg-slate-700 dark:text-slate-400',
-  inactive: 'bg-slate-100 text-slate-400 ring-slate-300/20 dark:bg-slate-700 dark:text-slate-400',
-  invited: 'bg-indigo-50 text-indigo-700 ring-indigo-500/20 dark:bg-indigo-900/30 dark:text-indigo-400',
+  active: 'bg-emerald-50 text-emerald-700 ring-emerald-500/20',
+  approved: 'bg-emerald-50 text-emerald-700 ring-emerald-500/20',
+  completed: 'bg-emerald-50 text-emerald-700 ring-emerald-500/20',
+  submitted: 'bg-blue-50 text-blue-700 ring-blue-500/20',
+  pending: 'bg-amber-50 text-amber-700 ring-amber-500/20',
+  in_progress: 'bg-sky-50 text-sky-700 ring-sky-500/20',
+  under_review: 'bg-sky-50 text-sky-700 ring-sky-500/20',
+  draft: 'bg-slate-100 text-slate-500 ring-slate-400/20',
+  rejected: 'bg-rose-50 text-rose-700 ring-rose-500/20',
+  expired: 'bg-slate-100 text-slate-400 ring-slate-300/20',
+  inactive: 'bg-slate-100 text-slate-400 ring-slate-300/20',
+  invited: 'bg-indigo-50 text-indigo-700 ring-indigo-500/20',
 };
 
 export default function StatusBadge({ status, size = 'sm' }: { status: string; size?: 'xs' | 'sm' }) {

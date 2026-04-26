@@ -44,15 +44,15 @@ export default function Exports() {
 
   return (
     <div className="space-y-6">
-      <div><h1 className="text-xl font-bold font-heading">Data Exports</h1><p className="text-sm text-slate-500 dark:text-slate-400">Download data as CSV/Excel for analysis. ZIP exports available for submissions.</p></div>
+      <div><h1 className="text-xl font-bold font-heading">Data Exports</h1><p className="text-sm text-slate-500">Download data as CSV/Excel for analysis. ZIP exports available for submissions.</p></div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {exports.map(exp => (
-          <div key={exp.key} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div key={exp.key} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
             <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${exp.color} text-white flex items-center justify-center mb-3`}><exp.icon size={22} /></div>
             <h3 className="font-semibold text-sm font-heading">{exp.label}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4 leading-relaxed">{exp.desc}</p>
+            <p className="text-xs text-slate-500 mt-1 mb-4 leading-relaxed">{exp.desc}</p>
             <button onClick={() => exportData(exp.key)} disabled={!!exporting}
-              className="w-full py-2.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium hover:bg-white dark:bg-slate-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 min-h-[44px]">
+              className="w-full py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-medium hover:bg-white transition-colors flex items-center justify-center gap-2 disabled:opacity-50 min-h-[44px]">
               {exporting === exp.key ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
               {exporting === exp.key ? 'Exporting...' : 'Export CSV'}
             </button>

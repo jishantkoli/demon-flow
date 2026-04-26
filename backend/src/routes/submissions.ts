@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.post('/', optionalAuthenticate, validate(submissionSchema), submitForm);
 router.put('/', optionalAuthenticate, updateSubmission);
-router.get('/', authenticate, getSubmissions);
+router.get('/', optionalAuthenticate, getSubmissions);
 router.get('/:id', optionalAuthenticate, getSubmissionById);
 
 export default router;
