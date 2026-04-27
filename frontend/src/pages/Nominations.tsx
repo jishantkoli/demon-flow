@@ -6,7 +6,6 @@ import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import { UserPlus, Send, Copy, Link2, Upload, RefreshCw, QrCode, MessageSquare, Trash2 } from 'lucide-react';
-import { useRef } from 'react';
 
 export default function Nominations({ user }: { user: User }) {
   const [searchParams] = useSearchParams();
@@ -21,7 +20,6 @@ export default function Nominations({ user }: { user: User }) {
   const [selectedForm, setSelectedForm] = useState<string>(initialFormId);
   const [addForm, setAddForm] = useState<Record<string, any>>({ teacher_name: '', teacher_email: '', teacher_phone: '', link_type: 'otp' });
   const [bulkText, setBulkText] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<string | null>(null);
 
   const handleFileUpload = async (fieldId: string, file: File) => {
@@ -382,13 +380,18 @@ export default function Nominations({ user }: { user: User }) {
                       <textarea value={addForm[cf.id]} onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} rows={3} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none resize-none" placeholder={cf.label} />
                     ) : cf.type === 'file' ? (
                       <div className="mt-1">
+                        {(() => {
+                          const inputId = `nom-file-${cf.id}`;
+                          return (
+                            <>
                         <input
+                          id={inputId}
                           type="file"
-                          ref={fileInputRef}
                           className="hidden"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) handleFileUpload(cf.id, file);
+                            e.currentTarget.value = '';
                           }}
                         />
                         {addForm[cf.id] ? (
@@ -397,7 +400,7 @@ export default function Nominations({ user }: { user: User }) {
                             <button onClick={() => setAddForm(p => ({ ...p, [cf.id]: '' }))} className="p-1 text-rose-500 hover:bg-rose-100 rounded-md transition-colors"><Trash2 size={12} /></button>
                           </div>
                         ) : (
-                          <div onClick={() => fileInputRef.current?.click()}
+                          <label htmlFor={inputId}
                             className="border border-dashed border-slate-300 rounded-xl p-3 text-center cursor-pointer hover:bg-slate-50 transition-colors">
                             {uploading === cf.id ? (
                               <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-1" />
@@ -405,8 +408,11 @@ export default function Nominations({ user }: { user: User }) {
                               <Upload size={16} className="mx-auto text-slate-400 mb-1" />
                             )}
                             <p className="text-[10px] text-slate-500">{uploading === cf.id ? 'Uploading...' : 'Click to upload file'}</p>
-                          </div>
+                          </label>
                         )}
+                            </>
+                          );
+                        })()}
                       </div>
                     ) : (
                       <input type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'} value={addForm[cf.id]} onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none" />

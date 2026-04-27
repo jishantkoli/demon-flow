@@ -18,6 +18,7 @@ export interface FormField {
   children?: FormField[];
   correct?: string;
   points?: number;
+  marks?: number;
   section_type?: 'normal' | 'branching' | 'quiz';
 }
 
@@ -73,6 +74,21 @@ export default function FormRenderer({ fields, formType, settings, initialValues
     setErrors(p => { const n = { ...p }; delete n[id]; return n; });
   }, []);
 
+  const toOptionText = useCallback((raw: any, options: string[] = []) => {
+    if (raw === undefined || raw === null) return raw;
+    if (typeof raw === 'number' && options[raw] !== undefined) return options[raw];
+    const n = Number(String(raw));
+    if (!Number.isNaN(n) && String(raw).trim() !== '' && options[n] !== undefined) return options[n];
+    return raw;
+  }, []);
+
+  const isMcqCorrect = useCallback((f: FormField, answer: any) => {
+    const options = Array.isArray(f.options) ? f.options : [];
+    const ansText = toOptionText(answer, options);
+    const corrText = toOptionText(f.correct, options);
+    return String(ansText) === String(corrText);
+  }, [toOptionText]);
+
   /* ═══ BRANCHING ═══ */
   const isVis = useCallback((f: FormField): boolean => {
     if (!f.show_when) return true;
@@ -97,17 +113,18 @@ export default function FormRenderer({ fields, formType, settings, initialValues
   const calcScore = useCallback((): number => {
     let score = 0, total = 0;
     const walk = (list: FormField[]) => list.forEach(f => {
-      if (f.type === 'mcq' && f.correct != null && f.points) {
-        total += f.points;
+      const qPoints = Number(f.points ?? f.marks ?? 0);
+      if (f.type === 'mcq' && f.correct != null && qPoints > 0) {
+        total += qPoints;
         const ans = valuesRef.current[f.id];
-        if (ans === f.correct) score += f.points;
-        else if (settings?.negative_marking && ans) score -= Math.round(f.points * 0.25);
+        if (isMcqCorrect(f, ans)) score += qPoints;
+        else if (settings?.negative_marking && ans) score -= Math.round(qPoints * 0.25);
       }
       if (f.children) walk(f.children);
     });
     walk(fields);
     return total > 0 ? Math.max(0, Math.round((score / total) * 100)) : 0;
-  }, [fields, settings, values]);
+  }, [fields, settings, values, isMcqCorrect]);
 
   /* ═══ VALIDATION ═══ */
   const validate = useCallback((): boolean => {
@@ -178,8 +195,8 @@ export default function FormRenderer({ fields, formType, settings, initialValues
       <label className="text-[13px] font-bold text-slate-800 mb-2 block" htmlFor={f.id}>
         {f.label}
         {f.required && <span className="text-red-500 ml-1">*</span>}
-        {f.type === 'mcq' && f.points != null && viewMode === 'admin' && (
-          <span className="ml-2 text-[10px] font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">{f.points} marks</span>
+        {f.type === 'mcq' && Number(f.points ?? f.marks ?? 0) > 0 && viewMode === 'admin' && (
+          <span className="ml-2 text-[10px] font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">{Number(f.points ?? f.marks)} marks</span>
         )}
       </label>
     );
@@ -332,11 +349,13 @@ export default function FormRenderer({ fields, formType, settings, initialValues
       case 'mcq': {
         const opts = shuffledOpts[f.id] || f.options || [];
         const showCorrect = viewMode === 'admin'; // ONLY admin sees correct answers
+        const selectedText = toOptionText(val, Array.isArray(f.options) ? f.options : []);
+        const correctText = toOptionText(f.correct, Array.isArray(f.options) ? f.options : []);
         return wrap(
           <div className="space-y-2 mt-1">
             {opts.map(o => {
-              const sel = val === o;
-              const isCorr = o === f.correct;
+              const sel = String(selectedText) === String(o);
+              const isCorr = String(correctText) === String(o);
               let cls = optCls(false);
               if (sel && !readOnly) cls = optCls(true);
               if (readOnly && showCorrect && isCorr)
@@ -357,10 +376,15 @@ export default function FormRenderer({ fields, formType, settings, initialValues
                 </label>
               );
             })}
-            {readOnly && showCorrect && f.points && (
-              <p className={`text-[12px] font-bold mt-1 ${val === f.correct ? 'text-emerald-600' : (val ? 'text-red-600' : 'text-slate-400')}`}>
-                {val === f.correct ? `✓ +${f.points} marks` : val ? `✗ 0 marks${settings?.negative_marking ? ` (−${Math.round(f.points * 0.25)} penalty)` : ''}` : 'Not answered'}
+            {readOnly && showCorrect && Number(f.points ?? f.marks ?? 0) > 0 && (
+              (() => {
+                const qPoints = Number(f.points ?? f.marks ?? 0);
+                return (
+              <p className={`text-[12px] font-bold mt-1 ${isMcqCorrect(f, val) ? 'text-emerald-600' : (val ? 'text-red-600' : 'text-slate-400')}`}>
+                {isMcqCorrect(f, val) ? `✓ +${qPoints} marks` : val ? `✗ 0 marks${settings?.negative_marking ? ` (−${Math.round(qPoints * 0.25)} penalty)` : ''}` : 'Not answered'}
               </p>
+                );
+              })()
             )}
           </div>
         );
@@ -403,7 +427,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
 
   const hasQuiz = fields.some(f => f.type === 'mcq') || fields.some(f => (f.children || []).some(c => c.type === 'mcq'));
   const quizQCount = (() => { let n = 0; const w = (l: FormField[]) => l.forEach(f => { if (f.type === 'mcq') n++; if (f.children) w(f.children); }); w(fields); return n; })();
-  const quizTotal = (() => { let n = 0; const w = (l: FormField[]) => l.forEach(f => { if (f.type === 'mcq' && f.points) n += f.points; if (f.children) w(f.children); }); w(fields); return n; })();
+  const quizTotal = (() => { let n = 0; const w = (l: FormField[]) => l.forEach(f => { const qPoints = Number(f.points ?? f.marks ?? 0); if (f.type === 'mcq' && qPoints > 0) n += qPoints; if (f.children) w(f.children); }); w(fields); return n; })();
 
   // Quiz start screen
   if (hasQuiz && !quizStarted && !readOnly && settings?.time_limit) {
@@ -461,7 +485,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
             <div className="text-sm">
               {viewMode === 'admin' && (
                 <p className="text-slate-700 font-medium">
-                  {(() => { let c = 0; const w = (l: FormField[]) => l.forEach(f => { if (f.type === 'mcq' && values[f.id] === f.correct) c++; if (f.children) w(f.children); }); w(fields); return c; })()}/{quizQCount} correct answers
+                  {(() => { let c = 0; const w = (l: FormField[]) => l.forEach(f => { if (f.type === 'mcq' && isMcqCorrect(f, values[f.id])) c++; if (f.children) w(f.children); }); w(fields); return c; })()}/{quizQCount} correct answers
                 </p>
               )}
               {viewMode === 'reviewer' && <p className="text-slate-600">Score calculated automatically by system</p>}

@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import path from 'path';
 import { rateLimit } from 'express-rate-limit';
 import mongoose from 'mongoose';
 
@@ -48,7 +49,8 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// Note: File uploads now served via Cloudinary — no local static folder needed
+// Static fallback for local uploads (used when Cloudinary is unavailable)
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Routes
 app.use('/api/v1/auth', authRoutes);

@@ -58,24 +58,47 @@ export default function Submissions({ user }: { user: User }) {
       setComments(comms);
 
       // 3. Fetch nomination data with robust matching inside same form
-      const formNoms: any[] = await api.get(`/nominations?form_id=${sub.form_id}`);
-      if (formNoms && formNoms.length > 0) {
+      const [formNomsRaw, byEmailRaw] = await Promise.all([
+        api.get(`/nominations?form_id=${sub.form_id}`).catch(() => []),
+        sub.user_email ? api.get(`/nominations?form_id=${sub.form_id}&teacher_email=${encodeURIComponent(sub.user_email)}`).catch(() => []) : Promise.resolve([])
+      ]);
+
+      const formNoms = Array.isArray(formNomsRaw) ? formNomsRaw : [];
+      const byEmailNoms = Array.isArray(byEmailRaw) ? byEmailRaw : [];
+      const nomMap = new Map<string, any>();
+      [...formNoms, ...byEmailNoms].forEach((n: any) => {
+        const key = String(n?.id || n?._id || `${n?.teacher_email || ''}-${n?.createdAt || ''}`);
+        if (key) nomMap.set(key, n);
+      });
+      const allNoms = Array.from(nomMap.values());
+
+      if (allNoms.length > 0) {
         const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
         const userEmail = norm(sub.user_email);
         const userName = norm(sub.user_name);
 
-        let matched = formNoms.find((n: any) => norm(n.teacher_email) === userEmail);
+        let matched = allNoms.find((n: any) => norm(n.teacher_email) === userEmail);
         if (!matched && userName) {
-          matched = formNoms.find((n: any) => norm(n.teacher_name) === userName);
+          matched = allNoms.find((n: any) => norm(n.teacher_name) === userName);
         }
         if (!matched && userName) {
-          matched = formNoms.find((n: any) => {
+          matched = allNoms.find((n: any) => {
             const t = norm(n.teacher_name);
             return t.includes(userName) || userName.includes(t);
           });
         }
-        if (!matched && formNoms.length === 1) {
-          matched = formNoms[0];
+        if (!matched) {
+          matched = allNoms.find((n: any) => {
+            const raw = n?.additional_data;
+            if (!raw) return false;
+            if (typeof raw === 'string') {
+              try { return Object.keys(JSON.parse(raw)).length > 0; } catch { return false; }
+            }
+            return typeof raw === 'object' && Object.keys(raw).length > 0;
+          });
+        }
+        if (!matched && allNoms.length === 1) {
+          matched = allNoms[0];
         }
 
         if (matched) setSelectedNomination(matched);
@@ -116,6 +139,58 @@ export default function Submissions({ user }: { user: User }) {
       responses = {}; 
     } 
   }
+
+  const parseObject = (raw: any): Record<string, any> => {
+    if (!raw) return {};
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+    return typeof raw === 'object' ? raw : {};
+  };
+
+  const nominationAdditionalData = parseObject(selectedNomination?.additional_data);
+  const nominationSettings = parseObject(selectedFormObj?.settings);
+
+  const getFieldMap = () => {
+    const out: Record<string, any> = {};
+    const walk = (list: any[]) => {
+      if (!Array.isArray(list)) return;
+      list.forEach((f: any) => {
+        if (!f || typeof f !== 'object') return;
+        if (f.id) out[f.id] = f;
+        if (Array.isArray(f.children)) walk(f.children);
+      });
+    };
+
+    const schemaSource = selectedFormObj?.form_schema || selectedFormObj?.schema;
+    let schemaObj: any = null;
+    if (schemaSource) {
+      schemaObj = typeof schemaSource === 'string' ? (() => { try { return JSON.parse(schemaSource); } catch { return null; } })() : schemaSource;
+    }
+
+    if (Array.isArray(schemaObj)) {
+      walk(schemaObj);
+    } else if (schemaObj?.sections && Array.isArray(schemaObj.sections)) {
+      schemaObj.sections.forEach((s: any) => walk(s?.fields || []));
+    } else if (schemaObj?.fields && Array.isArray(schemaObj.fields)) {
+      walk(schemaObj.fields);
+    }
+
+    if (Object.keys(out).length === 0) {
+      const formFields = typeof selectedFormObj?.fields === 'string'
+        ? (() => { try { return JSON.parse(selectedFormObj.fields); } catch { return []; } })()
+        : (selectedFormObj?.fields || []);
+      walk(formFields);
+    }
+
+    return out;
+  };
+  const fieldMap = getFieldMap();
 
   const columns = [
     { key: 'id', label: '#', sortable: true, render: (v: number) => <span className="text-xs font-mono text-muted">#{v}</span> },
@@ -197,22 +272,19 @@ export default function Submissions({ user }: { user: User }) {
                   </div>
 
                   {/* Custom fields from nomination */}
-                  {selectedNomination.additional_data && Object.keys(selectedNomination.additional_data).length > 0 && (
+                  {Object.keys(nominationAdditionalData).length > 0 && (
                     <div className="mt-3 pt-3 border-t border-primary/10 space-y-2">
                       <p className="text-[10px] text-muted uppercase font-bold mb-2">Form Data Filled by Functionary</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {Object.entries(selectedNomination.additional_data).map(([key, val]) => {
+                        {Object.entries(nominationAdditionalData).map(([key, val]) => {
                           const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
                           // Cloudinary returns full https:// URLs; fallback for legacy local filenames
                           const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val as string : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`) : '';
 
                           // Find label from form settings
                           let label = key;
-                          if (selectedFormObj?.settings) {
-                            const settings = typeof selectedFormObj.settings === 'string' ? JSON.parse(selectedFormObj.settings) : selectedFormObj.settings;
-                            const customField = settings.nomination_custom_fields?.find((cf: any) => cf.id === key);
-                            if (customField) label = customField.label;
-                          }
+                          const customField = nominationSettings.nomination_custom_fields?.find((cf: any) => cf.id === key);
+                          if (customField) label = customField.label;
 
                           return (
                             <div key={key} className="space-y-1">
@@ -238,6 +310,57 @@ export default function Submissions({ user }: { user: User }) {
             {/* Raw responses */}
             <div><h4 className="text-sm font-bold mb-2">Response Data</h4>
               <div className="bg-surface rounded-xl p-4 space-y-2">
+                {!selectedNomination && (
+                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    School functionary nomination is not linked to this submission, so functionary-filled data cannot be shown here.
+                  </div>
+                )}
+                {selectedNomination && Object.keys(nominationAdditionalData).length === 0 && (
+                  <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                    Nomination is linked, but no extra custom fields were saved by school functionary for this teacher.
+                  </div>
+                )}
+                {Object.keys(nominationAdditionalData).length > 0 && (
+                  <>
+                    <div className="text-[10px] font-bold text-primary uppercase tracking-wide pb-1 border-b border-primary/20">
+                      Filled By School Functionary
+                    </div>
+                    {Object.entries(nominationAdditionalData).map(([key, val]) => {
+                      const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+                      const fileUrl = isFile
+                        ? (typeof val === 'string' && val.startsWith('http')
+                          ? val
+                          : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`)
+                        : '';
+
+                      let label = key;
+                      const customField = nominationSettings.nomination_custom_fields?.find((cf: any) => cf.id === key);
+                      if (customField) label = customField.label;
+
+                      return (
+                        <div key={`nom-${key}`} className="flex flex-col sm:flex-row sm:items-start gap-1 py-1.5 border-b border-border/30">
+                          <span className="text-xs font-semibold text-muted min-w-[160px] shrink-0">{label}:</span>
+                          <span className="text-sm break-words flex flex-wrap items-center gap-2">
+                            {isFile ? (
+                              <>
+                                <span className="font-medium text-primary">{val as string}</span>
+                                <a href={fileUrl} target="_blank" rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-bold hover:bg-primary/20 transition-colors">
+                                  <ExternalLink size={10} /> View File
+                                </a>
+                              </>
+                            ) : (
+                              Array.isArray(val) ? (val as any[]).join(', ') : typeof val === 'object' ? JSON.stringify(val) : String(val)
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide pt-1">
+                      Filled By Teacher
+                    </div>
+                  </>
+                )}
                 {Object.keys(responses).length === 0 ? <p className="text-sm text-muted">No response data</p> :
                   Object.entries(responses).map(([key, val]) => {
                     const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
@@ -245,15 +368,24 @@ export default function Submissions({ user }: { user: User }) {
                     const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`) : '';
 
                     // Find label from form schema
-                    let label = key;
-                    const schema = selectedFormObj?.form_schema || selectedFormObj?.schema;
-                    if (schema) {
-                      const schemaObj = typeof schema === 'string' ? JSON.parse(schema) : schema;
-                      schemaObj.sections?.forEach((s: any) => {
-                        const field = s.fields?.find((f: any) => f.id === key);
-                        if (field) label = field.label;
-                      });
-                    }
+                    const fieldMeta = fieldMap[key];
+                    const label = fieldMeta?.label || key;
+
+                    const getDisplayValue = () => {
+                      if (Array.isArray(val)) return (val as any[]).join(', ');
+                      if (typeof val === 'object') return JSON.stringify(val);
+
+                      // MCQ/choice fields may store index (e.g. "0", "1"); show option text instead.
+                      const options = Array.isArray(fieldMeta?.options) ? fieldMeta.options : [];
+                      if (options.length > 0) {
+                        const idx = Number(String(val));
+                        if (!Number.isNaN(idx) && options[idx] !== undefined) {
+                          return String(options[idx]);
+                        }
+                      }
+
+                      return String(val);
+                    };
 
                     return (
                       <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 py-1.5 border-b border-border/30 last:border-0">
@@ -268,7 +400,7 @@ export default function Submissions({ user }: { user: User }) {
                               </a>
                             </>
                           ) : (
-                            Array.isArray(val) ? (val as any[]).join(', ') : typeof val === 'object' ? JSON.stringify(val) : String(val)
+                            getDisplayValue()
                           )}
                         </span>
                       </div>

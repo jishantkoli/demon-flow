@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { Submission } from '../models/Submission.js';
 import { Form } from '../models/Form.js';
+import { Nomination } from '../models/Nomination.js';
 import { AuthRequest } from '../middleware/auth.js';
 
 export const submitForm = async (req: AuthRequest, res: Response) => {
@@ -30,6 +31,17 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     if (!form) {
       console.log('Submission failed: Form not found with ID/Link', actualFormId, 'from payload', req.body);
       return res.status(404).json({ error: 'Form not found' });
+    }
+
+    // Check authorization for teachers
+    if (req.user && req.user.role === 'teacher') {
+      const nomination = await Nomination.findOne({
+        form_id: form._id,
+        teacher_email: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
+      });
+      if (!nomination) {
+        return res.status(403).json({ error: 'You are not authorized to submit this form. Please contact your school functionary.' });
+      }
     }
 
     // Expiration check

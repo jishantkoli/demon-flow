@@ -214,51 +214,66 @@ export default function Forms({ user }: { user: User }) {
       )}
 
       {/* Tabs + Search + Filter */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
-          {(['active', 'draft', 'expired'] as const)
-            .filter(t => !((user.role === 'functionary' || user.role === 'teacher') && t === 'draft'))
-            .map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${
-                tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
-              }`}>
-              {t} <span className="ml-1 opacity-60">({
-                forms.filter(f => {
-                  const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
-                  let effectiveStatus = f.status;
-                  if (isExpired) effectiveStatus = t === 'expired' ? 'expired' : f.status; // Correctly count for the tab
-                  
-                  // Re-apply the same logic as the filter for consistency
-                  let finalStatus = f.status;
-                  if (isExpired) finalStatus = 'expired';
-                  return finalStatus === t;
-                }).length
-              })</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex-1" />
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 min-w-[180px]">
-            <Search size={14} className="text-slate-500 flex-shrink-0" />
-            <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search forms..."
-              className="bg-transparent text-sm outline-none w-full placeholder-muted text-slate-900" />
+      {(forms.length > 0 || isAdmin) && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+            {(['active', 'draft', 'expired'] as const)
+              .filter(t => !((user.role === 'functionary' || user.role === 'teacher') && t === 'draft'))
+              .map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${
+                  tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                }`}>
+                {t} <span className="ml-1 opacity-60">({
+                  forms.filter(f => {
+                    const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
+                    let finalStatus = f.status;
+                    if (isExpired) finalStatus = 'expired';
+                    return finalStatus === t;
+                  }).length
+                })</span>
+              </button>
+            ))}
           </div>
-          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-            className="text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 outline-none">
-            <option value="">All Types</option>
-            {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
+          <div className="flex-1" />
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 min-w-[180px]">
+              <Search size={14} className="text-slate-500 flex-shrink-0" />
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search forms..."
+                className="bg-transparent text-sm outline-none w-full placeholder-muted text-slate-900" />
+            </div>
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+              className="text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 outline-none">
+              <option value="">All Types</option>
+              {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Form Cards Grid */}
       {filtered.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
-          <FileText size={40} className="mx-auto text-slate-500 mb-3" />
-          <p className="text-sm text-slate-500 font-medium">No {tab} forms found</p>
-          {isAdmin && tab === 'active' && <p className="text-xs text-slate-500 mt-1">Create a form and set status to Active</p>}
+          <div className="max-w-md mx-auto px-6">
+            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FileText size={32} className="text-slate-400" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 mb-2">
+              {user.role === 'teacher' ? 'No Forms Assigned' : `No ${tab} forms found`}
+            </h3>
+            <p className="text-sm text-slate-500 mb-6">
+              {user.role === 'teacher' 
+                ? "You don't have any forms assigned to you at the moment. Please contact your school functionary if you believe this is an error."
+                : tab === 'active' 
+                  ? "There are no active forms available right now."
+                  : `There are no forms in the ${tab} category.`}
+            </p>
+            {isAdmin && tab === 'active' && (
+              <button onClick={() => openCreateModal()} className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover shadow-sm transition-all">
+                <Plus size={16} /> Create Your First Form
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
