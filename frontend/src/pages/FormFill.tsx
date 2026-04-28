@@ -77,6 +77,10 @@ export default function FormFill({ user }: { user: User }) {
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
   const [nominationToken, setNominationToken] = useState('');
+  const urlToken = useMemo(() => {
+    try { return new URLSearchParams(window.location.search).get('token') || ''; }
+    catch { return ''; }
+  }, []);
 
   // Online/offline events
   useEffect(() => {
@@ -97,7 +101,7 @@ export default function FormFill({ user }: { user: User }) {
     }
 
     const query = new URLSearchParams(window.location.search);
-    const token = query.get('token');
+    const token = query.get('token') || urlToken;
     if (token) setNominationToken(token);
 
     const getNomination = async () => {
@@ -108,6 +112,7 @@ export default function FormFill({ user }: { user: User }) {
           if (res.success && res.data) {
             setEmail(res.data.teacher_email);
             setSchoolCode(res.data.school_code || '');
+            setNominationToken(res.data.unique_token || token);
             const nomData = { ...res.data };
             if (!nomData.id && !nomData._id && nomData.form) {
               nomData._id = nomData._id || nomData.id;
@@ -165,7 +170,7 @@ export default function FormFill({ user }: { user: User }) {
       setForm(res);
       if (nomination) setNomination(nomination);
 
-      const authMode = res.settings.auth_mode || 'login';
+      const authMode = res.settings.teacher_login || res.settings.auth_mode || 'login';
       const isAnon = user.id === 'anon';
 
       if (authMode === 'login' && isAnon && !token && !nomination) {
@@ -201,7 +206,7 @@ export default function FormFill({ user }: { user: User }) {
         setStep('filling');
       }
     }).catch(err => { setStep('error'); setError(err.message || 'Failed to load form'); });
-  }, [id]);
+  }, [id, urlToken]);
 
   // Autosave every 30s
   useEffect(() => {
@@ -344,13 +349,14 @@ export default function FormFill({ user }: { user: User }) {
     if (!form || !online) return;
     setSaving(true);
     try {
+      const effectiveToken = nominationToken || nomination?.unique_token || urlToken;
       const payload = { 
         form_id: form._id || form.id, 
         responses: answers, 
         status: 'draft', 
         is_draft: true,
         nomination_id: nomination?.id || nomination?._id,
-        nomination_token: nominationToken,
+        nomination_token: effectiveToken,
         user_email: user.id === 'anon' ? email : user.email,
         user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
         school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
@@ -382,13 +388,14 @@ export default function FormFill({ user }: { user: User }) {
     setError('');
     const sc = computeScore();
     const currentEmail = user.id === 'anon' ? (email || nomination?.teacher_email) : user.email;
+    const effectiveToken = nominationToken || nomination?.unique_token || urlToken;
     const payload = {
       form_id: form._id || form.id, 
       responses: answers,
       status: 'submitted', 
       is_draft: false,
       nomination_id: nomination?.id || nomination?._id,
-      nomination_token: nominationToken,
+      nomination_token: effectiveToken,
       score: sc?.score ?? null,
       user_email: currentEmail,
       user_name: user.id === 'anon' ? (nomination?.teacher_name || currentEmail?.split('@')[0]) : user.name,
@@ -463,7 +470,7 @@ export default function FormFill({ user }: { user: User }) {
 
   if (!form || !currentSection) return null;
 
-  const authMode = form.settings.auth_mode || 'login';
+  const authMode = form.settings.teacher_login || form.settings.auth_mode || 'login';
   const isAnon = user.id === 'anon';
 
   // Render OTP verification screen if required
