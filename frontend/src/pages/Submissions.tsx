@@ -60,69 +60,50 @@ export default function Submissions({ user }: { user: User }) {
 
   const openDetail = async (sub: any) => {
     setSelected(sub);
+    setComments([]);
     setSelectedNomination(null);
     setSelectedFormObj(null);
     try {
-      const formIdValue = (sub?.form_id && typeof sub.form_id === 'object')
-        ? (sub.form_id._id || sub.form_id.id || '')
-        : (sub?.form_id || '');
-      const formIdParam = encodeURIComponent(String(formIdValue));
-      const nominationIdValue = (sub?.nomination_id && typeof sub.nomination_id === 'object')
-        ? (sub.nomination_id._id || sub.nomination_id.id || '')
-        : (sub?.nomination_id || sub?.id || ''); // Fallback: check if sub.id itself is the nomination_id
-      const nominationIdParam = encodeURIComponent(String(nominationIdValue));
+      const formIdParam = sub.form_id || sub.formId;
+      const nominationIdParam = sub.nomination_id || sub.nominationId;
 
-      // Fetch comments - wrap in catch to prevent breaking if endpoint doesn't exist
-      const comms = await api.get(`/comments?submission_id=${sub.id}`).catch(() => []);
-      setComments(comms || []);
-
-      const [formRes, nomsRes, fallbackRes] = await Promise.allSettled([
-        // Form/schema is optional for nomination panel; avoid failing whole modal on 404.
-        formIdValue ? api.get(`/forms?id=${formIdParam}`) : Promise.resolve(null),
-        // 1. Try exact linkage by nomination_id or matching submission ID
-        nominationIdValue ? api.get(`/nominations?id=${nominationIdParam}`) : Promise.resolve([]),
-        // 2. Legacy Fallback: If no direct ID link, try to find by email + form_id
-        (!nominationIdValue && sub?.user_email) 
-          ? api.get(`/nominations?teacher_email=${encodeURIComponent(sub.user_email)}&form_id=${formIdParam}`)
-          : Promise.resolve([])
+      const [comms, formRes, nomsRes, fallbackRes, allFormNomsRes] = await Promise.allSettled([
+        api.get(`/comments?submission_id=${sub.id}`).catch(() => []),
+        formIdParam ? api.get(`/forms?id=${formIdParam}`) : Promise.resolve(null),
+        nominationIdParam ? api.get(`/nominations?id=${nominationIdParam}`) : Promise.resolve([]),
+        sub.user_email ? api.get(`/nominations?teacher_email=${encodeURIComponent(sub.user_email)}&form_id=${formIdParam}`) : Promise.resolve([]),
+        formIdParam ? api.get(`/nominations?form_id=${formIdParam}`) : Promise.resolve([])
       ]);
 
-      if (formRes.status === 'fulfilled' && formRes.value) {
-        setSelectedFormObj(formRes.value);
-      } else {
-        setSelectedFormObj(null);
-      }
+      if (comms.status === 'fulfilled') setComments(comms.value || []);
+      if (formRes.status === 'fulfilled') setSelectedFormObj(formRes.value);
 
-      // Comments handled above.
+      // Robust matching logic for nomination
+      const allPossibleNoms: any[] = [];
+      [nomsRes, fallbackRes, allFormNomsRes].forEach(res => {
+        if (res.status === 'fulfilled' && res.value) {
+          const data = Array.isArray(res.value) ? res.value : (Array.isArray((res.value as any)?.data) ? (res.value as any).data : [res.value]);
+          allPossibleNoms.push(...data.filter(Boolean));
+        }
+      });
 
-      // Check primary nomination result first, then fallback
-      let nominationsData = nomsRes.status === 'fulfilled'
-        ? (Array.isArray(nomsRes.value) ? nomsRes.value : (Array.isArray((nomsRes.value as any)?.data) ? (nomsRes.value as any).data : []))
-        : [];
-      
-      // Use fallback if primary search returned nothing
-      if (nominationsData.length === 0 && fallbackRes?.status === 'fulfilled') {
-        const fbData = Array.isArray(fallbackRes.value) ? fallbackRes.value : (Array.isArray((fallbackRes.value as any)?.data) ? (fallbackRes.value as any).data : []);
-        if (fbData.length > 0) nominationsData = fbData;
-      }
-      if (nominationsData.length > 0) {
-        setSelectedNomination(nominationsData[0]);
-      }
-
-      const is404Error = (reason: any) => {
-        const msg = String(reason?.message || reason || "").toLowerCase();
-        return msg.includes('404') || msg.includes('not found');
-      };
-
-      const hasUnexpectedError =
-        (formRes.status === 'rejected' && !is404Error(formRes.reason)) ||
-        (nomsRes.status === 'rejected' && !is404Error(nomsRes.reason));
-      
-      if (hasUnexpectedError) {
-        console.error('Error loading submission details:', {
-          formError: formRes.status === 'rejected' ? formRes.reason : null,
-          nominationError: nomsRes.status === 'rejected' ? nomsRes.reason : null
+      if (allPossibleNoms.length > 0) {
+        const nomMap = new Map<string, any>();
+        allPossibleNoms.forEach((n: any) => {
+          const key = String(n?.id || n?._id || `${n?.teacher_email || ''}-${n?.createdAt || ''}`);
+          if (key) nomMap.set(key, n);
         });
+        const uniqueNoms = Array.from(nomMap.values());
+        
+        const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const userEmail = norm(sub.user_email);
+        const userName = norm(sub.user_name);
+        
+        let matched = uniqueNoms.find((n: any) => norm(n.teacher_email) === userEmail);
+        if (!matched && userName) matched = uniqueNoms.find((n: any) => norm(n.teacher_name) === userName);
+        if (!matched && uniqueNoms.length === 1) matched = uniqueNoms[0];
+        
+        if (matched) setSelectedNomination(matched);
       }
     } catch (err: any) {
       // Don't log if it's a known 404 or comments-related error from old code
@@ -386,9 +367,24 @@ export default function Submissions({ user }: { user: User }) {
             {/* Raw responses */}
             <div><h4 className="text-sm font-bold mb-2">Response Data</h4>
               <div className="bg-surface rounded-xl p-4 space-y-2">
-                {!selectedNomination && (
+                {!selectedNomination ? (
                     <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                       School functionary nomination is not linked to this submission, so functionary-filled data cannot be shown here.
+                    </div>
+                  ) : (
+                    <div className="mb-4 p-3 bg-primary/5 border border-primary/10 rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-[10px] text-muted uppercase font-bold">School Code</p>
+                        <p className="text-xs font-semibold">{selectedNomination.school_code}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted uppercase font-bold">Teacher Phone</p>
+                        <p className="text-xs font-semibold">{selectedNomination.teacher_phone || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted uppercase font-bold">Nominated By</p>
+                        <p className="text-xs font-semibold text-primary">{selectedNomination.functionary_name || 'School Head'}</p>
+                      </div>
                     </div>
                   )}
                 {selectedNomination && Object.keys(nominationAdditionalData).length === 0 && (
