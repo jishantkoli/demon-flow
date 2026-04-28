@@ -57,8 +57,8 @@ export default function Submissions({ user }: { user: User }) {
       const comms = await api.get(`/comments?submission_id=${sub.id}`);
       setComments(comms);
 
-      // 3. Fetch nomination data by form_id (form_id is the link between functionary nomination and teacher submission)
-      const nomsRes = await api.get(`/nominations?form_id=${sub.form_id}`).catch(() => []);
+      // 3. Fetch nomination data by form_id AND teacher_email (form_id links to the form, teacher_email links to the specific nomination for this submission)
+      const nomsRes = await api.get(`/nominations?form_id=${sub.form_id}&teacher_email=${encodeURIComponent(sub.user_email)}`).catch(() => []);
       const noms = Array.isArray(nomsRes) ? nomsRes : [];
 
       if (noms.length > 0) {
