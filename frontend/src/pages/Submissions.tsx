@@ -68,7 +68,7 @@ export default function Submissions({ user }: { user: User }) {
       const formIdParam = encodeURIComponent(String(formIdValue));
       const nominationIdValue = (sub?.nomination_id && typeof sub.nomination_id === 'object')
         ? (sub.nomination_id._id || sub.nomination_id.id || '')
-        : (sub?.nomination_id || '');
+        : (sub?.nomination_id || sub?.id || ''); // Fallback: check if sub.id itself is the nomination_id
       const nominationIdParam = encodeURIComponent(String(nominationIdValue));
 
       const [formRes, nomsRes] = await Promise.allSettled([

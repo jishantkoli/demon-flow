@@ -134,7 +134,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const submission = await Submission.create({
+    const submissionData: any = {
       formId: form._id,
       userId: req.user?._id || null,
       userName: req.body.user_name || req.user?.profile?.fullName,
@@ -150,7 +150,14 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
         ip: req.ip,
         userAgent: req.headers['user-agent']
       }
-    });
+    };
+
+    // If we have a nomination, use its ID as the submission ID to make them "same"
+    if (linkedNomination?._id) {
+      submissionData._id = linkedNomination._id;
+    }
+
+    const submission = await Submission.create(submissionData);
 
     res.status(201).json({ ...submission.toObject(), id: submission._id, is_draft: submission.isDraft, school_code: submission.schoolCode });
   } catch (err: any) {
