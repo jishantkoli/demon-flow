@@ -71,11 +71,15 @@ export default function Submissions({ user }: { user: User }) {
         : (sub?.nomination_id || sub?.id || ''); // Fallback: check if sub.id itself is the nomination_id
       const nominationIdParam = encodeURIComponent(String(nominationIdValue));
 
-      const [formRes, nomsRes] = await Promise.allSettled([
+      const [formRes, nomsRes, fallbackRes] = await Promise.allSettled([
         // Form/schema is optional for nomination panel; avoid failing whole modal on 404.
         formIdValue ? api.get(`/forms?id=${formIdParam}`) : Promise.resolve(null),
-        // Preferred: exact linkage by nomination_id stored with submission.
-        nominationIdValue ? api.get(`/nominations?id=${nominationIdParam}`) : Promise.resolve([])
+        // 1. Try exact linkage by nomination_id or matching submission ID
+        nominationIdValue ? api.get(`/nominations?id=${nominationIdParam}`) : Promise.resolve([]),
+        // 2. Legacy Fallback: If no direct ID link, try to find by email + form_id
+        (!nominationIdValue && sub?.user_email) 
+          ? api.get(`/nominations?teacher_email=${encodeURIComponent(sub.user_email)}&form_id=${formIdParam}`)
+          : Promise.resolve([])
       ]);
 
       if (formRes.status === 'fulfilled' && formRes.value) {
@@ -87,9 +91,16 @@ export default function Submissions({ user }: { user: User }) {
       // Comments API is not available in current backend deployment.
       setComments([]);
 
-      const nominationsData = nomsRes.status === 'fulfilled'
+      // Check primary nomination result first, then fallback
+      let nominationsData = nomsRes.status === 'fulfilled'
         ? (Array.isArray(nomsRes.value) ? nomsRes.value : (Array.isArray((nomsRes.value as any)?.data) ? (nomsRes.value as any).data : []))
         : [];
+      
+      // Use fallback if primary search returned nothing
+      if (nominationsData.length === 0 && fallbackRes?.status === 'fulfilled') {
+        const fbData = Array.isArray(fallbackRes.value) ? fallbackRes.value : (Array.isArray((fallbackRes.value as any)?.data) ? (fallbackRes.value as any).data : []);
+        if (fbData.length > 0) nominationsData = fbData;
+      }
       if (nominationsData.length > 0) {
         setSelectedNomination(nominationsData[0]);
       }
