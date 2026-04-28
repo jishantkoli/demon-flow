@@ -39,6 +39,7 @@ export default function Submissions({ user }: { user: User }) {
         id: s._id || s.id,
         form_id: s.formId || s.form_id,
         nomination_id: s.nominationId || s.nomination_id,
+        nomination_token: s.nominationToken || s.nomination_token,
         user_email: s.userEmail || s.user_email,
         user_name: s.userName || s.user_name,
         school_code: s.schoolCode || s.school_code,
@@ -65,14 +66,19 @@ export default function Submissions({ user }: { user: User }) {
     setSelectedFormObj(null);
     try {
       const formIdParam = sub.form_id || sub.formId;
-      const nominationIdParam = sub.nomination_id || sub.nominationId;
+      const nominationIdParamRaw = sub.nomination_id || sub.nominationId;
+      const nominationIdParam = typeof nominationIdParamRaw === 'object'
+        ? (nominationIdParamRaw?._id || nominationIdParamRaw?.id || '')
+        : nominationIdParamRaw;
+      const nominationTokenParam = sub.nomination_token || sub.nominationToken;
 
-      const [comms, formRes, nomsRes, fallbackRes, allFormNomsRes] = await Promise.allSettled([
+      const [comms, formRes, nomsRes, fallbackRes, allFormNomsRes, tokenRes] = await Promise.allSettled([
         api.get(`/comments?submission_id=${sub.id}`).catch(() => []),
         formIdParam ? api.get(`/forms?id=${formIdParam}`) : Promise.resolve(null),
         nominationIdParam ? api.get(`/nominations?id=${nominationIdParam}`) : Promise.resolve([]),
         sub.user_email ? api.get(`/nominations?teacher_email=${encodeURIComponent(sub.user_email)}&form_id=${formIdParam}`) : Promise.resolve([]),
-        formIdParam ? api.get(`/nominations?form_id=${formIdParam}`) : Promise.resolve([])
+        formIdParam ? api.get(`/nominations?form_id=${formIdParam}`) : Promise.resolve([]),
+        nominationTokenParam ? api.get(`/nominations/token/${encodeURIComponent(nominationTokenParam)}`) : Promise.resolve(null)
       ]);
 
       if (comms.status === 'fulfilled') setComments(comms.value || []);
@@ -80,9 +86,16 @@ export default function Submissions({ user }: { user: User }) {
 
       // Robust matching logic for nomination
       const allPossibleNoms: any[] = [];
-      [nomsRes, fallbackRes, allFormNomsRes].forEach(res => {
+      [nomsRes, fallbackRes, allFormNomsRes, tokenRes].forEach(res => {
         if (res.status === 'fulfilled' && res.value) {
-          const data = Array.isArray(res.value) ? res.value : (Array.isArray((res.value as any)?.data) ? (res.value as any).data : [res.value]);
+          const payload: any = res.value;
+          const data = Array.isArray(payload)
+            ? payload
+            : Array.isArray(payload?.data)
+              ? payload.data
+              : payload?.data
+                ? [payload.data]
+                : [payload];
           allPossibleNoms.push(...data.filter(Boolean));
         }
       });
@@ -98,9 +111,21 @@ export default function Submissions({ user }: { user: User }) {
         const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
         const userEmail = norm(sub.user_email);
         const userName = norm(sub.user_name);
-        
-        let matched = uniqueNoms.find((n: any) => norm(n.teacher_email) === userEmail);
+        const schoolCode = norm(sub.school_code);
+        const subNomId = norm(nominationIdParam);
+
+        let matched = subNomId
+          ? uniqueNoms.find((n: any) => norm(n?.id || n?._id) === subNomId)
+          : undefined;
+        if (!matched) matched = uniqueNoms.find((n: any) => norm(n.teacher_email) === userEmail);
         if (!matched && userName) matched = uniqueNoms.find((n: any) => norm(n.teacher_name) === userName);
+        if (!matched && schoolCode) {
+          const schoolMatches = uniqueNoms.filter((n: any) => norm(n.school_code) === schoolCode);
+          if (schoolMatches.length === 1) matched = schoolMatches[0];
+          if (!matched && userName && schoolMatches.length > 1) {
+            matched = schoolMatches.find((n: any) => norm(n.teacher_name) === userName);
+          }
+        }
         if (!matched && uniqueNoms.length === 1) matched = uniqueNoms[0];
         
         if (matched) setSelectedNomination(matched);
@@ -120,14 +145,28 @@ export default function Submissions({ user }: { user: User }) {
     setSelected(sub);
     setSelectedNomination(null);
     try {
-      const [formNomsRaw, byEmailRaw] = await Promise.all([
+      const nominationIdParamRaw = sub.nomination_id || sub.nominationId;
+      const nominationIdParam = typeof nominationIdParamRaw === 'object'
+        ? (nominationIdParamRaw?._id || nominationIdParamRaw?.id || '')
+        : nominationIdParamRaw;
+      const nominationTokenParam = sub.nomination_token || sub.nominationToken;
+
+      const [formNomsRaw, byEmailRaw, byIdRaw, byTokenRaw] = await Promise.all([
         api.get(`/nominations?form_id=${sub.form_id}`).catch(() => []),
-        sub.user_email ? api.get(`/nominations?form_id=${sub.form_id}&teacher_email=${encodeURIComponent(sub.user_email)}`).catch(() => []) : Promise.resolve([])
+        sub.user_email ? api.get(`/nominations?form_id=${sub.form_id}&teacher_email=${encodeURIComponent(sub.user_email)}`).catch(() => []) : Promise.resolve([]),
+        nominationIdParam ? api.get(`/nominations?id=${nominationIdParam}`).catch(() => []) : Promise.resolve([]),
+        nominationTokenParam ? api.get(`/nominations/token/${encodeURIComponent(nominationTokenParam)}`).catch(() => null) : Promise.resolve(null)
       ]);
       const formNoms = Array.isArray(formNomsRaw) ? formNomsRaw : [];
       const byEmailNoms = Array.isArray(byEmailRaw) ? byEmailRaw : [];
+      const byIdNoms = Array.isArray(byIdRaw) ? byIdRaw : [];
+      const byTokenNoms = Array.isArray((byTokenRaw as any)?.data)
+        ? (byTokenRaw as any).data
+        : (byTokenRaw as any)?.data
+          ? [(byTokenRaw as any).data]
+          : [];
       const nomMap = new Map<string, any>();
-      [...formNoms, ...byEmailNoms].forEach((n: any) => {
+      [...byTokenNoms, ...byIdNoms, ...formNoms, ...byEmailNoms].forEach((n: any) => {
         const key = String(n?.id || n?._id || `${n?.teacher_email || ''}-${n?.createdAt || ''}`);
         if (key) nomMap.set(key, n);
       });
@@ -136,8 +175,20 @@ export default function Submissions({ user }: { user: User }) {
         const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
         const userEmail = norm(sub.user_email);
         const userName = norm(sub.user_name);
-        let matched = allNoms.find((n: any) => norm(n.teacher_email) === userEmail);
+        const schoolCode = norm(sub.school_code);
+        const subNomId = norm(nominationIdParam);
+        let matched = subNomId
+          ? allNoms.find((n: any) => norm(n?.id || n?._id) === subNomId)
+          : undefined;
+        if (!matched) matched = allNoms.find((n: any) => norm(n.teacher_email) === userEmail);
         if (!matched && userName) matched = allNoms.find((n: any) => norm(n.teacher_name) === userName);
+        if (!matched && schoolCode) {
+          const schoolMatches = allNoms.filter((n: any) => norm(n.school_code) === schoolCode);
+          if (schoolMatches.length === 1) matched = schoolMatches[0];
+          if (!matched && userName && schoolMatches.length > 1) {
+            matched = schoolMatches.find((n: any) => norm(n.teacher_name) === userName);
+          }
+        }
         if (!matched && allNoms.length === 1) matched = allNoms[0];
         if (matched) setSelectedNomination(matched);
       }

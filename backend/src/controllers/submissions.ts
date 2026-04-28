@@ -130,6 +130,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     const submissionData: any = {
       formId: form._id,
       nominationId: linkedNomination?._id || null,
+      nominationToken: req.body.nomination_token || null,
       userId: req.user?._id || null,
       userName: req.body.user_name || req.user?.profile?.fullName,
       userEmail: req.body.user_email || req.user?.email || linkedNomination?.teacher_email,
@@ -179,6 +180,9 @@ export const updateSubmission = async (req: AuthRequest, res: Response) => {
     };
     if (req.body.nomination_id || req.body.nominationId) {
       payload.nominationId = req.body.nomination_id || req.body.nominationId;
+    }
+    if (req.body.nomination_token !== undefined) {
+      payload.nominationToken = req.body.nomination_token;
     }
 
     const submission = await Submission.findByIdAndUpdate(id, payload, { new: true });
@@ -237,6 +241,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
       user_name: s.userName,
       user_email: s.userEmail,
       nomination_id: s.nominationId,
+      nomination_token: s.nominationToken,
       form_title: s.formTitle,
       submitted_at: s.createdAt,
       is_draft: s.isDraft
