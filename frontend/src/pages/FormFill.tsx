@@ -106,10 +106,8 @@ export default function FormFill({ user }: { user: User }) {
           if (res.success && res.data) {
             setEmail(res.data.teacher_email);
             setSchoolCode(res.data.school_code || '');
-            // Ensure nomination has a usable id
             const nomData = { ...res.data };
             if (!nomData.id && !nomData._id && nomData.form) {
-              // The token endpoint might nest the id differently
               nomData._id = nomData._id || nomData.id;
             }
             return nomData;
@@ -124,7 +122,6 @@ export default function FormFill({ user }: { user: User }) {
         try {
           const res: any = await api.get(`/nominations?form_id=${id}`);
           if (Array.isArray(res) && res.length > 0) {
-            // For teachers, backend filters by email automatically
             setEmail(res[0].teacher_email);
             setSchoolCode(res[0].school_code || '');
             return res[0];
@@ -143,7 +140,6 @@ export default function FormFill({ user }: { user: User }) {
     ]).then(([res, subs, nomination]: any[]) => {
       if (!res || res.error) { setStep('error'); setError('Form not found'); return; }
 
-      // Normalize schema: form_schema/schema/fields
       const schemaSource = res.form_schema || res.schema;
       if (schemaSource) {
         try {
@@ -167,28 +163,22 @@ export default function FormFill({ user }: { user: User }) {
       setForm(res);
       if (nomination) setNomination(nomination);
 
-      // Check auth mode
       const authMode = res.settings.auth_mode || 'login';
       const isAnon = user.id === 'anon';
 
       if (authMode === 'login' && isAnon && !token && !nomination) {
-        // Redirect to login page only if there's no token/nomination
-        // Teachers with valid nomination tokens should be able to access the form directly
         window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
         return;
       }
 
-      // Check status
       if (res.status !== 'active') { setStep('error'); setError('This form is not active.'); return; }
       if (res.expires_at && new Date(res.expires_at) < new Date()) { setStep('error'); setError('This form has closed.'); return; }
 
-      // If OTP mode and not verified yet, wait for OTP
       if (authMode === 'otp' && isAnon && !otpVerified) {
-        setStep('filling'); // We stay in filling step but render OTP UI
+        setStep('filling');
         return;
       }
 
-      // Check existing submission
       const existing = (subs || []).find((s: any) => !s.is_draft && !s.isDraft);
       const draft = (subs || []).find((s: any) => s.is_draft || s.isDraft);
 
@@ -297,7 +287,6 @@ export default function FormFill({ user }: { user: User }) {
       }
       setOtpVerified(true);
       
-      // After OTP is verified, we should re-check for existing submissions/drafts for this email
       if (id) {
         const subs: any = await api.get(`/submissions?form_id=${id}&user_email=${encodeURIComponent(email)}`).catch(() => []);
         const existing = (subs || []).find((s: any) => !s.is_draft && !s.isDraft);
@@ -354,12 +343,15 @@ export default function FormFill({ user }: { user: User }) {
     setSaving(true);
     try {
       const payload = { 
-      form_id: form._id || form.id, responses: answers, status: 'draft', is_draft: true,
-      nomination_id: nomination?.id || nomination?._id,
-      user_email: user.id === 'anon' ? email : user.email,
-      user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
-      school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
-    };
+        form_id: form._id || form.id, 
+        responses: answers, 
+        status: 'draft', 
+        is_draft: true,
+        nomination_id: nomination?.id || nomination?._id,
+        user_email: user.id === 'anon' ? email : user.email,
+        user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
+        school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
+      };
       if (submissionId) {
         await api.put('/submissions', { id: submissionId, ...payload });
       } else {
@@ -373,7 +365,6 @@ export default function FormFill({ user }: { user: User }) {
 
   const submit = async () => {
     if (!form) return;
-    // Validate required fields
     for (const s of visibleSections) {
       for (const f of s.fields) {
         if (!fieldVisible(f)) continue;
@@ -387,22 +378,27 @@ export default function FormFill({ user }: { user: User }) {
     }
     setError('');
     const sc = computeScore();
+    const currentEmail = user.id === 'anon' ? (email || nomination?.teacher_email) : user.email;
     const payload = {
-      form_id: form._id || form.id, responses: answers,
-      status: 'submitted', is_draft: false,
+      form_id: form._id || form.id, 
+      responses: answers,
+      status: 'submitted', 
+      is_draft: false,
       nomination_id: nomination?.id || nomination?._id,
       score: sc?.score ?? null,
-      user_email: user.id === 'anon' ? email : user.email,
-      user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
-      school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
+      user_email: currentEmail,
+      user_name: user.id === 'anon' ? (nomination?.teacher_name || currentEmail?.split('@')[0]) : user.name,
+      school_code: schoolCode || nomination?.school_code || (user.id !== 'anon' ? user.school_code : '')
     };
+    
+    console.log('[FormFill] Submitting payload:', payload);
     try {
       let saved: any;
       if (submissionId) saved = await api.put('/submissions', { id: submissionId, ...payload });
       else saved = await api.post('/submissions', payload);
+      
       const realId = saved?.data?._id || saved?.data?.id || saved?._id || saved?.id || submissionId || 'DONE';
       
-      // Update nomination status to 'completed' after successful submission
       const nomId = nomination?.id || nomination?._id;
       if (nomId) {
         try {
@@ -415,6 +411,7 @@ export default function FormFill({ user }: { user: User }) {
       setReceipt({ id: realId, score: sc?.score, max: sc?.max });
       setStep('submitted');
     } catch (err: any) {
+      console.error('[FormFill] Submission error:', err);
       setError(err.message || 'Failed to submit. Please try again.');
     }
   };

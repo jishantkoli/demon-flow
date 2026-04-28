@@ -160,6 +160,26 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       }
     };
 
+    // FAIL-SAFE: If nominationId is still missing, scan responses for an email field to link
+    if (!submissionData.nominationId && responses && Array.isArray(responses)) {
+      const responseEmail = responses.find((r: any) => 
+        String(r.fieldId || '').toLowerCase().includes('email') || 
+        String(r.fieldId || '').toLowerCase().includes('mail')
+      )?.value;
+      
+      if (responseEmail && typeof responseEmail === 'string') {
+        const fallbackNom = await Nomination.findOne({
+          form_id: form._id,
+          teacher_email: { $regex: new RegExp(`^${responseEmail.trim()}$`, 'i') }
+        });
+        if (fallbackNom) {
+          submissionData.nominationId = fallbackNom._id;
+          if (!submissionData.userEmail) submissionData.userEmail = fallbackNom.teacher_email;
+          if (!submissionData.schoolCode) submissionData.schoolCode = fallbackNom.school_code;
+        }
+      }
+    }
+
     const submission = await Submission.create(submissionData);
 
     // Update nomination status to 'completed' after successful non-draft submission

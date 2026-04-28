@@ -52,6 +52,16 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
   const location = useLocation();
   const nav = getNav(user.role);
 
+  // CRITICAL: Bypass layout for anonymous users on public fill routes
+  const isPublicFill = location.pathname.startsWith('/fill/');
+  if (user.id === 'anon' || isPublicFill) {
+    return (
+      <div className="min-h-screen bg-canvas">
+        <main className="flex-1 overflow-x-hidden">{children}</main>
+      </div>
+    );
+  }
+
   const loadNotifications = () => {
     if (!user?.id || user.id === 'anon') {
       setNotifications([]);
