@@ -65,7 +65,8 @@ export default function Submissions({ user }: { user: User }) {
         // Form/schema is optional for nomination panel; avoid failing whole modal on 404.
         api.get(`/forms?id=${sub.form_id}`),
         api.get(`/comments?submission_id=${sub.id}`),
-        api.get(`/nominations?form_id=${sub.form_id}&teacher_email=${encodeURIComponent(sub.user_email)}`)
+        // User requested lookup based on form_id only.
+        api.get(`/nominations?form_id=${sub.form_id}`)
       ]);
 
       if (formRes.status === 'fulfilled' && formRes.value) {
@@ -82,27 +83,6 @@ export default function Submissions({ user }: { user: User }) {
 
       if (nomsRes.status === 'fulfilled' && Array.isArray(nomsRes.value) && nomsRes.value.length > 0) {
         setSelectedNomination(nomsRes.value[0]);
-      }
-
-      // Fallback: if strict form_id + teacher_email lookup misses, try by form_id and resolve best match.
-      if (!(nomsRes.status === 'fulfilled' && Array.isArray(nomsRes.value) && nomsRes.value.length > 0)) {
-        const fallbackRes = await api.get(`/nominations?form_id=${sub.form_id}`).catch(() => []);
-        const fallbackNoms = Array.isArray(fallbackRes) ? fallbackRes : [];
-        if (fallbackNoms.length === 1) {
-          setSelectedNomination(fallbackNoms[0]);
-        } else if (fallbackNoms.length > 1) {
-          const norm = (v: any) => String(v || '').trim().toLowerCase();
-          const userEmail = norm(sub.user_email);
-          const userName = norm(sub.user_name);
-          const schoolCode = norm(sub.school_code);
-
-          const byEmail = fallbackNoms.find((n: any) => norm(n.teacher_email) === userEmail);
-          const byNameAndSchool = fallbackNoms.find((n: any) => norm(n.teacher_name) === userName && norm(n.school_code) === schoolCode);
-          const schoolMatches = fallbackNoms.filter((n: any) => norm(n.school_code) === schoolCode);
-          const uniqueBySchool = schoolMatches.length === 1 ? schoolMatches[0] : null;
-          const picked = byEmail || byNameAndSchool || uniqueBySchool || null;
-          if (picked) setSelectedNomination(picked);
-        }
       }
 
       if (formRes.status === 'rejected' || commsRes.status === 'rejected' || nomsRes.status === 'rejected') {
