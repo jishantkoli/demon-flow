@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { initTheme } from './lib/theme';
 import Layout from './components/Layout';
@@ -66,8 +66,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 
 function AppContent() {
   const { user, loading, logout, refreshUser } = useAuth();
-
-
+  const [searchParams] = useSearchParams();
 
   if (loading) {
     return (
@@ -81,12 +80,11 @@ function AppContent() {
     );
   }
 
-  if (!user) {
-    // Allow access to public form filling even if not logged in
-    const isPublicFill = window.location.pathname.startsWith('/fill/');
-    if (!isPublicFill) {
-      return <Login onLogin={refreshUser} />;
-    }
+  // Define public routes
+  const isPublicFill = window.location.pathname.startsWith('/fill/');
+
+  if (!user && !isPublicFill) {
+    return <Login onLogin={refreshUser} />;
   }
 
   return (
@@ -107,8 +105,8 @@ function AppContent() {
         {user?.role === 'admin' && <Route path="/audit-logs" element={<AuditLogs />} />}
         {user?.role === 'admin' && <Route path="/exports" element={<Exports />} />}
         <Route path="/profile" element={user ? <Profile user={user} /> : <Navigate to="/login" />} />
-        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login onLogin={refreshUser} />} />
-        <Route path="*" element={<Navigate to={user ? "/" : "/login"} replace />} />
+        <Route path="/login" element={user ? <Navigate to={searchParams.get('redirect') || "/"} replace /> : <Login onLogin={refreshUser} />} />
+        <Route path="*" element={<Navigate to={user || isPublicFill ? undefined : "/login"} replace />} />
       </Routes>
     </Layout>
   );

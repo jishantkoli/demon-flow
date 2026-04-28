@@ -104,7 +104,8 @@ export default function FormFill({ user }: { user: User }) {
         if (res.success && res.data) {
           setEmail(res.data.teacher_email);
           setSchoolCode(res.data.school_code || '');
-          setOtpVerified(true);
+          // We don't set setOtpVerified(true) here anymore,
+          // because the user wants OTP verification even with a direct link
           return res.data;
         }
       } catch (e) {
@@ -148,8 +149,8 @@ export default function FormFill({ user }: { user: User }) {
       const isAnon = user.id === 'anon';
 
       if (authMode === 'login' && isAnon && !token) {
-        setStep('error');
-        setError('Login required to fill this form.');
+        // Redirect to login page instead of just showing an error
+        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
         return;
       }
 
@@ -158,7 +159,7 @@ export default function FormFill({ user }: { user: User }) {
       if (res.expires_at && new Date(res.expires_at) < new Date()) { setStep('error'); setError('This form has closed.'); return; }
 
       // If OTP mode and not verified yet, wait for OTP
-      if (authMode === 'otp' && isAnon && !otpVerified && !token) {
+      if (authMode === 'otp' && isAnon && !otpVerified) {
         setStep('filling'); // We stay in filling step but render OTP UI
         return;
       }
