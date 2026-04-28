@@ -34,58 +34,43 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Form not found' });
     }
 
+    // ─── NOMINATION LINKING (3-layer: ID → Token → Email) ───────────────
     let linkedNomination: any = null;
+
+    // Layer 1: Direct nomination ID (if frontend sent it)
     if (rawNominationId) {
-      linkedNomination = await Nomination.findById(rawNominationId);
-      if (!linkedNomination) {
-        return res.status(404).json({ error: 'Linked nomination not found' });
-      }
-      if (linkedNomination.form_id?.toString() !== form._id.toString()) {
-        return res.status(400).json({ error: 'Linked nomination does not belong to this form' });
+      try {
+        linkedNomination = await Nomination.findById(rawNominationId);
+      } catch (e) {
+        console.log('Nomination ID lookup failed (invalid ID format):', rawNominationId);
       }
     }
 
-    // Prevention of duplicate submissions/drafts:
-    // If no ID is provided, check if a draft already exists for this form and email
-    const userEmail = req.body.user_email || req.user?.email;
-    if (userEmail && (req.body.is_draft || req.body.status === 'draft')) {
-      const existingDraft = await Submission.findOne({
-        formId: form._id,
-        userEmail: { $regex: new RegExp(`^${userEmail}$`, 'i') },
-        isDraft: true
-      });
-      if (existingDraft) {
-        // Update the existing draft instead of creating a new one
-        existingDraft.responses = responses;
-        existingDraft.userName = req.body.user_name || existingDraft.userName;
-        existingDraft.schoolCode = req.body.school_code || existingDraft.schoolCode;
-        await existingDraft.save();
-        return res.status(200).json({ ...existingDraft.toObject(), id: existingDraft._id, is_draft: true });
+    // Layer 2: Nomination token from URL (MOST RELIABLE - 1 token = 1 nomination)
+    const nominationToken = req.body.nomination_token;
+    if (!linkedNomination && nominationToken) {
+      linkedNomination = await Nomination.findOne({ unique_token: nominationToken });
+      if (linkedNomination) {
+        console.log('✅ Nomination linked via TOKEN:', nominationToken, '→', linkedNomination._id);
       }
     }
 
-    // Check authorization for teachers (only for logged-in teachers without a nomination link)
-    if (req.user && req.user.role === 'teacher') {
-      if (!linkedNomination) {
-        linkedNomination = await Nomination.findOne({
-          form_id: form._id,
-          teacher_email: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
-        });
-      }
-      const isTeacherMatch = linkedNomination
-        ? new RegExp(`^${req.user.email}$`, 'i').test(linkedNomination.teacher_email || '')
-        : false;
-      if (!linkedNomination || !isTeacherMatch) {
-        return res.status(403).json({ error: 'You are not authorized to submit this form. Please contact your school functionary.' });
-      }
-    }
-
-    // For anonymous users with a nomination_id, try to find the nomination by email match as fallback
-    if (!linkedNomination && !req.user && req.body.user_email) {
+    // Layer 3: Email + form_id fallback (works for OTP and login flows)
+    const searchEmail = req.body.user_email || req.user?.email;
+    if (!linkedNomination && searchEmail) {
       linkedNomination = await Nomination.findOne({
         form_id: form._id,
-        teacher_email: { $regex: new RegExp(`^${req.body.user_email}$`, 'i') }
+        teacher_email: { $regex: new RegExp(`^${searchEmail.trim()}$`, 'i') }
       });
+      if (linkedNomination) {
+        console.log('✅ Nomination linked via EMAIL:', searchEmail, '→', linkedNomination._id);
+      }
+    }
+
+    if (linkedNomination) {
+      console.log('✅ Final linked nomination:', linkedNomination._id, 'teacher:', linkedNomination.teacher_email);
+    } else {
+      console.log('ℹ️ No nomination found for this submission (form:', form._id, 'email:', searchEmail, ')');
     }
 
     // Expiration check
@@ -144,10 +129,10 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
 
     const submissionData: any = {
       formId: form._id,
-      nominationId: linkedNomination?._id || rawNominationId,
+      nominationId: linkedNomination?._id || null,
       userId: req.user?._id || null,
       userName: req.body.user_name || req.user?.profile?.fullName,
-      userEmail: req.body.user_email || req.user?.email,
+      userEmail: req.body.user_email || req.user?.email || linkedNomination?.teacher_email,
       schoolCode: req.body.school_code || linkedNomination?.school_code || req.user?.profile?.schoolCode,
       formTitle: req.body.form_title || form.title,
       responses,
@@ -160,25 +145,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       }
     };
 
-    // FAIL-SAFE: If nominationId is still missing, scan responses for an email field to link
-    if (!submissionData.nominationId && responses && Array.isArray(responses)) {
-      const responseEmail = responses.find((r: any) => 
-        String(r.fieldId || '').toLowerCase().includes('email') || 
-        String(r.fieldId || '').toLowerCase().includes('mail')
-      )?.value;
-      
-      if (responseEmail && typeof responseEmail === 'string') {
-        const fallbackNom = await Nomination.findOne({
-          form_id: form._id,
-          teacher_email: { $regex: new RegExp(`^${responseEmail.trim()}$`, 'i') }
-        });
-        if (fallbackNom) {
-          submissionData.nominationId = fallbackNom._id;
-          if (!submissionData.userEmail) submissionData.userEmail = fallbackNom.teacher_email;
-          if (!submissionData.schoolCode) submissionData.schoolCode = fallbackNom.school_code;
-        }
-      }
-    }
+    console.log('📋 Submission data:', { formId: submissionData.formId, nominationId: submissionData.nominationId, userEmail: submissionData.userEmail, schoolCode: submissionData.schoolCode });
 
     const submission = await Submission.create(submissionData);
 

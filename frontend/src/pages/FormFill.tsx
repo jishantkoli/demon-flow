@@ -76,6 +76,7 @@ export default function FormFill({ user }: { user: User }) {
   const [otp, setOtp] = useState('');
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
+  const [nominationToken, setNominationToken] = useState('');
 
   // Online/offline events
   useEffect(() => {
@@ -97,6 +98,7 @@ export default function FormFill({ user }: { user: User }) {
 
     const query = new URLSearchParams(window.location.search);
     const token = query.get('token');
+    if (token) setNominationToken(token);
 
     const getNomination = async () => {
       // 1. If token exists, use it (highest priority)
@@ -348,6 +350,7 @@ export default function FormFill({ user }: { user: User }) {
         status: 'draft', 
         is_draft: true,
         nomination_id: nomination?.id || nomination?._id,
+        nomination_token: nominationToken,
         user_email: user.id === 'anon' ? email : user.email,
         user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
         school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
@@ -385,6 +388,7 @@ export default function FormFill({ user }: { user: User }) {
       status: 'submitted', 
       is_draft: false,
       nomination_id: nomination?.id || nomination?._id,
+      nomination_token: nominationToken,
       score: sc?.score ?? null,
       user_email: currentEmail,
       user_name: user.id === 'anon' ? (nomination?.teacher_name || currentEmail?.split('@')[0]) : user.name,
