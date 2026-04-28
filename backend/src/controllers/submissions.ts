@@ -184,6 +184,11 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
           { userId: req.user._id },
           { userEmail: { $regex: new RegExp(`^${req.user.email}$`, 'i') } }
         ];
+      } else if (req.user.role === 'functionary') {
+        // Functionaries see submissions for teachers they nominated
+        const myNominations = await Nomination.find({ functionary_id: req.user._id });
+        const teacherEmails = myNominations.map(n => n.teacher_email);
+        query.userEmail = { $in: teacherEmails.map(email => new RegExp(`^${email}$`, 'i')) };
       }
     } else {
       // For truly anonymous requests (before OTP), we can only filter by email if provided

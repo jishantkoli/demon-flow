@@ -71,8 +71,14 @@ export const getNominations = async (req: AuthRequest, res: Response) => {
       query.teacher_email = { $regex: new RegExp(`^${teacher_email}$`, 'i') };
     }
     
-    // Admins can see all, functionaries see theirs, teachers see only their own nominations
-    if (req.user.role === 'functionary') {
+    // Admins can see all
+    // If specific form_id AND teacher_email are provided (usually for linking a submission), allow access
+    // Otherwise, restrict by role
+    if (req.user.role === 'admin') {
+      // No filter
+    } else if (form_id && teacher_email) {
+      // Allow lookup for linking submissions
+    } else if (req.user.role === 'functionary') {
       query.functionary_id = req.user._id;
     } else if (req.user.role === 'teacher') {
       query.teacher_email = { $regex: new RegExp(`^${req.user.email}$`, 'i') };

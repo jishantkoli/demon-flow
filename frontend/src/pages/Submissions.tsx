@@ -25,14 +25,25 @@ export default function Submissions({ user }: { user: User }) {
   const fetchData = async () => {
     try {
       let url = '/submissions?';
-      if (user.role === 'teacher' || user.role === 'functionary') url += `user_id=${user.id}&`;
+      if (user.role === 'teacher') url += `user_id=${user.id}&`;
       if (statusFilter) url += `status=${statusFilter}&`;
       if (formFilter) url += `form_id=${formFilter}&`;
       const [subs, f] = await Promise.all([
         api.get(url).catch(() => []),
         api.get('/forms').catch(() => [])
       ]);
-      setSubmissions(Array.isArray(subs) ? subs : []);
+      
+      const mappedSubs = (Array.isArray(subs) ? subs : []).map((s: any) => ({
+        ...s,
+        id: s._id || s.id,
+        form_id: s.formId || s.form_id,
+        user_email: s.userEmail || s.user_email,
+        user_name: s.userName || s.user_name,
+        form_title: s.formTitle || s.form_title,
+        submitted_at: s.createdAt || s.submitted_at
+      }));
+      
+      setSubmissions(mappedSubs);
       setForms(Array.isArray(f) ? f : []);
     } catch (err) { 
       console.error('Error fetching submissions:', err);
@@ -154,7 +165,7 @@ export default function Submissions({ user }: { user: User }) {
   const fieldMap = getFieldMap();
 
   const columns = [
-    { key: 'id', label: '#', sortable: true, render: (v: number) => <span className="text-xs font-mono text-muted">#{v}</span> },
+    { key: 'id', label: '#', sortable: true, render: (v: string) => <span className="text-xs font-mono text-muted">#{v?.toString().slice(-6).toUpperCase() || '—'}</span> },
     { key: 'form_title', label: 'Form', sortable: true, render: (v: string) => <span className="font-medium text-sm">{v || 'Untitled'}</span> },
     { key: 'user_name', label: 'Submitted By', sortable: true, render: (v: string, row: any) => (<div><p className="text-sm">{v || 'Anonymous'}</p><p className="text-[10px] text-muted">{row.user_email}</p></div>) },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
