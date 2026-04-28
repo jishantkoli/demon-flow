@@ -22,6 +22,51 @@ export default function Submissions({ user }: { user: User }) {
   const [formFilter, setFormFilter] = useState('');
 
   const canSeeScore = user.role === 'admin' || user.role === 'reviewer';
+  const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const emailLocal = (v: any) => norm(v).split('@')[0];
+  const compact = (v: any) => norm(v).replace(/[^a-z0-9]/g, '');
+
+  const pickBestNomination = (nominations: any[], sub: any, nominationIdParam?: any) => {
+    if (!Array.isArray(nominations) || nominations.length === 0) return null;
+
+    const userEmail = norm(sub?.user_email);
+    const userName = norm(sub?.user_name);
+    const schoolCode = norm(sub?.school_code);
+    const subNomId = norm(nominationIdParam);
+    const userEmailLocal = emailLocal(userEmail);
+    const userNameCompact = compact(userName);
+
+    // 1) Strong exact matching first
+    let matched = subNomId
+      ? nominations.find((n: any) => norm(n?.id || n?._id) === subNomId)
+      : undefined;
+    if (!matched) matched = nominations.find((n: any) => norm(n.teacher_email) === userEmail);
+    if (!matched && userEmail) matched = nominations.find((n: any) => emailLocal(n.teacher_email) === userEmailLocal);
+    if (!matched && userName) matched = nominations.find((n: any) => norm(n.teacher_name) === userName);
+    if (matched) return matched;
+
+    // 2) Score-based best candidate fallback (for minor typos/case/format issues)
+    const scored = nominations.map((n: any) => {
+      const nEmail = norm(n.teacher_email);
+      const nEmailLocal = emailLocal(n.teacher_email);
+      const nName = norm(n.teacher_name);
+      const nNameCompact = compact(n.teacher_name);
+      const nSchool = norm(n.school_code);
+
+      let score = 0;
+      if (schoolCode && nSchool === schoolCode) score += 30;
+      if (userEmailLocal && nEmailLocal === userEmailLocal) score += 40;
+      if (userNameCompact && nNameCompact === userNameCompact) score += 35;
+      if (userNameCompact && nNameCompact && (nNameCompact.includes(userNameCompact) || userNameCompact.includes(nNameCompact))) score += 20;
+      if (userEmail && nEmail && (nEmail.includes(userEmail) || userEmail.includes(nEmail))) score += 15;
+
+      return { n, score };
+    }).sort((a, b) => b.score - a.score);
+
+    if (scored[0]?.score > 0) return scored[0].n;
+    if (nominations.length === 1) return nominations[0];
+    return null;
+  };
 
   const fetchData = async () => {
     try {
@@ -108,33 +153,7 @@ export default function Submissions({ user }: { user: User }) {
         });
         const uniqueNoms = Array.from(nomMap.values());
         
-        const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
-        const emailLocal = (v: any) => norm(v).split('@')[0];
-        const userEmail = norm(sub.user_email);
-        const userName = norm(sub.user_name);
-        const schoolCode = norm(sub.school_code);
-        const subNomId = norm(nominationIdParam);
-
-        let matched = subNomId
-          ? uniqueNoms.find((n: any) => norm(n?.id || n?._id) === subNomId)
-          : undefined;
-        if (!matched) matched = uniqueNoms.find((n: any) => norm(n.teacher_email) === userEmail);
-        if (!matched && userEmail) {
-          const local = emailLocal(userEmail);
-          matched = uniqueNoms.find((n: any) => emailLocal(n.teacher_email) === local);
-        }
-        if (!matched && userName) matched = uniqueNoms.find((n: any) => norm(n.teacher_name) === userName);
-        if (!matched && schoolCode) {
-          const schoolMatches = uniqueNoms.filter((n: any) => norm(n.school_code) === schoolCode);
-          if (schoolMatches.length === 1) matched = schoolMatches[0];
-          if (!matched && userName && schoolMatches.length > 1) {
-            matched = schoolMatches.find((n: any) => norm(n.teacher_name) === userName);
-          }
-          if (!matched && schoolMatches.length > 0) matched = schoolMatches[0];
-        }
-        if (!matched && uniqueNoms.length === 1) matched = uniqueNoms[0];
-        // Final fallback: show latest nomination data for this form instead of empty warning state.
-        if (!matched && uniqueNoms.length > 0) matched = uniqueNoms[0];
+        const matched = pickBestNomination(uniqueNoms, sub, nominationIdParam);
         
         if (matched) setSelectedNomination(matched);
       }
@@ -180,32 +199,7 @@ export default function Submissions({ user }: { user: User }) {
       });
       const allNoms = Array.from(nomMap.values());
       if (allNoms.length > 0) {
-        const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
-        const emailLocal = (v: any) => norm(v).split('@')[0];
-        const userEmail = norm(sub.user_email);
-        const userName = norm(sub.user_name);
-        const schoolCode = norm(sub.school_code);
-        const subNomId = norm(nominationIdParam);
-        let matched = subNomId
-          ? allNoms.find((n: any) => norm(n?.id || n?._id) === subNomId)
-          : undefined;
-        if (!matched) matched = allNoms.find((n: any) => norm(n.teacher_email) === userEmail);
-        if (!matched && userEmail) {
-          const local = emailLocal(userEmail);
-          matched = allNoms.find((n: any) => emailLocal(n.teacher_email) === local);
-        }
-        if (!matched && userName) matched = allNoms.find((n: any) => norm(n.teacher_name) === userName);
-        if (!matched && schoolCode) {
-          const schoolMatches = allNoms.filter((n: any) => norm(n.school_code) === schoolCode);
-          if (schoolMatches.length === 1) matched = schoolMatches[0];
-          if (!matched && userName && schoolMatches.length > 1) {
-            matched = schoolMatches.find((n: any) => norm(n.teacher_name) === userName);
-          }
-          if (!matched && schoolMatches.length > 0) matched = schoolMatches[0];
-        }
-        if (!matched && allNoms.length === 1) matched = allNoms[0];
-        // Final fallback: keep nomination modal useful even when strict linkage is missing.
-        if (!matched && allNoms.length > 0) matched = allNoms[0];
+        const matched = pickBestNomination(allNoms, sub, nominationIdParam);
         if (matched) setSelectedNomination(matched);
       }
       // Also fetch form to get labels for custom fields
@@ -433,13 +427,17 @@ export default function Submissions({ user }: { user: User }) {
 
             {/* Raw responses */}
             <div><h4 className="text-sm font-bold mb-2">Response Data</h4>
-              <div className="bg-surface rounded-xl p-4 space-y-2">
-                {!selectedNomination ? (
+              <div className="space-y-4">
+                <div className="bg-surface rounded-xl p-4 space-y-2">
+                  <div className="text-[10px] font-bold text-primary uppercase tracking-wide pb-1 border-b border-primary/20">
+                    School Functionary Form Fill
+                  </div>
+                  {!selectedNomination ? (
                     <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                       School functionary nomination is not linked to this submission, so functionary-filled data cannot be shown here.
                     </div>
                   ) : (
-                    <div className="mb-4 p-3 bg-primary/5 border border-primary/10 rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="mb-2 p-3 bg-primary/5 border border-primary/10 rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
                         <p className="text-[10px] text-muted uppercase font-bold">School Code</p>
                         <p className="text-xs font-semibold">{selectedNomination.school_code}</p>
@@ -454,97 +452,98 @@ export default function Submissions({ user }: { user: User }) {
                       </div>
                     </div>
                   )}
-                {selectedNomination && Object.keys(nominationAdditionalData).length === 0 && (
-                  <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                    Nomination is linked, but no extra custom fields were saved by school functionary for this teacher.
-                  </div>
-                )}
-                {Object.keys(nominationAdditionalData).length > 0 && (
-                  <>
-                    <div className="text-[10px] font-bold text-primary uppercase tracking-wide pb-1 border-b border-primary/20">
-                      Filled By School Functionary
+                  {selectedNomination && Object.keys(nominationAdditionalData).length === 0 && (
+                    <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                      Nomination is linked, but no extra custom fields were saved by school functionary for this teacher.
                     </div>
-                    {Object.entries(nominationAdditionalData).map(([key, val]) => {
-                      const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
-                      const fileUrl = isFile
-                        ? (typeof val === 'string' && val.startsWith('http')
-                          ? val
-                          : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`)
-                        : '';
+                  )}
+                  {Object.keys(nominationAdditionalData).length > 0 && (
+                    <>
+                      {Object.entries(nominationAdditionalData).map(([key, val]) => {
+                        const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+                        const fileUrl = isFile
+                          ? (typeof val === 'string' && val.startsWith('http')
+                            ? val
+                            : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`)
+                          : '';
 
-                      let label = key;
-                      const customField = nominationSettings.nomination_custom_fields?.find((cf: any) => cf.id === key);
-                      if (customField) label = customField.label;
+                        let label = key;
+                        const customField = nominationSettings.nomination_custom_fields?.find((cf: any) => cf.id === key);
+                        if (customField) label = customField.label;
+
+                        return (
+                          <div key={`nom-${key}`} className="flex flex-col sm:flex-row sm:items-start gap-1 py-1.5 border-b border-border/30 last:border-0">
+                            <span className="text-xs font-semibold text-muted min-w-[160px] shrink-0">{label}:</span>
+                            <span className="text-sm break-words flex flex-wrap items-center gap-2">
+                              {isFile ? (
+                                <>
+                                  <span className="font-medium text-primary">{val as string}</span>
+                                  <a href={fileUrl} target="_blank" rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-bold hover:bg-primary/20 transition-colors">
+                                    <ExternalLink size={10} /> View File
+                                  </a>
+                                </>
+                              ) : (
+                                Array.isArray(val) ? (val as any[]).join(', ') : typeof val === 'object' ? JSON.stringify(val) : String(val)
+                              )}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+
+                <div className="bg-surface rounded-xl p-4 space-y-2">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide pb-1 border-b border-border/60">
+                    Teacher Form Fill
+                  </div>
+                  {Object.keys(responses).length === 0 ? <p className="text-sm text-muted">No response data</p> :
+                    Object.entries(responses).map(([key, val]) => {
+                      const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+                      // Cloudinary returns full https:// URLs; fallback for legacy local filenames
+                      const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`) : '';
+
+                      // Find label from form schema
+                      const fieldMeta = fieldMap[key];
+                      const label = fieldMeta?.label || key;
+
+                      const getDisplayValue = () => {
+                        if (Array.isArray(val)) return (val as any[]).join(', ');
+                        if (typeof val === 'object') return JSON.stringify(val);
+
+                        // MCQ/choice fields may store index (e.g. "0", "1"); show option text instead.
+                        const options = Array.isArray(fieldMeta?.options) ? fieldMeta.options : [];
+                        if (options.length > 0) {
+                          const idx = Number(String(val));
+                          if (!Number.isNaN(idx) && options[idx] !== undefined) {
+                            return String(options[idx]);
+                          }
+                        }
+
+                        return String(val);
+                      };
 
                       return (
-                        <div key={`nom-${key}`} className="flex flex-col sm:flex-row sm:items-start gap-1 py-1.5 border-b border-border/30">
+                        <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 py-1.5 border-b border-border/30 last:border-0">
                           <span className="text-xs font-semibold text-muted min-w-[160px] shrink-0">{label}:</span>
                           <span className="text-sm break-words flex flex-wrap items-center gap-2">
                             {isFile ? (
                               <>
                                 <span className="font-medium text-primary">{val as string}</span>
-                                <a href={fileUrl} target="_blank" rel="noopener noreferrer"
+                                <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
                                   className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-bold hover:bg-primary/20 transition-colors">
                                   <ExternalLink size={10} /> View File
                                 </a>
                               </>
                             ) : (
-                              Array.isArray(val) ? (val as any[]).join(', ') : typeof val === 'object' ? JSON.stringify(val) : String(val)
+                              getDisplayValue()
                             )}
                           </span>
                         </div>
                       );
                     })}
-                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide pt-1">
-                      Filled By Teacher
-                    </div>
-                  </>
-                )}
-                {Object.keys(responses).length === 0 ? <p className="text-sm text-muted">No response data</p> :
-                  Object.entries(responses).map(([key, val]) => {
-                    const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
-                    // Cloudinary returns full https:// URLs; fallback for legacy local filenames
-                    const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`) : '';
-
-                    // Find label from form schema
-                    const fieldMeta = fieldMap[key];
-                    const label = fieldMeta?.label || key;
-
-                    const getDisplayValue = () => {
-                      if (Array.isArray(val)) return (val as any[]).join(', ');
-                      if (typeof val === 'object') return JSON.stringify(val);
-
-                      // MCQ/choice fields may store index (e.g. "0", "1"); show option text instead.
-                      const options = Array.isArray(fieldMeta?.options) ? fieldMeta.options : [];
-                      if (options.length > 0) {
-                        const idx = Number(String(val));
-                        if (!Number.isNaN(idx) && options[idx] !== undefined) {
-                          return String(options[idx]);
-                        }
-                      }
-
-                      return String(val);
-                    };
-
-                    return (
-                      <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 py-1.5 border-b border-border/30 last:border-0">
-                        <span className="text-xs font-semibold text-muted min-w-[160px] shrink-0">{label}:</span>
-                        <span className="text-sm break-words flex flex-wrap items-center gap-2">
-                          {isFile ? (
-                            <>
-                              <span className="font-medium text-primary">{val as string}</span>
-                              <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
-                                className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-bold hover:bg-primary/20 transition-colors">
-                                <ExternalLink size={10} /> View File
-                              </a>
-                            </>
-                          ) : (
-                            getDisplayValue()
-                          )}
-                        </span>
-                      </div>
-                    );
-                  })}
+                </div>
               </div>
             </div>
 
