@@ -94,11 +94,15 @@ export default function Submissions({ user }: { user: User }) {
         setSelectedNomination(nominationsData[0]);
       }
 
-      const is404Error = (reason: any) =>
-        !!reason && typeof reason?.message === 'string' && reason.message.includes('404');
+      const is404Error = (reason: any) => {
+        const msg = String(reason?.message || reason || "").toLowerCase();
+        return msg.includes('404') || msg.includes('not found');
+      };
+
       const hasUnexpectedError =
         (formRes.status === 'rejected' && !is404Error(formRes.reason)) ||
         (nomsRes.status === 'rejected' && !is404Error(nomsRes.reason));
+      
       if (hasUnexpectedError) {
         console.error('Error loading submission details:', {
           formError: formRes.status === 'rejected' ? formRes.reason : null,
@@ -107,8 +111,8 @@ export default function Submissions({ user }: { user: User }) {
       }
     } catch (err: any) {
       // Don't log if it's a known 404 or comments-related error from old code
-      const msg = err?.message || String(err);
-      if (!msg.includes('404') && !msg.includes('comments')) {
+      const msg = String(err?.message || err || "").toLowerCase();
+      if (!msg.includes('404') && !msg.includes('comments') && !msg.includes('not found')) {
         console.error("Error loading submission details:", err);
       }
       setComments([]);
