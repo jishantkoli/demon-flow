@@ -57,29 +57,12 @@ export default function Submissions({ user }: { user: User }) {
       const comms = await api.get(`/comments?submission_id=${sub.id}`);
       setComments(comms);
 
-      // 3. Fetch nomination data with robust matching inside same form
-      const [formNomsRaw, byEmailRaw] = await Promise.all([
-        api.get(`/nominations?form_id=${sub.form_id}`).catch(() => []),
-        sub.user_email ? api.get(`/nominations?form_id=${sub.form_id}&teacher_email=${encodeURIComponent(sub.user_email)}`).catch(() => []) : Promise.resolve([])
-      ]);
+      // 3. Fetch nomination data by form_id (form_id is the link between functionary nomination and teacher submission)
+      const nomsRes = await api.get(`/nominations?form_id=${sub.form_id}`).catch(() => []);
+      const noms = Array.isArray(nomsRes) ? nomsRes : [];
 
-      const formNoms = Array.isArray(formNomsRaw) ? formNomsRaw : [];
-      const byEmailNoms = Array.isArray(byEmailRaw) ? byEmailRaw : [];
-      const nomMap = new Map<string, any>();
-      [...formNoms, ...byEmailNoms].forEach((n: any) => {
-        const key = String(n?.id || n?._id || `${n?.teacher_email || ''}-${n?.createdAt || ''}`);
-        if (key) nomMap.set(key, n);
-      });
-      const allNoms = Array.from(nomMap.values());
-
-      if (allNoms.length > 0) {
-        const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
-        const userEmail = norm(sub.user_email);
-
-        // Match strictly by email (form_id is already filtered in API call)
-        const matched = allNoms.find((n: any) => norm(n.teacher_email) === userEmail);
-
-        if (matched) setSelectedNomination(matched);
+      if (noms.length > 0) {
+        setSelectedNomination(noms[0]);
       }
     } catch (err) { 
       console.error("Error loading submission details:", err);
@@ -289,10 +272,10 @@ export default function Submissions({ user }: { user: User }) {
             <div><h4 className="text-sm font-bold mb-2">Response Data</h4>
               <div className="bg-surface rounded-xl p-4 space-y-2">
                 {!selectedNomination && (
-                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    School functionary nomination is not linked to this submission, so functionary-filled data cannot be shown here.
-                  </div>
-                )}
+                    <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      No nomination found for this form, so functionary-filled data cannot be shown here.
+                    </div>
+                  )}
                 {selectedNomination && Object.keys(nominationAdditionalData).length === 0 && (
                   <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                     Nomination is linked, but no extra custom fields were saved by school functionary for this teacher.
