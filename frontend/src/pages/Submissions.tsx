@@ -14,6 +14,7 @@ export default function Submissions({ user }: { user: User }) {
   const [selected, setSelected] = useState<any>(null);
   const [selectedFormObj, setSelectedFormObj] = useState<any>(null);
   const [selectedNomination, setSelectedNomination] = useState<any>(null);
+  const [showNomProfile, setShowNomProfile] = useState(false);
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -133,6 +134,42 @@ export default function Submissions({ user }: { user: User }) {
     }
   };
 
+  const openNominationOnly = async (sub: any) => {
+    // Similar to openDetail but specifically for the nomination modal
+    setSelected(sub);
+    setSelectedNomination(null);
+    try {
+      const [formNomsRaw, byEmailRaw] = await Promise.all([
+        api.get(`/nominations?form_id=${sub.form_id}`).catch(() => []),
+        sub.user_email ? api.get(`/nominations?form_id=${sub.form_id}&teacher_email=${encodeURIComponent(sub.user_email)}`).catch(() => []) : Promise.resolve([])
+      ]);
+      const formNoms = Array.isArray(formNomsRaw) ? formNomsRaw : [];
+      const byEmailNoms = Array.isArray(byEmailRaw) ? byEmailRaw : [];
+      const nomMap = new Map<string, any>();
+      [...formNoms, ...byEmailNoms].forEach((n: any) => {
+        const key = String(n?.id || n?._id || `${n?.teacher_email || ''}-${n?.createdAt || ''}`);
+        if (key) nomMap.set(key, n);
+      });
+      const allNoms = Array.from(nomMap.values());
+      if (allNoms.length > 0) {
+        const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const userEmail = norm(sub.user_email);
+        const userName = norm(sub.user_name);
+        let matched = allNoms.find((n: any) => norm(n.teacher_email) === userEmail);
+        if (!matched && userName) matched = allNoms.find((n: any) => norm(n.teacher_name) === userName);
+        if (!matched && allNoms.length === 1) matched = allNoms[0];
+        if (matched) setSelectedNomination(matched);
+      }
+      // Also fetch form to get labels for custom fields
+      const formRes = await api.get(`/forms?id=${sub.form_id}`);
+      if (formRes) setSelectedFormObj(formRes);
+      
+      setShowNomProfile(true);
+    } catch (err) {
+      console.error("Error loading nomination:", err);
+    }
+  };
+
   const addComment = async () => {
     // Comments endpoint does not exist on backend; avoid triggering 404.
     if (!newComment.trim() || !selected) return;
@@ -220,7 +257,21 @@ export default function Submissions({ user }: { user: User }) {
   const columns = [
     { key: 'id', label: '#', sortable: true, render: (v: string) => <span className="text-xs font-mono text-muted">#{v?.toString().slice(-6).toUpperCase() || '—'}</span> },
     { key: 'form_title', label: 'Form', sortable: true, render: (v: string) => <span className="font-medium text-sm">{v || 'Untitled'}</span> },
-    { key: 'user_name', label: 'Submitted By', sortable: true, render: (v: string, row: any) => (<div><p className="text-sm">{v || 'Anonymous'}</p><p className="text-[10px] text-muted">{row.user_email}</p></div>) },
+    { 
+      key: 'user_name', 
+      label: 'Submitted By', 
+      sortable: true, 
+      render: (v: string, row: any) => (
+        <div 
+          className="cursor-pointer hover:bg-primary/5 p-1 -m-1 rounded-lg transition-colors group"
+          onClick={(e) => { e.stopPropagation(); openNominationOnly(row); }}
+          title="Click to view nomination details"
+        >
+          <p className="text-sm font-medium group-hover:text-primary">{v || 'Anonymous'}</p>
+          <p className="text-[10px] text-muted">{row.user_email}</p>
+        </div>
+      ) 
+    },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
     // Score column: hidden for teacher/functionary — they should NEVER see quiz scores
     { key: 'score', label: 'Score', sortable: true, hidden: !canSeeScore, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{typeof v === 'object' ? v?.percentage : v}%</span> : <span className="text-muted">—</span> },
@@ -447,6 +498,113 @@ export default function Submissions({ user }: { user: User }) {
                 <button onClick={addComment} className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover min-h-[44px]"><Send size={14} /></button>
               </div>
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Nomination Profile Modal */}
+      <Modal open={showNomProfile} onClose={() => { setShowNomProfile(false); setSelected(null); }} title="Nomination Profile" size="lg">
+        {selectedNomination ? (
+          <div className="space-y-6">
+            <div className="flex items-center gap-4 p-4 bg-primary/5 rounded-2xl border border-primary/10">
+              <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center text-primary font-bold text-lg">
+                {selectedNomination.teacher_name?.charAt(0) || 'T'}
+              </div>
+              <div>
+                <h3 className="text-lg font-bold">{selectedNomination.teacher_name}</h3>
+                <p className="text-sm text-muted">{selectedNomination.teacher_email}</p>
+              </div>
+              <div className="ml-auto text-right">
+                <span className="text-[10px] uppercase font-bold text-muted block mb-1">Status</span>
+                <StatusBadge status={selectedNomination.status || 'completed'} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-surface rounded-xl border border-border">
+                <p className="text-[10px] text-muted uppercase font-bold mb-2">Basic Information</p>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs text-muted">School Code</p>
+                    <p className="text-sm font-semibold font-mono">{selectedNomination.school_code}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Phone Number</p>
+                    <p className="text-sm font-semibold">{selectedNomination.teacher_phone || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Nominated By</p>
+                    <p className="text-sm font-semibold text-primary">{selectedNomination.functionary_name || 'School Head'}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-surface rounded-xl border border-border">
+                <p className="text-[10px] text-muted uppercase font-bold mb-2">Submission Context</p>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs text-muted">Form Applied</p>
+                    <p className="text-sm font-semibold">{selected?.form_title || 'Untitled Form'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Submission Date</p>
+                    <p className="text-sm font-semibold">{selected?.submitted_at ? new Date(selected.submitted_at).toLocaleString() : '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Current Status</p>
+                    <p className="text-sm font-semibold capitalize">{selected?.status?.replace('_', ' ')}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Custom fields from nomination */}
+            {Object.keys(nominationAdditionalData).length > 0 && (
+              <div className="p-5 bg-amber-50/50 border border-amber-100 rounded-2xl">
+                <h4 className="text-sm font-bold text-amber-900 mb-4 flex items-center gap-2">
+                  <Eye size={16} /> Details Filled by Functionary
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8">
+                  {Object.entries(nominationAdditionalData).map(([key, val]) => {
+                    const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+                    const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val as string : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`) : '';
+
+                    let label = key;
+                    const customField = nominationSettings.nomination_custom_fields?.find((cf: any) => cf.id === key);
+                    if (customField) label = customField.label;
+
+                    return (
+                      <div key={key} className="space-y-1">
+                        <p className="text-[11px] text-amber-700/70 font-bold uppercase tracking-tight">{label}</p>
+                        {isFile ? (
+                          <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline bg-white px-2 py-1 rounded-lg border border-primary/10">
+                            <ExternalLink size={12} /> View Document
+                          </a>
+                        ) : (
+                          <p className="text-sm font-semibold text-slate-800">{String(val)}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
+            <div className="flex justify-end pt-2">
+              <button onClick={() => { setShowNomProfile(false); openDetail(selected); }} 
+                className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover shadow-sm flex items-center gap-2">
+                <ExternalLink size={16} /> View Full Submission
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="py-12 text-center space-y-3">
+            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
+              <Inbox size={32} />
+            </div>
+            <p className="text-slate-500 font-medium">No nomination details found for this user.</p>
+            <p className="text-xs text-slate-400 max-w-xs mx-auto">This submission might have been made directly without a functionary nomination, or the data is not linked correctly.</p>
           </div>
         )}
       </Modal>
