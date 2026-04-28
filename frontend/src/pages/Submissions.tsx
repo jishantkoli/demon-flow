@@ -75,31 +75,9 @@ export default function Submissions({ user }: { user: User }) {
       if (allNoms.length > 0) {
         const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
         const userEmail = norm(sub.user_email);
-        const userName = norm(sub.user_name);
 
-        let matched = allNoms.find((n: any) => norm(n.teacher_email) === userEmail);
-        if (!matched && userName) {
-          matched = allNoms.find((n: any) => norm(n.teacher_name) === userName);
-        }
-        if (!matched && userName) {
-          matched = allNoms.find((n: any) => {
-            const t = norm(n.teacher_name);
-            return t.includes(userName) || userName.includes(t);
-          });
-        }
-        if (!matched) {
-          matched = allNoms.find((n: any) => {
-            const raw = n?.additional_data;
-            if (!raw) return false;
-            if (typeof raw === 'string') {
-              try { return Object.keys(JSON.parse(raw)).length > 0; } catch { return false; }
-            }
-            return typeof raw === 'object' && Object.keys(raw).length > 0;
-          });
-        }
-        if (!matched && allNoms.length === 1) {
-          matched = allNoms[0];
-        }
+        // Match strictly by email (form_id is already filtered in API call)
+        const matched = allNoms.find((n: any) => norm(n.teacher_email) === userEmail);
 
         if (matched) setSelectedNomination(matched);
       }
