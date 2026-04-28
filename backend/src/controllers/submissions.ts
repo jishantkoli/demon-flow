@@ -64,7 +64,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Check authorization for teachers
+    // Check authorization for teachers (only for logged-in teachers without a nomination link)
     if (req.user && req.user.role === 'teacher') {
       if (!linkedNomination) {
         linkedNomination = await Nomination.findOne({
@@ -78,6 +78,14 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       if (!linkedNomination || !isTeacherMatch) {
         return res.status(403).json({ error: 'You are not authorized to submit this form. Please contact your school functionary.' });
       }
+    }
+
+    // For anonymous users with a nomination_id, try to find the nomination by email match as fallback
+    if (!linkedNomination && !req.user && req.body.user_email) {
+      linkedNomination = await Nomination.findOne({
+        form_id: form._id,
+        teacher_email: { $regex: new RegExp(`^${req.body.user_email}$`, 'i') }
+      });
     }
 
     // Expiration check
@@ -139,7 +147,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       userId: req.user?._id || null,
       userName: req.body.user_name || req.user?.profile?.fullName,
       userEmail: req.body.user_email || req.user?.email,
-      schoolCode: req.body.school_code || req.user?.profile?.schoolCode,
+      schoolCode: req.body.school_code || linkedNomination?.school_code || req.user?.profile?.schoolCode,
       nominationId: linkedNomination?._id || undefined,
       formTitle: req.body.form_title || form.title,
       responses,
@@ -152,12 +160,16 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       }
     };
 
-    // If we have a nomination, use its ID as the submission ID to make them "same"
-    if (linkedNomination?._id) {
-      submissionData._id = linkedNomination._id;
-    }
-
     const submission = await Submission.create(submissionData);
+
+    // Update nomination status to 'completed' after successful non-draft submission
+    if (linkedNomination && !submissionData.isDraft) {
+      try {
+        await Nomination.findByIdAndUpdate(linkedNomination._id, { status: 'completed' });
+      } catch (e) {
+        console.error('Failed to update nomination status:', e);
+      }
+    }
 
     res.status(201).json({ ...submission.toObject(), id: submission._id, is_draft: submission.isDraft, school_code: submission.schoolCode });
   } catch (err: any) {

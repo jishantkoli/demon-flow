@@ -106,7 +106,13 @@ export default function FormFill({ user }: { user: User }) {
           if (res.success && res.data) {
             setEmail(res.data.teacher_email);
             setSchoolCode(res.data.school_code || '');
-            return res.data;
+            // Ensure nomination has a usable id
+            const nomData = { ...res.data };
+            if (!nomData.id && !nomData._id && nomData.form) {
+              // The token endpoint might nest the id differently
+              nomData._id = nomData._id || nomData.id;
+            }
+            return nomData;
           }
         } catch (e) {
           console.error("Token verification failed", e);
@@ -165,8 +171,9 @@ export default function FormFill({ user }: { user: User }) {
       const authMode = res.settings.auth_mode || 'login';
       const isAnon = user.id === 'anon';
 
-      if (authMode === 'login' && isAnon && !token) {
-        // Redirect to login page instead of just showing an error
+      if (authMode === 'login' && isAnon && !token && !nomination) {
+        // Redirect to login page only if there's no token/nomination
+        // Teachers with valid nomination tokens should be able to access the form directly
         window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
         return;
       }
@@ -394,6 +401,17 @@ export default function FormFill({ user }: { user: User }) {
       if (submissionId) saved = await api.put('/submissions', { id: submissionId, ...payload });
       else saved = await api.post('/submissions', payload);
       const realId = saved?.data?._id || saved?.data?.id || saved?._id || saved?.id || submissionId || 'DONE';
+      
+      // Update nomination status to 'completed' after successful submission
+      const nomId = nomination?.id || nomination?._id;
+      if (nomId) {
+        try {
+          await api.put(`/nominations/${nomId}`, { id: nomId, status: 'completed' });
+        } catch (e) {
+          console.warn('Failed to update nomination status:', e);
+        }
+      }
+      
       setReceipt({ id: realId, score: sc?.score, max: sc?.max });
       setStep('submitted');
     } catch (err: any) {
