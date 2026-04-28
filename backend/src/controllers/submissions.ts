@@ -33,6 +33,25 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Form not found' });
     }
 
+    // Prevention of duplicate submissions/drafts:
+    // If no ID is provided, check if a draft already exists for this form and email
+    const userEmail = req.body.user_email || req.user?.email;
+    if (userEmail && (req.body.is_draft || req.body.status === 'draft')) {
+      const existingDraft = await Submission.findOne({
+        formId: form._id,
+        userEmail: { $regex: new RegExp(`^${userEmail}$`, 'i') },
+        isDraft: true
+      });
+      if (existingDraft) {
+        // Update the existing draft instead of creating a new one
+        existingDraft.responses = responses;
+        existingDraft.userName = req.body.user_name || existingDraft.userName;
+        existingDraft.schoolCode = req.body.school_code || existingDraft.schoolCode;
+        await existingDraft.save();
+        return res.status(200).json({ ...existingDraft.toObject(), id: existingDraft._id, is_draft: true });
+      }
+    }
+
     // Check authorization for teachers
     if (req.user && req.user.role === 'teacher') {
       const nomination = await Nomination.findOne({
@@ -143,7 +162,7 @@ export const updateSubmission = async (req: AuthRequest, res: Response) => {
 
 export const getSubmissions = async (req: AuthRequest, res: Response) => {
   try {
-    const { formId, form_id, user_id } = req.query;
+    const { formId, form_id, user_id, user_email } = req.query;
     const actualFormId = formId || form_id;
     const query: any = {};
     if (actualFormId) {
@@ -156,17 +175,21 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
       }
     }
     if (user_id) query.userId = user_id;
+    if (user_email) query.userEmail = { $regex: new RegExp(`^${user_email}$`, 'i') };
 
     if (req.user) {
       if (req.user.role === 'teacher') {
-        query.userId = req.user._id;
+        // Teachers see submissions matching their ID OR their email
+        query.$or = [
+          { userId: req.user._id },
+          { userEmail: { $regex: new RegExp(`^${req.user.email}$`, 'i') } }
+        ];
       }
     } else {
-      // Anonymous users can only see their own submissions if we had a session, 
-      // but for now they see nothing to protect privacy.
-      if (!actualFormId) return res.status(200).json([]);
-      query.userId = null; // Only show anonymous submissions for this form? No, still risky.
-      return res.status(200).json([]); 
+      // For truly anonymous requests (before OTP), we can only filter by email if provided
+      // and only if the form is found. But to be safe, we only allow this if user_email is explicitly requested.
+      if (!user_email) return res.status(200).json([]);
+      query.userEmail = { $regex: new RegExp(`^${user_email}$`, 'i') };
     }
 
     const submissions = await Submission.find(query)

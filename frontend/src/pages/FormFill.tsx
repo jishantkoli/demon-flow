@@ -271,6 +271,34 @@ export default function FormFill({ user }: { user: User }) {
         localStorage.setItem('auth_user', JSON.stringify(res.user));
       }
       setOtpVerified(true);
+      
+      // After OTP is verified, we should re-check for existing submissions/drafts for this email
+      if (id) {
+        const subs: any = await api.get(`/submissions?form_id=${id}&user_email=${encodeURIComponent(email)}`).catch(() => []);
+        const existing = (subs || []).find((s: any) => !s.is_draft && !s.isDraft);
+        const draft = (subs || []).find((s: any) => s.is_draft || s.isDraft);
+
+        if (existing) {
+          const score = typeof existing.score === 'object' && existing.score !== null
+            ? existing.score.earnedPoints
+            : existing.score ?? null;
+          const max = typeof existing.score === 'object' && existing.score !== null
+            ? existing.score.totalPoints
+            : null;
+          setReceipt({ id: existing._id || existing.id, score, max });
+          setStep('submitted');
+        } else if (draft) {
+          try { 
+            setAnswers(typeof draft.responses === 'string' 
+              ? JSON.parse(draft.responses) 
+              : Array.isArray(draft.responses) 
+                ? Object.fromEntries(draft.responses.map((r: any) => [r.fieldId, r.value])) 
+                : (draft.responses || {})
+            ); 
+          } catch {}
+          setSubmissionId(draft._id || draft.id);
+        }
+      }
     } catch (err: any) {
       setError(err.message || 'Invalid OTP');
     } finally {
