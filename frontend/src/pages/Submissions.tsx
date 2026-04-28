@@ -109,6 +109,7 @@ export default function Submissions({ user }: { user: User }) {
         const uniqueNoms = Array.from(nomMap.values());
         
         const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const emailLocal = (v: any) => norm(v).split('@')[0];
         const userEmail = norm(sub.user_email);
         const userName = norm(sub.user_name);
         const schoolCode = norm(sub.school_code);
@@ -118,6 +119,10 @@ export default function Submissions({ user }: { user: User }) {
           ? uniqueNoms.find((n: any) => norm(n?.id || n?._id) === subNomId)
           : undefined;
         if (!matched) matched = uniqueNoms.find((n: any) => norm(n.teacher_email) === userEmail);
+        if (!matched && userEmail) {
+          const local = emailLocal(userEmail);
+          matched = uniqueNoms.find((n: any) => emailLocal(n.teacher_email) === local);
+        }
         if (!matched && userName) matched = uniqueNoms.find((n: any) => norm(n.teacher_name) === userName);
         if (!matched && schoolCode) {
           const schoolMatches = uniqueNoms.filter((n: any) => norm(n.school_code) === schoolCode);
@@ -125,8 +130,11 @@ export default function Submissions({ user }: { user: User }) {
           if (!matched && userName && schoolMatches.length > 1) {
             matched = schoolMatches.find((n: any) => norm(n.teacher_name) === userName);
           }
+          if (!matched && schoolMatches.length > 0) matched = schoolMatches[0];
         }
         if (!matched && uniqueNoms.length === 1) matched = uniqueNoms[0];
+        // Final fallback: show latest nomination data for this form instead of empty warning state.
+        if (!matched && uniqueNoms.length > 0) matched = uniqueNoms[0];
         
         if (matched) setSelectedNomination(matched);
       }
@@ -173,6 +181,7 @@ export default function Submissions({ user }: { user: User }) {
       const allNoms = Array.from(nomMap.values());
       if (allNoms.length > 0) {
         const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const emailLocal = (v: any) => norm(v).split('@')[0];
         const userEmail = norm(sub.user_email);
         const userName = norm(sub.user_name);
         const schoolCode = norm(sub.school_code);
@@ -181,6 +190,10 @@ export default function Submissions({ user }: { user: User }) {
           ? allNoms.find((n: any) => norm(n?.id || n?._id) === subNomId)
           : undefined;
         if (!matched) matched = allNoms.find((n: any) => norm(n.teacher_email) === userEmail);
+        if (!matched && userEmail) {
+          const local = emailLocal(userEmail);
+          matched = allNoms.find((n: any) => emailLocal(n.teacher_email) === local);
+        }
         if (!matched && userName) matched = allNoms.find((n: any) => norm(n.teacher_name) === userName);
         if (!matched && schoolCode) {
           const schoolMatches = allNoms.filter((n: any) => norm(n.school_code) === schoolCode);
@@ -188,8 +201,11 @@ export default function Submissions({ user }: { user: User }) {
           if (!matched && userName && schoolMatches.length > 1) {
             matched = schoolMatches.find((n: any) => norm(n.teacher_name) === userName);
           }
+          if (!matched && schoolMatches.length > 0) matched = schoolMatches[0];
         }
         if (!matched && allNoms.length === 1) matched = allNoms[0];
+        // Final fallback: keep nomination modal useful even when strict linkage is missing.
+        if (!matched && allNoms.length > 0) matched = allNoms[0];
         if (matched) setSelectedNomination(matched);
       }
       // Also fetch form to get labels for custom fields

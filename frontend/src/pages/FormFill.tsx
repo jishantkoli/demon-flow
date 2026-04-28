@@ -170,7 +170,9 @@ export default function FormFill({ user }: { user: User }) {
       setForm(res);
       if (nomination) setNomination(nomination);
 
-      const authMode = res.settings.teacher_login || res.settings.auth_mode || 'login';
+      const authModeRaw = String(res.settings.auth_mode || '').toLowerCase();
+      const teacherLoginRaw = String(res.settings.teacher_login || '').toLowerCase();
+      const authMode = authModeRaw || (teacherLoginRaw === 'direct' ? 'anonymous' : teacherLoginRaw === 'otp' ? 'otp' : 'login');
       const isAnon = user.id === 'anon';
 
       if (authMode === 'login' && isAnon && !token && !nomination) {
@@ -470,7 +472,9 @@ export default function FormFill({ user }: { user: User }) {
 
   if (!form || !currentSection) return null;
 
-  const authMode = form.settings.teacher_login || form.settings.auth_mode || 'login';
+  const authModeRaw = String(form.settings.auth_mode || '').toLowerCase();
+  const teacherLoginRaw = String(form.settings.teacher_login || '').toLowerCase();
+  const authMode = authModeRaw || (teacherLoginRaw === 'direct' ? 'anonymous' : teacherLoginRaw === 'otp' ? 'otp' : 'login');
   const isAnon = user.id === 'anon';
 
   // Render OTP verification screen if required
