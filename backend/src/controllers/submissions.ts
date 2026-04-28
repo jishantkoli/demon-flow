@@ -144,11 +144,11 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
 
     const submissionData: any = {
       formId: form._id,
+      nominationId: linkedNomination?._id || rawNominationId,
       userId: req.user?._id || null,
       userName: req.body.user_name || req.user?.profile?.fullName,
       userEmail: req.body.user_email || req.user?.email,
       schoolCode: req.body.school_code || linkedNomination?.school_code || req.user?.profile?.schoolCode,
-      nominationId: linkedNomination?._id || undefined,
       formTitle: req.body.form_title || form.title,
       responses,
       score,

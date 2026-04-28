@@ -114,6 +114,14 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
   const match = user.email ? user.email.match(/^head\.([a-z0-9]+)@/i) : null;
   const schoolCode = user.school_code || (match ? match[1]?.toUpperCase() : undefined);
 
+  if (!user || user.id === 'anon') {
+    return (
+      <div className="min-h-screen bg-canvas">
+        <main className="flex-1 overflow-x-hidden">{children}</main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-surface text-fg flex">
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
