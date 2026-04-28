@@ -105,8 +105,12 @@ export default function Submissions({ user }: { user: User }) {
           nominationError: nomsRes.status === 'rejected' ? nomsRes.reason : null
         });
       }
-    } catch (err) {
-      console.error("Error loading submission details:", err);
+    } catch (err: any) {
+      // Don't log if it's a known 404 or comments-related error from old code
+      const msg = err?.message || String(err);
+      if (!msg.includes('404') && !msg.includes('comments')) {
+        console.error("Error loading submission details:", err);
+      }
       setComments([]);
     }
   };

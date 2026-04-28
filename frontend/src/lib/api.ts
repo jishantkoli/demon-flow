@@ -1,6 +1,12 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1';
 
 async function request(url: string, options?: RequestInit) {
+  // Global block for non-existent /comments endpoint to stop 404 logs/errors
+  if (url.startsWith('/comments')) {
+    console.warn(`Blocked call to non-existent endpoint: ${url}`);
+    return options?.method && options.method !== 'GET' ? { success: false } : [];
+  }
+
   const token = localStorage.getItem('auth_token');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token && token !== 'undefined' && token !== 'null') headers['Authorization'] = `Bearer ${token}`;
@@ -13,11 +19,6 @@ async function request(url: string, options?: RequestInit) {
     });
     
     if (!res.ok) {
-      // Backward-compat: some older/cached clients still try `/comments`,
-      // but backend has no comments route in this deployment.
-      if (res.status === 404 && url.startsWith('/comments')) {
-        return options?.method && options.method !== 'GET' ? { success: false } : [];
-      }
       let errMessage = `Request failed (${res.status})`;
       try {
         const err = await res.json();
