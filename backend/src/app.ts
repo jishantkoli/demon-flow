@@ -99,6 +99,11 @@ app.get('/api/v1', (req, res) => {
   });
 });
 
+// Dummy endpoint to prevent 404s from older frontend clients or unblocked calls requesting comments
+app.get('/api/v1/comments', (req, res) => {
+  res.status(200).json([]);
+});
+
 // Global error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   const status = err.status || 500;
