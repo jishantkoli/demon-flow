@@ -37,6 +37,7 @@ export default function Submissions({ user }: { user: User }) {
         ...s,
         id: s._id || s.id,
         form_id: s.formId || s.form_id,
+        nomination_id: s.nominationId || s.nomination_id,
         user_email: s.userEmail || s.user_email,
         user_name: s.userName || s.user_name,
         school_code: s.schoolCode || s.school_code,
@@ -61,12 +62,20 @@ export default function Submissions({ user }: { user: User }) {
     setSelectedNomination(null);
     setSelectedFormObj(null);
     try {
-      const [formRes, commsRes, nomsRes] = await Promise.allSettled([
+      const formIdValue = (sub?.form_id && typeof sub.form_id === 'object')
+        ? (sub.form_id._id || sub.form_id.id || '')
+        : (sub?.form_id || '');
+      const formIdParam = encodeURIComponent(String(formIdValue));
+      const nominationIdValue = (sub?.nomination_id && typeof sub.nomination_id === 'object')
+        ? (sub.nomination_id._id || sub.nomination_id.id || '')
+        : (sub?.nomination_id || '');
+      const nominationIdParam = encodeURIComponent(String(nominationIdValue));
+
+      const [formRes, nomsRes] = await Promise.allSettled([
         // Form/schema is optional for nomination panel; avoid failing whole modal on 404.
-        api.get(`/forms?id=${sub.form_id}`),
-        api.get(`/comments?submission_id=${sub.id}`),
-        // User requested lookup based on form_id only.
-        api.get(`/nominations?form_id=${sub.form_id}`)
+        api.get(`/forms?id=${formIdParam}`),
+        // Preferred: exact linkage by nomination_id stored with submission.
+        nominationIdValue ? api.get(`/nominations?id=${nominationIdParam}`) : Promise.resolve([])
       ]);
 
       if (formRes.status === 'fulfilled' && formRes.value) {
@@ -75,20 +84,19 @@ export default function Submissions({ user }: { user: User }) {
         setSelectedFormObj(null);
       }
 
-      if (commsRes.status === 'fulfilled' && Array.isArray(commsRes.value)) {
-        setComments(commsRes.value);
-      } else {
-        setComments([]);
+      // Comments API is not available in current backend deployment.
+      setComments([]);
+
+      const nominationsData = nomsRes.status === 'fulfilled'
+        ? (Array.isArray(nomsRes.value) ? nomsRes.value : (Array.isArray((nomsRes.value as any)?.data) ? (nomsRes.value as any).data : []))
+        : [];
+      if (nominationsData.length > 0) {
+        setSelectedNomination(nominationsData[0]);
       }
 
-      if (nomsRes.status === 'fulfilled' && Array.isArray(nomsRes.value) && nomsRes.value.length > 0) {
-        setSelectedNomination(nomsRes.value[0]);
-      }
-
-      if (formRes.status === 'rejected' || commsRes.status === 'rejected' || nomsRes.status === 'rejected') {
+      if (formRes.status === 'rejected' || nomsRes.status === 'rejected') {
         console.error('Error loading submission details:', {
           formError: formRes.status === 'rejected' ? formRes.reason : null,
-          commentsError: commsRes.status === 'rejected' ? commsRes.reason : null,
           nominationError: nomsRes.status === 'rejected' ? nomsRes.reason : null
         });
       }
@@ -99,9 +107,10 @@ export default function Submissions({ user }: { user: User }) {
   };
 
   const addComment = async () => {
+    // Comments endpoint does not exist on backend; avoid triggering 404.
     if (!newComment.trim() || !selected) return;
-    await api.post('/comments', { submission_id: selected.id, user_id: user.id, user_name: user.name, user_role: user.role, content: newComment });
-    setNewComment(''); setComments(await api.get(`/comments?submission_id=${selected.id}`));
+    console.warn('Comments API is not configured. Skipping comment submit.');
+    setNewComment('');
   };
 
   const exportCSV = () => {
@@ -301,7 +310,7 @@ export default function Submissions({ user }: { user: User }) {
               <div className="bg-surface rounded-xl p-4 space-y-2">
                 {!selectedNomination && (
                     <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                      No nomination found for this form, so functionary-filled data cannot be shown here.
+                      School functionary nomination is not linked to this submission, so functionary-filled data cannot be shown here.
                     </div>
                   )}
                 {selectedNomination && Object.keys(nominationAdditionalData).length === 0 && (

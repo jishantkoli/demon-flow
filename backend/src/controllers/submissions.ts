@@ -7,6 +7,7 @@ import { AuthRequest } from '../middleware/auth.js';
 export const submitForm = async (req: AuthRequest, res: Response) => {
   try {
     let { form_id, formId, responses } = req.body;
+    const rawNominationId = req.body.nomination_id || req.body.nominationId;
     const actualFormId = form_id || formId || req.body.formId;
     
     // Convert object responses to array if needed
@@ -33,6 +34,17 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Form not found' });
     }
 
+    let linkedNomination: any = null;
+    if (rawNominationId) {
+      linkedNomination = await Nomination.findById(rawNominationId);
+      if (!linkedNomination) {
+        return res.status(404).json({ error: 'Linked nomination not found' });
+      }
+      if (linkedNomination.form_id?.toString() !== form._id.toString()) {
+        return res.status(400).json({ error: 'Linked nomination does not belong to this form' });
+      }
+    }
+
     // Prevention of duplicate submissions/drafts:
     // If no ID is provided, check if a draft already exists for this form and email
     const userEmail = req.body.user_email || req.user?.email;
@@ -54,11 +66,16 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
 
     // Check authorization for teachers
     if (req.user && req.user.role === 'teacher') {
-      const nomination = await Nomination.findOne({
-        form_id: form._id,
-        teacher_email: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
-      });
-      if (!nomination) {
+      if (!linkedNomination) {
+        linkedNomination = await Nomination.findOne({
+          form_id: form._id,
+          teacher_email: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
+        });
+      }
+      const isTeacherMatch = linkedNomination
+        ? new RegExp(`^${req.user.email}$`, 'i').test(linkedNomination.teacher_email || '')
+        : false;
+      if (!linkedNomination || !isTeacherMatch) {
         return res.status(403).json({ error: 'You are not authorized to submit this form. Please contact your school functionary.' });
       }
     }
@@ -123,6 +140,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       userName: req.body.user_name || req.user?.profile?.fullName,
       userEmail: req.body.user_email || req.user?.email,
       schoolCode: req.body.school_code || req.user?.profile?.schoolCode,
+      nominationId: linkedNomination?._id || undefined,
       formTitle: req.body.form_title || form.title,
       responses,
       score,
@@ -148,11 +166,16 @@ export const updateSubmission = async (req: AuthRequest, res: Response) => {
       responses = Object.entries(responses).map(([fieldId, value]) => ({ fieldId, value }));
     }
 
-    const submission = await Submission.findByIdAndUpdate(id, {
+    const payload: any = {
       ...req.body,
       responses: responses || req.body.responses,
       isDraft: is_draft !== undefined ? is_draft : req.body.isDraft
-    }, { new: true });
+    };
+    if (req.body.nomination_id || req.body.nominationId) {
+      payload.nominationId = req.body.nomination_id || req.body.nominationId;
+    }
+
+    const submission = await Submission.findByIdAndUpdate(id, payload, { new: true });
     if (!submission) return res.status(404).json({ error: 'Submission not found' });
     res.status(200).json({ ...submission.toObject(), id: submission._id, is_draft: submission.isDraft });
   } catch (err: any) {
@@ -207,6 +230,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
       user_id: s.userId,
       user_name: s.userName,
       user_email: s.userEmail,
+      nomination_id: s.nominationId,
       form_title: s.formTitle,
       submitted_at: s.createdAt,
       is_draft: s.isDraft

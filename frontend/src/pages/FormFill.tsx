@@ -348,6 +348,7 @@ export default function FormFill({ user }: { user: User }) {
     try {
       const payload = { 
       form_id: form._id || form.id, responses: answers, status: 'draft', is_draft: true,
+      nomination_id: nomination?.id || nomination?._id,
       user_email: user.id === 'anon' ? email : user.email,
       user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
       school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
@@ -382,6 +383,7 @@ export default function FormFill({ user }: { user: User }) {
     const payload = {
       form_id: form._id || form.id, responses: answers,
       status: 'submitted', is_draft: false,
+      nomination_id: nomination?.id || nomination?._id,
       score: sc?.score ?? null,
       user_email: user.id === 'anon' ? email : user.email,
       user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,

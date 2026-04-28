@@ -63,21 +63,23 @@ const ensureTeacherUser = async (teacherData: any) => {
 
 export const getNominations = async (req: AuthRequest, res: Response) => {
   try {
-    const { functionary_id, form_id, teacher_email } = req.query;
+    const { id, functionary_id, form_id, teacher_email, school_code } = req.query;
     const query: any = {};
+    if (id) query._id = id;
     if (functionary_id) query.functionary_id = functionary_id;
     if (form_id) query.form_id = form_id;
     if (teacher_email) {
       query.teacher_email = { $regex: new RegExp(`^${teacher_email}$`, 'i') };
     }
+    if (school_code) query.school_code = school_code;
     
     // Admins can see all.
     // If a specific form_id is provided (submission detail linking), allow lookup by form.
     // Otherwise, restrict by role.
     if (req.user.role === 'admin') {
       // No filter
-    } else if (form_id) {
-      // Allow lookup for linking submissions by form_id only
+    } else if (form_id || id) {
+      // Allow lookup for linking submissions by direct nomination id (preferred) or form_id.
     } else if (req.user.role === 'functionary') {
       query.functionary_id = req.user._id;
     } else if (req.user.role === 'teacher') {
