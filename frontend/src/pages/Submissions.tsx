@@ -71,6 +71,10 @@ export default function Submissions({ user }: { user: User }) {
         : (sub?.nomination_id || sub?.id || ''); // Fallback: check if sub.id itself is the nomination_id
       const nominationIdParam = encodeURIComponent(String(nominationIdValue));
 
+      // Fetch comments - wrap in catch to prevent breaking if endpoint doesn't exist
+      const comms = await api.get(`/comments?submission_id=${sub.id}`).catch(() => []);
+      setComments(comms || []);
+
       const [formRes, nomsRes, fallbackRes] = await Promise.allSettled([
         // Form/schema is optional for nomination panel; avoid failing whole modal on 404.
         formIdValue ? api.get(`/forms?id=${formIdParam}`) : Promise.resolve(null),
@@ -88,8 +92,7 @@ export default function Submissions({ user }: { user: User }) {
         setSelectedFormObj(null);
       }
 
-      // Comments API is not available in current backend deployment.
-      setComments([]);
+      // Comments handled above.
 
       // Check primary nomination result first, then fallback
       let nominationsData = nomsRes.status === 'fulfilled'

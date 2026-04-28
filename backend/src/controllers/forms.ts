@@ -18,7 +18,7 @@ export const getForms = async (req: AuthRequest, res: Response) => {
       if (!form) return res.status(404).json({ error: 'Form not found' });
 
       // If user is a teacher, verify they are nominated for this form
-      if (req.user && req.user.role === 'teacher') {
+      if (req.user?.role === 'teacher') {
         const nomination = await Nomination.findOne({
           form_id: form._id,
           teacher_email: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
@@ -34,12 +34,12 @@ export const getForms = async (req: AuthRequest, res: Response) => {
     if (status) query.status = status;
     
     // Admins see all, others see active by default
-    if (!req.user || req.user.role !== 'admin') {
+    if (req.user?.role !== 'admin') {
       query.status = 'active';
     }
 
     // Teachers only see forms they are nominated for
-    if (req.user && req.user.role === 'teacher') {
+    if (req.user?.role === 'teacher') {
       const userEmail = req.user.email;
       const nominations = await Nomination.find({ 
         teacher_email: { $regex: new RegExp(`^${userEmail}$`, 'i') } 
