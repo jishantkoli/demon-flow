@@ -73,7 +73,7 @@ export default function Submissions({ user }: { user: User }) {
 
       const [formRes, nomsRes] = await Promise.allSettled([
         // Form/schema is optional for nomination panel; avoid failing whole modal on 404.
-        api.get(`/forms?id=${formIdParam}`),
+        formIdValue ? api.get(`/forms?id=${formIdParam}`) : Promise.resolve(null),
         // Preferred: exact linkage by nomination_id stored with submission.
         nominationIdValue ? api.get(`/nominations?id=${nominationIdParam}`) : Promise.resolve([])
       ]);
@@ -94,7 +94,12 @@ export default function Submissions({ user }: { user: User }) {
         setSelectedNomination(nominationsData[0]);
       }
 
-      if (formRes.status === 'rejected' || nomsRes.status === 'rejected') {
+      const is404Error = (reason: any) =>
+        !!reason && typeof reason?.message === 'string' && reason.message.includes('404');
+      const hasUnexpectedError =
+        (formRes.status === 'rejected' && !is404Error(formRes.reason)) ||
+        (nomsRes.status === 'rejected' && !is404Error(nomsRes.reason));
+      if (hasUnexpectedError) {
         console.error('Error loading submission details:', {
           formError: formRes.status === 'rejected' ? formRes.reason : null,
           nominationError: nomsRes.status === 'rejected' ? nomsRes.reason : null

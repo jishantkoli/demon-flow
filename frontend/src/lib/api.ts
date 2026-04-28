@@ -13,6 +13,11 @@ async function request(url: string, options?: RequestInit) {
     });
     
     if (!res.ok) {
+      // Backward-compat: some older/cached clients still try `/comments`,
+      // but backend has no comments route in this deployment.
+      if (res.status === 404 && url.startsWith('/comments')) {
+        return options?.method && options.method !== 'GET' ? { success: false } : [];
+      }
       let errMessage = `Request failed (${res.status})`;
       try {
         const err = await res.json();
