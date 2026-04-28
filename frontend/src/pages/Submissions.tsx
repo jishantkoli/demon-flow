@@ -59,25 +59,40 @@ export default function Submissions({ user }: { user: User }) {
     setSelected(sub);
     setSelectedNomination(null);
     setSelectedFormObj(null);
-    try { 
-      // 1. Fetch form object to get schema/settings
-      const formRes = await api.get(`/forms?id=${sub.form_id}`);
-      if (formRes) setSelectedFormObj(formRes);
+    try {
+      const [formRes, commsRes, nomsRes] = await Promise.allSettled([
+        // Form/schema is optional for nomination panel; avoid failing whole modal on 404.
+        api.get(`/forms?id=${sub.form_id}`),
+        api.get(`/comments?submission_id=${sub.id}`),
+        api.get(`/nominations?form_id=${sub.form_id}&teacher_email=${encodeURIComponent(sub.user_email)}`)
+      ]);
 
-      // 2. Fetch comments
-      const comms = await api.get(`/comments?submission_id=${sub.id}`);
-      setComments(comms);
-
-      // 3. Fetch nomination data by form_id AND teacher_email (form_id links to the form, teacher_email links to the specific nomination for this submission)
-      const nomsRes = await api.get(`/nominations?form_id=${sub.form_id}&teacher_email=${encodeURIComponent(sub.user_email)}`).catch(() => []);
-      const noms = Array.isArray(nomsRes) ? nomsRes : [];
-
-      if (noms.length > 0) {
-        setSelectedNomination(noms[0]);
+      if (formRes.status === 'fulfilled' && formRes.value) {
+        setSelectedFormObj(formRes.value);
+      } else {
+        setSelectedFormObj(null);
       }
-    } catch (err) { 
+
+      if (commsRes.status === 'fulfilled' && Array.isArray(commsRes.value)) {
+        setComments(commsRes.value);
+      } else {
+        setComments([]);
+      }
+
+      if (nomsRes.status === 'fulfilled' && Array.isArray(nomsRes.value) && nomsRes.value.length > 0) {
+        setSelectedNomination(nomsRes.value[0]);
+      }
+
+      if (formRes.status === 'rejected' || commsRes.status === 'rejected' || nomsRes.status === 'rejected') {
+        console.error('Error loading submission details:', {
+          formError: formRes.status === 'rejected' ? formRes.reason : null,
+          commentsError: commsRes.status === 'rejected' ? commsRes.reason : null,
+          nominationError: nomsRes.status === 'rejected' ? nomsRes.reason : null
+        });
+      }
+    } catch (err) {
       console.error("Error loading submission details:", err);
-      setComments([]); 
+      setComments([]);
     }
   };
 
