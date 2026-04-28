@@ -97,19 +97,34 @@ export default function FormFill({ user }: { user: User }) {
     const query = new URLSearchParams(window.location.search);
     const token = query.get('token');
 
-    const verifyNomination = async () => {
-      if (!token) return null;
-      try {
-        const res: any = await api.get(`/nominations/token/${token}`);
-        if (res.success && res.data) {
-          setEmail(res.data.teacher_email);
-          setSchoolCode(res.data.school_code || '');
-          // We don't set setOtpVerified(true) here anymore,
-          // because the user wants OTP verification even with a direct link
-          return res.data;
+    const getNomination = async () => {
+      // 1. If token exists, use it (highest priority)
+      if (token) {
+        try {
+          const res: any = await api.get(`/nominations/token/${token}`);
+          if (res.success && res.data) {
+            setEmail(res.data.teacher_email);
+            setSchoolCode(res.data.school_code || '');
+            return res.data;
+          }
+        } catch (e) {
+          console.error("Token verification failed", e);
         }
-      } catch (e) {
-        console.error("Token verification failed", e);
+      }
+
+      // 2. If no token but user is logged in, fetch by form_id
+      if (user && user.id !== 'anon') {
+        try {
+          const res: any = await api.get(`/nominations?form_id=${id}`);
+          if (Array.isArray(res) && res.length > 0) {
+            // For teachers, backend filters by email automatically
+            setEmail(res[0].teacher_email);
+            setSchoolCode(res[0].school_code || '');
+            return res[0];
+          }
+        } catch (e) {
+          console.error("Failed to fetch nomination by form_id", e);
+        }
       }
       return null;
     };
@@ -117,7 +132,7 @@ export default function FormFill({ user }: { user: User }) {
     Promise.all([
       api.get(`/forms?id=${id}`),
       api.get(`/submissions?form_id=${id}`),
-      verifyNomination()
+      getNomination()
     ]).then(([res, subs, nomination]: any[]) => {
       if (!res || res.error) { setStep('error'); setError('Form not found'); return; }
 
