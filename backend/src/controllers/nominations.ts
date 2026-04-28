@@ -162,15 +162,20 @@ export const deleteNomination = async (req: AuthRequest, res: Response) => {
 export const getNominationByToken = async (req: Request, res: Response) => {
   try {
     const { token } = req.params;
-    const nomination = await Nomination.findOne({ unique_token: token }).populate('form_id');
+    const nomination = await Nomination.findOne({ unique_token: token })
+      .populate('form_id')
+      .populate('functionary_id', 'profile.fullName email');
+      
     if (!nomination) return res.status(404).json({ error: 'Nomination link invalid or expired' });
     
+    const obj = nomination.toObject();
     res.status(200).json({ 
       success: true, 
       data: {
-        ...nomination.toObject(),
+        ...obj,
         id: nomination._id,
-        form: nomination.form_id // This is now the populated form object
+        form: nomination.form_id, // This is now the populated form object
+        functionary_name: (obj.functionary_id as any)?.profile?.fullName || (obj.functionary_id as any)?.email || 'School Head'
       } 
     });
   } catch (err: any) {

@@ -56,6 +56,7 @@ export default function FormFill({ user }: { user: User }) {
   const nav = useNavigate();
 
   const [form, setForm] = useState<FormData | null>(null);
+  const [nomination, setNomination] = useState<any>(null);
   const [step, setStep] = useState<Step>('loading');
   const [error, setError] = useState('');
 
@@ -158,6 +159,7 @@ export default function FormFill({ user }: { user: User }) {
       res.settings = typeof res.settings === 'string' ? (JSON.parse(res.settings) || {}) : (res.settings || {});
 
       setForm(res);
+      if (nomination) setNomination(nomination);
 
       // Check auth mode
       const authMode = res.settings.auth_mode || 'login';
@@ -226,6 +228,22 @@ export default function FormFill({ user }: { user: User }) {
   }, [timeLeft]);
 
   const sections = form?.schema?.sections || form?.form_schema?.sections || [];
+
+  const parseObject = (raw: any): Record<string, any> => {
+    if (!raw) return {};
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+    return typeof raw === 'object' ? raw : {};
+  };
+
+  const nominationAdditionalData = useMemo(() => parseObject(nomination?.additional_data), [nomination]);
+  const formSettings = useMemo(() => parseObject(form?.settings), [form]);
 
   const visibleSections = useMemo(() => {
     return sections.filter((s: Section) => {
@@ -518,6 +536,54 @@ export default function FormFill({ user }: { user: User }) {
 
       {/* Content */}
       <div className="max-w-3xl mx-auto p-5 md:p-8 space-y-5">
+        {nomination && (
+          <div className="card !bg-blue-50/50 border-blue-100 mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-blue text-white grid place-items-center">
+                <Inbox size={16} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-ink">Nomination Details</h3>
+                <p className="text-[10px] text-muted uppercase font-semibold">Filled by {nomination.functionary_name || 'School Head'}</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+              <div className="space-y-0.5">
+                <p className="text-[10px] text-muted uppercase font-bold">Nominated Teacher</p>
+                <p className="text-sm font-semibold">{nomination.teacher_name}</p>
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-[10px] text-muted uppercase font-bold">School Code</p>
+                <p className="text-sm font-semibold font-mono">{nomination.school_code}</p>
+              </div>
+              
+              {Object.entries(nominationAdditionalData).map(([key, val]) => {
+                const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+                const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val as string : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`) : '';
+                
+                let label = key;
+                const customField = formSettings.nomination_custom_fields?.find((cf: any) => cf.id === key);
+                if (customField) label = customField.label;
+
+                return (
+                  <div key={key} className="space-y-0.5">
+                    <p className="text-[10px] text-muted uppercase font-bold">{label}</p>
+                    {isFile ? (
+                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
+                        className="inline-flex items-center gap-1 text-xs font-bold text-blue hover:underline">
+                        <ExternalLink size={10} /> View Attachment
+                      </a>
+                    ) : (
+                      <p className="text-sm font-semibold">{String(val)}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div>
           <div className="text-xs text-muted uppercase tracking-wider font-semibold">Section {sectionIdx + 1}</div>
           <h2 className="font-display text-2xl font-bold text-ink mt-1">{currentSection.title}</h2>
