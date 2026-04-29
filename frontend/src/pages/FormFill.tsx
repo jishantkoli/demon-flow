@@ -477,53 +477,16 @@ export default function FormFill({ user }: { user: User }) {
   const authMode = authModeRaw || (teacherLoginRaw === 'direct' ? 'anonymous' : teacherLoginRaw === 'otp' ? 'otp' : 'login');
   const isAnon = user.id === 'anon';
 
-  // Render OTP verification screen if required
+  // Render OTP verification screen if required - REDIRECT TO LOGIN
   if (authMode === 'otp' && isAnon && !otpVerified) {
+    const redirectUrl = encodeURIComponent(window.location.pathname + window.location.search);
+    const emailHint = nomination?.teacher_email ? `&email=${encodeURIComponent(nomination.teacher_email)}` : '';
+    nav(`/login?portal=teacher&redirect=${redirectUrl}${emailHint}`);
     return (
       <div className="min-h-screen bg-canvas grid place-items-center p-6">
-        <div className="card max-w-md w-full p-8">
-          <div className="w-16 h-16 rounded-full bg-blue-soft text-blue grid place-items-center mx-auto mb-4">
-            <GraduationCap size={34}/>
-          </div>
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-ink">Verification Required</h2>
-            <p className="text-sm text-muted mt-1">Please verify your email to access this form.</p>
-          </div>
-
-          <div className="space-y-4">
-            {!otpSent ? (
-              <>
-                <label className="block">
-                  <span className="text-xs font-semibold text-muted mb-1 block">School Email</span>
-                  <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                    className="input" placeholder="teacher@school.edu" />
-                </label>
-                <button onClick={handleSendOtp} disabled={otpLoading}
-                  className="btn btn-primary w-full flex items-center justify-center gap-2">
-                  {otpLoading ? <Loader2 className="animate-spin" size={18}/> : <Send size={18}/>}
-                  Send Verification Code
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700 mb-4">
-                  Code sent to <strong>{email}</strong>. Check your inbox.
-                </div>
-                <label className="block">
-                  <span className="text-xs font-semibold text-muted mb-1 block">Verification Code</span>
-                  <input type="text" value={otp} onChange={e => setOtp(e.target.value)}
-                    className="input text-center text-xl tracking-widest font-bold" placeholder="••••••" maxLength={6} />
-                </label>
-                {error && <p className="text-xs text-rose-500 font-medium">{error}</p>}
-                <button onClick={handleVerifyOtp} className="btn btn-primary w-full">
-                  Verify & Access Form
-                </button>
-                <button onClick={() => setOtpSent(false)} className="btn btn-ghost w-full text-xs">
-                  Change email address
-                </button>
-              </>
-            )}
-          </div>
+        <div className="text-center">
+          <Loader2 className="animate-spin mx-auto text-primary mb-4" size={40} />
+          <p className="text-muted">Redirecting to login...</p>
         </div>
       </div>
     );

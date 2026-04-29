@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { loginWithPassword, requestOTP, verifyOTP } from '../lib/auth';
 import { motion } from 'framer-motion';
 import { GraduationCap, Mail, Key, Phone, ArrowRight, Eye, EyeOff, AlertCircle, CheckCircle, Info } from 'lucide-react';
@@ -6,8 +7,27 @@ import { GraduationCap, Mail, Key, Phone, ArrowRight, Eye, EyeOff, AlertCircle, 
 type Portal = 'select' | 'admin' | 'functionary' | 'teacher';
 
 export default function Login({ onLogin }: { onLogin: (u: any) => void }) {
+  const [searchParams] = useSearchParams();
   const [portal, setPortal] = useState<Portal>('select');
   const [email, setEmail] = useState('');
+  
+  // Auto-select portal and pre-fill email if provided in query params
+  useEffect(() => {
+    const portalParam = searchParams.get('portal') as Portal;
+    const emailParam = searchParams.get('email');
+    const redirectParam = searchParams.get('redirect');
+
+    if (portalParam && ['admin', 'functionary', 'teacher'].includes(portalParam)) {
+      setPortal(portalParam);
+    } else if (redirectParam?.startsWith('/fill/')) {
+      setPortal('teacher');
+    }
+
+    if (emailParam) {
+      setEmail(emailParam);
+    }
+  }, [searchParams]);
+
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -24,7 +44,16 @@ export default function Login({ onLogin }: { onLogin: (u: any) => void }) {
     try { 
       const res = await loginWithPassword(email, password); 
       console.log('Admin Login success:', res);
-      onLogin(res.user); 
+      
+      const redirect = searchParams.get('redirect');
+      if (redirect) {
+        setSuccess('Login successful! Redirecting...');
+        setTimeout(() => {
+          window.location.href = redirect;
+        }, 800);
+      } else {
+        onLogin(res.user); 
+      }
     }
     catch (err: any) { 
        console.error('Admin Login failed:', err);
@@ -47,7 +76,17 @@ export default function Login({ onLogin }: { onLogin: (u: any) => void }) {
       try { 
         const res = await verifyOTP(email, otp); 
         console.log('OTP Verify success:', res);
-        onLogin(res.user); 
+        
+        const redirect = searchParams.get('redirect');
+        if (redirect) {
+          // If there's a redirect URL, go there after a brief success message
+          setSuccess('Login successful! Redirecting...');
+          setTimeout(() => {
+            window.location.href = redirect;
+          }, 1000);
+        } else {
+          onLogin(res.user); 
+        }
       }
       catch (err: any) { 
         console.error('OTP Verify failed:', err);
