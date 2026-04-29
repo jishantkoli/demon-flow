@@ -95,15 +95,15 @@ export default function FormFill({ user }: { user: User }) {
     if (!id) { setStep('error'); setError('No form specified'); return; }
     
     // School Functionaries should not be filling forms, they should be nominating
-    if (user.role === 'functionary') {
+    const query = new URLSearchParams(window.location.search);
+    const token = query.get('token') || urlToken;
+    if (token) setNominationToken(token);
+
+    if (user.role === 'functionary' && !token) {
       setStep('error');
       setError('School Functionaries cannot fill out forms. Please use the "Nominate Teachers" button on the Forms page.');
       return;
     }
-
-    const query = new URLSearchParams(window.location.search);
-    const token = query.get('token') || urlToken;
-    if (token) setNominationToken(token);
 
     const getNomination = async () => {
       // 1. If token exists, use it (highest priority)
@@ -476,9 +476,11 @@ export default function FormFill({ user }: { user: User }) {
   const teacherLoginRaw = String(form.settings.teacher_login || '').toLowerCase();
   const authMode = authModeRaw || (teacherLoginRaw === 'direct' ? 'anonymous' : teacherLoginRaw === 'otp' ? 'otp' : 'login');
   const isAnon = user.id === 'anon';
+  const isFunctionary = user.role === 'functionary';
 
   // Render OTP verification screen if required - REDIRECT TO LOGIN
-  if (authMode === 'otp' && isAnon && !otpVerified) {
+  // If user is a functionary, they also need to login as a teacher to fill this
+  if (authMode === 'otp' && (isAnon || isFunctionary) && !otpVerified) {
     const redirectUrl = encodeURIComponent(window.location.pathname + window.location.search);
     const emailHint = nomination?.teacher_email ? `&email=${encodeURIComponent(nomination.teacher_email)}` : '';
     nav(`/login?portal=teacher&redirect=${redirectUrl}${emailHint}`);
@@ -486,7 +488,7 @@ export default function FormFill({ user }: { user: User }) {
       <div className="min-h-screen bg-canvas grid place-items-center p-6">
         <div className="text-center">
           <Loader2 className="animate-spin mx-auto text-primary mb-4" size={40} />
-          <p className="text-muted">Redirecting to login...</p>
+          <p className="text-muted">Redirecting to teacher login...</p>
         </div>
       </div>
     );
