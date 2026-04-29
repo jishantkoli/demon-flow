@@ -418,7 +418,7 @@ export default function FormBuilder() {
               </div>
             )}
 
-            {(form.form_type === 'nomination' || form.form_type === 'multi') && (
+            {form.form_type === 'nomination' && (
               <div className="mt-3 pt-3 border-t border-border space-y-2">
                 <div className="text-xs font-semibold text-ink">Nomination Settings</div>
                 <label className="text-xs"><span className="text-muted">Nomination limit (per school)</span>
