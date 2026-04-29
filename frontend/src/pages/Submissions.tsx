@@ -215,7 +215,8 @@ export default function Submissions({ user }: { user: User }) {
   const fieldMap = getFieldMap();
 
   const columns = [
-    { key: 'id', label: '#', sortable: true, render: (v: string) => <span className="text-xs font-mono text-muted">#{v?.toString().slice(-6).toUpperCase() || '—'}</span> },
+    { key: 'unique_token', label: 'Token', sortable: true, render: (v: string) => <span className="text-xs font-mono text-primary font-bold">{v || '—'}</span> },
+    { key: 'id', label: 'Submission ID', sortable: true, render: (v: string) => <span className="text-[10px] font-mono text-muted">#{v?.toString().slice(-6).toUpperCase() || '—'}</span> },
     { key: 'form_title', label: 'Form', sortable: true, render: (v: string) => <span className="font-medium text-sm">{v || 'Untitled'}</span> },
     { key: 'user_name', label: 'Submitted By', sortable: true, render: (v: string, row: any) => (<div><p className="text-sm">{v || 'Anonymous'}</p><p className="text-[10px] text-muted">{row.user_email}</p></div>) },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
@@ -242,11 +243,12 @@ export default function Submissions({ user }: { user: User }) {
         </div>}
       />
 
-      <Modal open={!!selected} onClose={() => setSelected(null)} title={`Submission #${selected?.id || ''}`} size="xl">
+      <Modal open={!!selected} onClose={() => setSelected(null)} title={selected?.unique_token ? `Token: ${selected.unique_token}` : `Submission #${selected?.id || ''}`} size="xl">
         {selected && (
           <div className="space-y-5">
             {/* Meta cards — score only shown to admin/reviewer */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Token</p><p className="text-sm font-bold mt-0.5 text-primary">{selected.unique_token || 'N/A'}</p></div>
               <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Form</p><p className="text-sm font-bold mt-0.5">{selected.form_title || `#${selected.form_id}`}</p></div>
               <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Submitted By</p><p className="text-sm font-bold mt-0.5">{selected.user_name || 'Anonymous'}</p></div>
               <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Status</p><div className="mt-0.5"><StatusBadge status={selected.status} /></div></div>
@@ -263,47 +265,40 @@ export default function Submissions({ user }: { user: User }) {
 
             {/* Nomination Data (Filled by Head/Functionary) */}
             {selectedNomination && (
-              <div>
-                <h4 className="text-sm font-bold mb-2 flex items-center gap-2">
-                  <Inbox size={14} className="text-primary" /> Nomination Details (Filled by {selectedNomination.functionary_name || 'Head'})
-                </h4>
-                <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 space-y-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <p className="text-[10px] text-muted uppercase font-bold">Nominated Name</p>
-                      <p className="text-sm font-semibold">{selectedNomination.teacher_name}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] text-muted uppercase font-bold">Nominated Email</p>
-                      <p className="text-sm font-semibold">{selectedNomination.teacher_email}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] text-muted uppercase font-bold">Nominated By</p>
-                      <p className="text-sm font-semibold text-primary">{selectedNomination.functionary_name || 'School Head'}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] text-muted uppercase font-bold">School Code</p>
-                      <p className="text-sm font-semibold font-mono">{selectedNomination.school_code}</p>
-                    </div>
-                    {selectedNomination.teacher_phone ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Left Side: School Functionary Details */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-bold flex items-center gap-2 text-primary border-b border-primary/10 pb-2">
+                    <Inbox size={14} /> 1. School Functionary Form Details
+                  </h4>
+                  <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 space-y-4">
+                    <div className="grid grid-cols-1 gap-3">
                       <div className="space-y-1">
-                        <p className="text-[10px] text-muted uppercase font-bold">Nominated Phone</p>
-                        <p className="text-sm font-semibold">{selectedNomination.teacher_phone}</p>
+                        <p className="text-[10px] text-muted uppercase font-bold">Nominated Name</p>
+                        <p className="text-sm font-semibold">{selectedNomination.teacher_name}</p>
                       </div>
-                    ) : null}
-                  </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-muted uppercase font-bold">Nominated Email</p>
+                        <p className="text-sm font-semibold">{selectedNomination.teacher_email}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-muted uppercase font-bold">School Code</p>
+                        <p className="text-sm font-semibold font-mono">{selectedNomination.school_code}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-muted uppercase font-bold">Nominated By</p>
+                        <p className="text-sm font-semibold text-primary">{selectedNomination.functionary_name || 'School Head'}</p>
+                      </div>
+                    </div>
 
-                  {/* Custom fields from nomination */}
-                  {Object.keys(nominationAdditionalData).length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-primary/10 space-y-2">
-                      <p className="text-[10px] text-muted uppercase font-bold mb-2">Form Data Filled by Functionary</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Custom fields from nomination */}
+                    {Object.keys(nominationAdditionalData).length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-primary/10 space-y-3">
+                        <p className="text-[10px] text-muted uppercase font-bold">Additional Nomination Info</p>
                         {Object.entries(nominationAdditionalData).map(([key, val]) => {
                           const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
-                          // Cloudinary returns full https:// URLs; fallback for legacy local filenames
                           const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val as string : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`) : '';
-
-                          // Find label from form settings
+                          
                           let label = key;
                           const customField = nominationSettings.nomination_custom_fields?.find((cf: any) => cf.id === key);
                           if (customField) label = customField.label;
@@ -314,7 +309,7 @@ export default function Submissions({ user }: { user: User }) {
                               {isFile ? (
                                 <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
                                   className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
-                                  <ExternalLink size={10} /> View File ({val as string})
+                                  <ExternalLink size={10} /> View File
                                 </a>
                               ) : (
                                 <p className="text-sm font-semibold">{String(val)}</p>
@@ -323,113 +318,74 @@ export default function Submissions({ user }: { user: User }) {
                           );
                         })}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Side: Teacher Form Responses */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-bold flex items-center gap-2 text-slate-700 border-b border-slate-200 pb-2">
+                    <Send size={14} /> 2. Teacher Form Responses
+                  </h4>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 max-h-[400px] overflow-y-auto">
+                    {Object.keys(responses).length === 0 ? (
+                      <p className="text-sm text-muted">No response data from teacher yet.</p>
+                    ) : (
+                      Object.entries(responses).map(([key, val]) => {
+                        const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+                        const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`) : '';
+                        const fieldMeta = fieldMap[key];
+                        const label = fieldMeta?.label || key;
+
+                        const getDisplayValue = () => {
+                          if (Array.isArray(val)) return (val as any[]).join(', ');
+                          const options = Array.isArray(fieldMeta?.options) ? fieldMeta.options : [];
+                          if (options.length > 0) {
+                            const idx = Number(String(val));
+                            if (!Number.isNaN(idx) && options[idx] !== undefined) return String(options[idx]);
+                          }
+                          return String(val);
+                        };
+
+                        return (
+                          <div key={key} className="space-y-1 pb-2 border-b border-slate-200 last:border-0">
+                            <p className="text-[10px] text-muted font-bold uppercase">{label}</p>
+                            <div className="text-sm font-semibold break-words">
+                              {isFile ? (
+                                <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
+                                  className="inline-flex items-center gap-1 text-primary hover:underline">
+                                  <ExternalLink size={10} /> View Uploaded File
+                                </a>
+                              ) : getDisplayValue()}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Raw responses */}
-            <div><h4 className="text-sm font-bold mb-2">Response Data</h4>
+            {!selectedNomination && (
               <div className="bg-surface rounded-xl p-4 space-y-2">
-                {!selectedNomination && (
-                    <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                      School functionary nomination is not linked to this submission, so functionary-filled data cannot be shown here.
-                    </div>
-                  )}
-                {selectedNomination && Object.keys(nominationAdditionalData).length === 0 && (
-                  <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                    Nomination is linked, but no extra custom fields were saved by school functionary for this teacher.
-                  </div>
-                )}
-                {Object.keys(nominationAdditionalData).length > 0 && (
-                  <>
-                    <div className="text-[10px] font-bold text-primary uppercase tracking-wide pb-1 border-b border-primary/20">
-                      Filled By School Functionary
-                    </div>
-                    {Object.entries(nominationAdditionalData).map(([key, val]) => {
-                      const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
-                      const fileUrl = isFile
-                        ? (typeof val === 'string' && val.startsWith('http')
-                          ? val
-                          : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`)
-                        : '';
-
-                      let label = key;
-                      const customField = nominationSettings.nomination_custom_fields?.find((cf: any) => cf.id === key);
-                      if (customField) label = customField.label;
-
-                      return (
-                        <div key={`nom-${key}`} className="flex flex-col sm:flex-row sm:items-start gap-1 py-1.5 border-b border-border/30">
-                          <span className="text-xs font-semibold text-muted min-w-[160px] shrink-0">{label}:</span>
-                          <span className="text-sm break-words flex flex-wrap items-center gap-2">
-                            {isFile ? (
-                              <>
-                                <span className="font-medium text-primary">{val as string}</span>
-                                <a href={fileUrl} target="_blank" rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-bold hover:bg-primary/20 transition-colors">
-                                  <ExternalLink size={10} /> View File
-                                </a>
-                              </>
-                            ) : (
-                              Array.isArray(val) ? (val as any[]).join(', ') : typeof val === 'object' ? JSON.stringify(val) : String(val)
-                            )}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide pt-1">
-                      Filled By Teacher
-                    </div>
-                  </>
-                )}
-                {Object.keys(responses).length === 0 ? <p className="text-sm text-muted">No response data</p> :
-                  Object.entries(responses).map(([key, val]) => {
-                    const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
-                    // Cloudinary returns full https:// URLs; fallback for legacy local filenames
-                    const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`) : '';
-
-                    // Find label from form schema
-                    const fieldMeta = fieldMap[key];
-                    const label = fieldMeta?.label || key;
-
-                    const getDisplayValue = () => {
-                      if (Array.isArray(val)) return (val as any[]).join(', ');
-                      if (typeof val === 'object') return JSON.stringify(val);
-
-                      // MCQ/choice fields may store index (e.g. "0", "1"); show option text instead.
-                      const options = Array.isArray(fieldMeta?.options) ? fieldMeta.options : [];
-                      if (options.length > 0) {
-                        const idx = Number(String(val));
-                        if (!Number.isNaN(idx) && options[idx] !== undefined) {
-                          return String(options[idx]);
-                        }
-                      }
-
-                      return String(val);
-                    };
-
-                    return (
-                      <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 py-1.5 border-b border-border/30 last:border-0">
-                        <span className="text-xs font-semibold text-muted min-w-[160px] shrink-0">{label}:</span>
-                        <span className="text-sm break-words flex flex-wrap items-center gap-2">
-                          {isFile ? (
-                            <>
-                              <span className="font-medium text-primary">{val as string}</span>
-                              <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
-                                className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-bold hover:bg-primary/20 transition-colors">
-                                <ExternalLink size={10} /> View File
-                              </a>
-                            </>
-                          ) : (
-                            getDisplayValue()
-                          )}
-                        </span>
+                <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  School functionary nomination is not linked to this submission.
+                </div>
+                {/* Fallback to show teacher responses anyway */}
+                <div className="space-y-4 mt-4">
+                  <h4 className="text-sm font-bold">Teacher Form Responses</h4>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                    {Object.entries(responses).map(([key, val]) => (
+                      <div key={key} className="space-y-1 pb-2 border-b border-slate-200 last:border-0">
+                        <p className="text-[10px] text-muted font-bold uppercase">{fieldMap[key]?.label || key}</p>
+                        <p className="text-sm font-semibold">{String(val)}</p>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Comments */}
             <div><h4 className="text-sm font-bold mb-2 flex items-center gap-2"><MessageSquare size={14} /> Comments ({comments.length})</h4>
