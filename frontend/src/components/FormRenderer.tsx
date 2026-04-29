@@ -14,7 +14,8 @@ export interface FormField {
   allowedFormats?: string[];
   maxSizeMB?: number;
   is_trigger?: boolean;
-  show_when?: { field: string; equals: string };
+  visibleIf?: { fieldId: string; op: 'eq' | 'neq'; value: string };
+  show_when?: { field: string; equals: string }; // Legacy support
   children?: FormField[];
   correct?: string;
   points?: number;
@@ -91,8 +92,18 @@ export default function FormRenderer({ fields, formType, settings, initialValues
 
   /* ═══ BRANCHING ═══ */
   const isVis = useCallback((f: FormField): boolean => {
-    if (!f.show_when) return true;
-    return valuesRef.current[f.show_when.field] === f.show_when.equals;
+    // New format (visibleIf)
+    if (f.visibleIf) {
+      const v = valuesRef.current[f.visibleIf.fieldId];
+      if (f.visibleIf.op === 'eq') return String(v) === f.visibleIf.value;
+      if (f.visibleIf.op === 'neq') return String(v) !== f.visibleIf.value;
+      return true;
+    }
+    // Legacy format (show_when)
+    if (f.show_when) {
+      return String(valuesRef.current[f.show_when.field]) === String(f.show_when.equals);
+    }
+    return true;
   }, []);
 
   const getVisible = useCallback((): FormField[] => {

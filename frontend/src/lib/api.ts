@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001/api/v1`;
+export const API_BASE = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001/api/v1`;
 
 async function request(url: string, options?: RequestInit) {
   // Global block for non-existent /comments endpoint to stop 404 logs/errors
@@ -9,8 +9,16 @@ async function request(url: string, options?: RequestInit) {
   }
 
   const token = localStorage.getItem('auth_token');
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token && token !== 'undefined' && token !== 'null') headers['Authorization'] = `Bearer ${token}`;
+  const isFormData = options?.body instanceof FormData;
+  
+  const headers: Record<string, string> = {};
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
+  
+  if (token && token !== 'undefined' && token !== 'null') {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   
   try {
     const res = await fetch(`${API_BASE}${url}`, { 
@@ -52,4 +60,9 @@ export const api = {
   post: (url: string, body: any) => request(url, { method: 'POST', body: JSON.stringify(body) }),
   put: (url: string, body: any) => request(url, { method: 'PUT', body: JSON.stringify(body) }),
   del: (url: string, body: any) => request(url, { method: 'DELETE', body: JSON.stringify(body) }),
+  upload: (url: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request(url, { method: 'POST', body: formData });
+  }
 };

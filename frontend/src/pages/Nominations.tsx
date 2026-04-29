@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { User } from '../lib/auth';
-import { api } from '../lib/api';
+import { api, API_BASE } from '../lib/api';
 import { copyToClipboard } from '../lib/utils';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
@@ -25,24 +25,15 @@ export default function Nominations({ user }: { user: User }) {
 
   const handleFileUpload = async (fieldId: string, file: File) => {
     try {
+      console.log('Starting upload for', fieldId, file.name);
       setUploading(fieldId);
-      const formData = new FormData();
-      formData.append('file', file);
-
-      // We'll create this endpoint in the backend
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1'}/uploads`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
-        body: formData
-      });
-
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      
+      const data = await api.upload('/uploads', file);
+      console.log('Upload success:', data);
       
       setAddForm(p => ({ ...p, [fieldId]: data.url || data.filename }));
     } catch (err: any) {
+      console.error('FileUpload error:', err);
       alert(err.message || 'Failed to upload file');
     } finally {
       setUploading(null);
@@ -65,7 +56,10 @@ export default function Nominations({ user }: { user: User }) {
         api.get(url),
         api.get('/forms?status=active')
       ]);
-      setNominations(n); setForms(f);
+      // Only show forms that have nomination mode ON (form_type === 'nomination')
+      const nominationForms = f.filter((form: any) => form.form_type === 'nomination');
+      setNominations(n); 
+      setForms(nominationForms);
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
   useEffect(() => { fetchData(); }, []);
@@ -223,25 +217,70 @@ export default function Nominations({ user }: { user: User }) {
       </div>
 
       {/* Nomination Limits */}
-      {forms.filter(f => !selectedForm || f.id === selectedForm).map(f => {
-        const noms = nomsByForm(f.id);
-        let maxNom = 5;
-        try { const s = typeof f.settings === 'string' ? JSON.parse(f.settings) : f.settings; maxNom = s?.max_nominations || 5; } catch {}
-        return (
-          <div key={f.id} onClick={() => { setSelectedForm(f.id); setShowAdd(true); }}
-            className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm cursor-pointer hover:border-primary transition-all group">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-bold group-hover:text-primary transition-colors">{f.title}</h3>
-              <span className={`text-xs font-bold ${noms.length >= maxNom ? 'text-danger' : 'text-accent-green'}`}>{noms.length}/{maxNom} nominations</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {forms.filter(f => !selectedForm || f.id === selectedForm).map(f => {
+          const noms = nomsByForm(f.id);
+          let maxNom = 5;
+          try { 
+            const s = typeof f.settings === 'string' ? JSON.parse(f.settings) : f.settings; 
+            maxNom = s?.nomination_limit || s?.max_nominations || 5; 
+          } catch {}
+          
+          const isSelected = selectedForm === f.id;
+          const isFull = noms.length >= maxNom;
+
+          return (
+            <div 
+              key={f.id} 
+              onClick={() => setSelectedForm(isSelected ? '' : f.id)}
+              className={`bg-white rounded-2xl border-2 p-4 shadow-sm cursor-pointer transition-all group ${
+                isSelected ? 'border-primary ring-2 ring-primary/10' : 'border-slate-200 hover:border-primary/50'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <h3 className={`text-sm font-bold transition-colors ${isSelected ? 'text-primary' : 'group-hover:text-primary'}`}>
+                  {f.title}
+                </h3>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  isFull ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
+                }`}>
+                  {noms.length}/{maxNom}
+                </span>
+              </div>
+              
+              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-3">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${isFull ? 'bg-red-500' : 'bg-green-500'}`} 
+                  style={{ width: `${Math.min((noms.length / maxNom) * 100, 100)}%` }} 
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex gap-3 text-[10px] text-slate-500">
+                  <span title="Completed">✓ {noms.filter(n => n.status === 'completed').length}</span>
+                  <span title="In Progress">○ {noms.filter(n => n.status === 'in_progress' || n.status === 'invited').length}</span>
+                </div>
+                
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedForm(f.id);
+                    setShowAdd(true);
+                  }}
+                  disabled={isFull && !isAdmin}
+                  className={`text-[10px] font-bold px-3 py-1 rounded-lg transition-all ${
+                    isFull && !isAdmin 
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                      : 'bg-primary text-white hover:bg-primary-hover shadow-sm hover:shadow-md'
+                  }`}
+                >
+                  {isFull && !isAdmin ? 'Limit Reached' : '+ Nominate'}
+                </button>
+              </div>
             </div>
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${noms.length >= maxNom ? 'bg-danger' : 'bg-accent-green'}`} style={{ width: `${Math.min((noms.length / maxNom) * 100, 100)}%` }} /></div>
-            <div className="flex gap-4 mt-2 text-xs text-slate-500">
-              <span>✓ {noms.filter(n => n.status === 'completed').length} completed</span>
-              <span>○ {noms.filter(n => n.status === 'in_progress').length} in progress</span>
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
 
       <DataTable columns={columns} data={nominations.filter(n => !selectedForm || n.form_id === selectedForm)} loading={loading} searchPlaceholder="Search teachers..."
         onRowClick={(row) => { setSelectedNom(row); setShowDetails(true); }}
@@ -293,7 +332,7 @@ export default function Nominations({ user }: { user: User }) {
                 const label = customField ? customField.label : (key.charAt(0).toUpperCase() + key.slice(1));
                 const isFile = customField?.type === 'file' || (typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val));
                 // Cloudinary returns full https:// URLs; fallback for legacy local filenames
-                const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val as string : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`) : '';
+                const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val as string : `${API_BASE.replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`) : '';
 
                 return (
                   <div key={key} className="p-3 rounded-xl border border-slate-200">
@@ -389,22 +428,30 @@ export default function Nominations({ user }: { user: User }) {
                             <>
                         <input
                           id={inputId}
+                          key={inputId}
                           type="file"
                           className="hidden"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) handleFileUpload(cf.id, file);
-                            e.currentTarget.value = '';
+                            // Do NOT reset e.currentTarget.value here as it might interfere with some browsers
                           }}
                         />
                         {addForm[cf.id] ? (
                           <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg border border-blue-100">
-                            <span className="text-xs flex-1 truncate font-medium">{addForm[cf.id]}</span>
-                            <button onClick={() => setAddForm(p => ({ ...p, [cf.id]: '' }))} className="p-1 text-rose-500 hover:bg-rose-100 rounded-md transition-colors"><Trash2 size={12} /></button>
+                            <span className="text-xs flex-1 truncate font-medium">File Uploaded: {String(addForm[cf.id]).split('/').pop()}</span>
+                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAddForm(p => ({ ...p, [cf.id]: '' })); }} className="p-1 text-rose-500 hover:bg-rose-100 rounded-md transition-colors"><Trash2 size={12} /></button>
                           </div>
                         ) : (
-                          <label htmlFor={inputId}
-                            className="border border-dashed border-slate-300 rounded-xl p-3 text-center cursor-pointer hover:bg-slate-50 transition-colors">
+                          <label 
+                            htmlFor={inputId}
+                            onClick={(e) => {
+                              // If label click doesn't work, we can manually trigger input
+                              // but htmlFor should work fine if ID is unique.
+                              console.log('Label clicked for', inputId);
+                            }}
+                            className="block border border-dashed border-slate-300 rounded-xl p-3 text-center cursor-pointer hover:bg-slate-50 transition-colors"
+                          >
                             {uploading === cf.id ? (
                               <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-1" />
                             ) : (

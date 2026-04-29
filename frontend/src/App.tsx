@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useSearchParams, Outlet } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { initTheme } from './lib/theme';
 import Layout from './components/Layout';
@@ -114,12 +114,17 @@ function AppContent() {
   );
 }
 
+const router = createBrowserRouter([
+  {
+    path: "*",
+    element: <AppContent />,
+  }
+]);
+
 export default function App() {
   return (
-    <BrowserRouter>
-      <ErrorBoundary>
-        <AppContent />
-      </ErrorBoundary>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <RouterProvider router={router} />
+    </ErrorBoundary>
   );
 }

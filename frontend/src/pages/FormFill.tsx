@@ -143,17 +143,23 @@ export default function FormFill({ user }: { user: User }) {
 
     Promise.all([
       api.get(`/forms?id=${id}`),
-      api.get(`/submissions?form_id=${id}`),
+      api.get(`/submissions?form_id=${id}${token ? `&nomination_token=${token}` : ''}`),
       getNomination()
     ]).then(([res, subs, nomination]: any[]) => {
       if (!res || res.error) { setStep('error'); setError('Form not found'); return; }
 
-      const schemaSource = res.form_schema || res.schema;
-      if (schemaSource) {
-        try {
-          res.schema = typeof schemaSource === 'string' ? JSON.parse(schemaSource) : schemaSource;
-        } catch (e) {
-          console.error("Failed to parse schema", e);
+      res.form_type = res.form_type || res.formType || 'normal';
+      res.settings = typeof res.settings === 'string' ? (JSON.parse(res.settings) || {}) : (res.settings || {});
+
+      // Important: Ensure schema sections are loaded even if form_schema is missing
+      if (!res.schema || !res.schema.sections) {
+        const schemaSource = res.form_schema || res.schema;
+        if (schemaSource) {
+          try {
+            res.schema = typeof schemaSource === 'string' ? JSON.parse(schemaSource) : schemaSource;
+          } catch (e) {
+            console.error("Failed to parse schema", e);
+          }
         }
       }
 
@@ -165,37 +171,38 @@ export default function FormFill({ user }: { user: User }) {
       }
       if (!res.schema) res.schema = { sections: [] };
 
-      res.form_type = res.form_type || res.formType || 'normal';
-      res.settings = typeof res.settings === 'string' ? (JSON.parse(res.settings) || {}) : (res.settings || {});
-
       setForm(res);
       if (nomination) setNomination(nomination);
 
-      const authModeRaw = String(res.settings.auth_mode || '').toLowerCase();
-      const teacherLoginRaw = String(res.settings.teacher_login || '').toLowerCase();
-      const authMode = authModeRaw || (teacherLoginRaw === 'direct' ? 'anonymous' : teacherLoginRaw === 'otp' ? 'otp' : 'login');
+      const isNominationForm = res.form_type === 'nomination';
       const isAnon = user.id === 'anon';
+      const hasToken = !!token || !!nomination;
 
-      if (authMode === 'login' && isAnon && !token && !nomination) {
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-        return;
+      // ─── STRICT ACCESS LOGIC ───
+      // 1. If NOT a nomination form, always allow access (Anonymous by default)
+      if (!isNominationForm) {
+        // Normal forms are always public in this logic
+        console.log('Normal form detected, allowing public access');
+      } 
+      // 2. If it IS a nomination form, we MUST have a token or be logged in
+      else {
+        if (isAnon && !hasToken) {
+          // Redirect to teacher portal login if it's a nomination form without a token
+          nav(`/login?portal=teacher&redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`, { replace: true });
+          return;
+        }
       }
 
       if (res.status !== 'active') { setStep('error'); setError('This form is not active.'); return; }
       if (res.expires_at && new Date(res.expires_at) < new Date()) { setStep('error'); setError('This form has closed.'); return; }
 
-      // If OTP required but not logged in/verified, REDIRECT TO LOGIN IMMEDIATELY
-      if (authMode === 'otp' && (isAnon || user.role === 'functionary') && !otpVerified) {
-        const redirectUrl = encodeURIComponent(window.location.pathname + window.location.search);
-        const emailHint = nomination?.teacher_email ? `&email=${encodeURIComponent(nomination.teacher_email)}` : '';
-        window.location.href = `/login?portal=teacher&redirect=${redirectUrl}${emailHint}`;
-        return;
-      }
-
       const existing = (subs || []).find((s: any) => !s.is_draft && !s.isDraft);
       const draft = (subs || []).find((s: any) => s.is_draft || s.isDraft);
 
-      if (existing) {
+      // If it's a nomination form, we strictly check for existing submissions
+      // to prevent double-filling for the same teacher token.
+      // But if it's a normal anonymous form, we allow multiple submissions.
+      if (existing && isNominationForm) {
         const score = typeof existing.score === 'object' && existing.score !== null
           ? existing.score.earnedPoints
           : existing.score ?? null;
@@ -256,20 +263,55 @@ export default function FormFill({ user }: { user: User }) {
   const formSettings = useMemo(() => parseObject(form?.settings), [form]);
 
   const visibleSections = useMemo(() => {
-    return sections.filter((s: Section) => {
-      if (!s.visibleIf) return true;
-      const v = answers[s.visibleIf.fieldId];
-      if (s.visibleIf.op === 'eq') return String(v) === s.visibleIf.value;
-      if (s.visibleIf.op === 'neq') return String(v) !== s.visibleIf.value;
+    const base = sections.filter((s: Section) => {
+      // New format (visibleIf)
+      if (s.visibleIf) {
+        const v = answers[s.visibleIf.fieldId];
+        if (s.visibleIf.op === 'eq') return String(v) === s.visibleIf.value;
+        if (s.visibleIf.op === 'neq') return String(v) !== s.visibleIf.value;
+        return true;
+      }
+      // Legacy support (show_when)
+      const anyS = s as any;
+      if (anyS.show_when) {
+        return String(answers[anyS.show_when.field]) === String(anyS.show_when.equals);
+      }
       return true;
     });
-  }, [form, answers]);
+
+    // If it's a nomination form and has custom nomination fields, 
+    // inject them into a virtual "Information" section at the beginning.
+    const customFields = (form?.settings?.nomination_custom_fields as any[]) || [];
+    if (form?.form_type === 'nomination' && customFields.length > 0) {
+      const infoSection: Section = {
+        id: 'nomination_info',
+        title: 'Nomination Information',
+        description: 'Please review or complete your nomination details.',
+        fields: customFields.map(cf => ({
+          id: cf.id,
+          type: cf.type as FieldType,
+          label: cf.label,
+          required: cf.required
+        }))
+      };
+      return [infoSection, ...base];
+    }
+    return base;
+  }, [form, answers, sections]);
 
   const fieldVisible = (f: Field) => {
-    if (!f.visibleIf) return true;
-    const v = answers[f.visibleIf.fieldId];
-    if (f.visibleIf.op === 'eq') return String(v) === f.visibleIf.value;
-    if (f.visibleIf.op === 'neq') return String(v) !== f.visibleIf.value;
+    // New format (visibleIf)
+    if (f.visibleIf) {
+      const v = answers[f.visibleIf.fieldId];
+      if (f.visibleIf.op === 'eq') return String(v) === f.visibleIf.value;
+      if (f.visibleIf.op === 'neq') return String(v) !== f.visibleIf.value;
+      return true;
+    }
+    // Legacy support (show_when)
+    const anyF = f as any;
+    if (anyF.show_when) {
+      return String(answers[anyF.show_when.field]) === String(anyF.show_when.equals);
+    }
     return true;
   };
 
@@ -305,7 +347,8 @@ export default function FormFill({ user }: { user: User }) {
         const existing = (subs || []).find((s: any) => !s.is_draft && !s.isDraft);
         const draft = (subs || []).find((s: any) => s.is_draft || s.isDraft);
 
-        if (existing) {
+        // Consistency: Only block if it's a nomination form
+        if (existing && form?.form_type === 'nomination') {
           const score = typeof existing.score === 'object' && existing.score !== null
             ? existing.score.earnedPoints
             : existing.score ?? null;
@@ -467,7 +510,24 @@ export default function FormFill({ user }: { user: User }) {
             <div className="flex justify-between"><span className="text-muted">Submitted</span><span>{fmtDate(new Date().toISOString())}</span></div>
             {receipt.max ? <div className="flex justify-between"><span className="text-muted">Score</span><span className="font-semibold">{receipt.score}/{receipt.max}</span></div> : null}
           </div>
-          <button onClick={() => nav('/forms')} className="btn btn-ghost mt-5">Back to Forms</button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6">
+            <button onClick={() => nav('/forms')} className="btn btn-ghost">Back to Forms</button>
+            {form.form_type !== 'nomination' && (
+              <button 
+                onClick={() => {
+                  setAnswers({});
+                  setSubmissionId(null);
+                  setReceipt(null);
+                  setSectionIdx(0);
+                  setStep('filling');
+                  setError('');
+                }} 
+                className="btn btn-primary"
+              >
+                Submit Another Response
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
