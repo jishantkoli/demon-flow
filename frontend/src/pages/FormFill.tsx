@@ -184,9 +184,11 @@ export default function FormFill({ user }: { user: User }) {
       if (res.status !== 'active') { setStep('error'); setError('This form is not active.'); return; }
       if (res.expires_at && new Date(res.expires_at) < new Date()) { setStep('error'); setError('This form has closed.'); return; }
 
-      // If OTP required but not logged in/verified, STOP HERE and wait for render-level redirect
+      // If OTP required but not logged in/verified, REDIRECT TO LOGIN IMMEDIATELY
       if (authMode === 'otp' && (isAnon || user.role === 'functionary') && !otpVerified) {
-        setStep('loading'); // Stay in loading state, render will handle redirect
+        const redirectUrl = encodeURIComponent(window.location.pathname + window.location.search);
+        const emailHint = nomination?.teacher_email ? `&email=${encodeURIComponent(nomination.teacher_email)}` : '';
+        window.location.href = `/login?portal=teacher&redirect=${redirectUrl}${emailHint}`;
         return;
       }
 
@@ -472,28 +474,6 @@ export default function FormFill({ user }: { user: User }) {
   }
 
   if (!form || !currentSection) return null;
-
-  const authModeRaw = String(form.settings.auth_mode || '').toLowerCase();
-  const teacherLoginRaw = String(form.settings.teacher_login || '').toLowerCase();
-  const authMode = authModeRaw || (teacherLoginRaw === 'direct' ? 'anonymous' : teacherLoginRaw === 'otp' ? 'otp' : 'login');
-  const isAnon = user.id === 'anon';
-  const isFunctionary = user.role === 'functionary';
-
-  // Render OTP verification screen if required - REDIRECT TO LOGIN
-  // If user is a functionary, they also need to login as a teacher to fill this
-  if (authMode === 'otp' && (isAnon || isFunctionary) && !otpVerified) {
-    const redirectUrl = encodeURIComponent(window.location.pathname + window.location.search);
-    const emailHint = nomination?.teacher_email ? `&email=${encodeURIComponent(nomination.teacher_email)}` : '';
-    nav(`/login?portal=teacher&redirect=${redirectUrl}${emailHint}`);
-    return (
-      <div className="min-h-screen bg-canvas grid place-items-center p-6">
-        <div className="text-center">
-          <Loader2 className="animate-spin mx-auto text-primary mb-4" size={40} />
-          <p className="text-muted">Redirecting to teacher login...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-canvas">
