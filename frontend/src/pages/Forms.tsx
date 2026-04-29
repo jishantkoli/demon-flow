@@ -26,6 +26,7 @@ const typeColors: Record<string, { bg: string; text: string; border: string }> =
 export default function Forms({ user }: { user: User }) {
   const navigate = useNavigate();
   const [forms, setForms] = useState<any[]>([]);
+  const [teacherNominationLinks, setTeacherNominationLinks] = useState<Record<string, { token?: string; schoolCode?: string }>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -51,6 +52,30 @@ export default function Forms({ user }: { user: User }) {
     try { setForms(await api.get('/forms')); } catch (err) { console.error(err); } finally { setLoading(false); }
   };
   useEffect(() => { fetchForms(); }, []);
+
+  useEffect(() => {
+    const loadTeacherNominationLinks = async () => {
+      if (user.role !== 'teacher' || !user.email) {
+        setTeacherNominationLinks({});
+        return;
+      }
+      try {
+        const noms: any[] = await api.get(`/nominations?teacher_email=${encodeURIComponent(user.email)}`);
+        const byForm: Record<string, { token?: string; schoolCode?: string }> = {};
+        (Array.isArray(noms) ? noms : []).forEach((n: any) => {
+          const formId = String(n.form_id || n.formId || '');
+          if (!formId) return;
+          const token = n.unique_token || n.nomination_token || n.nominationToken;
+          byForm[formId] = { token, schoolCode: n.school_code || n.schoolCode };
+        });
+        setTeacherNominationLinks(byForm);
+      } catch (err) {
+        console.error('Failed to load teacher nomination links:', err);
+        setTeacherNominationLinks({});
+      }
+    };
+    loadTeacherNominationLinks();
+  }, [user.role, user.email]);
 
   const isAdmin = user.role === 'admin';
 
@@ -337,7 +362,18 @@ export default function Forms({ user }: { user: User }) {
                   {/* Actions */}
                   <div className="flex gap-2 mt-4">
                     {canFill && user.role !== 'functionary' && (
-                      <button onClick={() => user.role === 'teacher' ? navigate(`/fill/${row.id}`) : openPreviewModal(row)}
+                      <button onClick={() => {
+                        if (user.role === 'teacher') {
+                          const linkMeta = teacherNominationLinks[String(row.id)] || {};
+                          const params = new URLSearchParams();
+                          if (linkMeta.token) params.set('token', linkMeta.token);
+                          if (linkMeta.schoolCode) params.set('sc', linkMeta.schoolCode);
+                          const qs = params.toString();
+                          navigate(`/fill/${row.id}${qs ? `?${qs}` : ''}`);
+                          return;
+                        }
+                        openPreviewModal(row);
+                      }}
                         className="flex-1 py-2.5 bg-accent-green text-white rounded-xl text-sm font-bold hover:bg-accent-green-hover transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm">
                         {user.role === 'teacher' ? <Play size={14} /> : <Eye size={14} />}
                         {user.role === 'teacher' ? 'Fill Form' : 'Preview Form'}

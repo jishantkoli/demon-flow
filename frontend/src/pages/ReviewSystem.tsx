@@ -13,6 +13,12 @@ import {
 } from 'lucide-react';
 
 export default function ReviewSystem({ user }: { user: User }) {
+  type FieldFilterRow = {
+    field_id: string;
+    operator: 'contains' | 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte';
+    field_value: string;
+  };
+
   const navigate = useNavigate();
   const [forms, setForms] = useState<any[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<string>('');
@@ -28,7 +34,7 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [showShortlist, setShowShortlist] = useState(false);
   const [levelForm, setLevelForm] = useState({ name: '', level_number: 1, scoring_type: 'form_level', grade_scale: 'A,B,C,D', blind_review: false, reviewer_ids: [] as string[] });
   const [shortlistFilter, setShortlistFilter] = useState({ filter_type: 'all', filter_value: '0', source_level_id: '', field_id: '', field_value: '' });
-  const [fieldFilters, setFieldFilters] = useState([{ field_id: '', field_value: '' }]);
+  const [fieldFilters, setFieldFilters] = useState<FieldFilterRow[]>([{ field_id: '', operator: 'contains', field_value: '' }]);
   const [shortlistResult, setShortlistResult] = useState<any>(null);
   const [isFiltering, setIsFiltering] = useState(false);
   const [filteredResults, setFilteredResults] = useState<any[] | null>(null);
@@ -124,6 +130,13 @@ export default function ReviewSystem({ user }: { user: User }) {
       .filter(Boolean);
   };
 
+  const getDefaultOperator = (field: any): FieldFilterRow['operator'] => {
+    if (!field) return 'contains';
+    if (field.type === 'number') return 'gte';
+    if (Array.isArray(field.options) && field.options.length > 0) return 'eq';
+    return 'contains';
+  };
+
   const openProfile = async (submissionId: string) => {
     setProfileLoading(true); setShowProfile(true);
     try {
@@ -166,7 +179,10 @@ export default function ReviewSystem({ user }: { user: User }) {
     }
 
     // Filter by Fields (AND logic)
-    const activeFieldFilters = fieldFilters.filter(f => f.field_id && f.field_value);
+    const activeFieldFilters = fieldFilters.filter(f => f.field_id && String(f.field_value).trim() !== '');
+    const formFieldMap = new Map(
+      getFormFilterFields().map((f: any) => [String(f.id), f])
+    );
     if (activeFieldFilters.length > 0) {
       results = results.filter(s => {
         let responseArray: any[] = [];
@@ -177,11 +193,29 @@ export default function ReviewSystem({ user }: { user: User }) {
         return activeFieldFilters.every(f => {
           const fieldResp = responseArray.find((r: any) => String(r.fieldId) === String(f.field_id));
           const fieldValue = fieldResp ? fieldResp.value : null;
-          
-          if (Array.isArray(fieldValue)) {
-            return fieldValue.some(v => String(v || '').toLowerCase().includes(String(f.field_value).toLowerCase()));
+
+          const actualValues = Array.isArray(fieldValue) ? fieldValue : [fieldValue];
+          const expectedText = String(f.field_value).trim().toLowerCase();
+          const selectedField = formFieldMap.get(String(f.field_id));
+
+          if (['gt', 'gte', 'lt', 'lte'].includes(f.operator) || selectedField?.type === 'number') {
+            const expectedNum = Number(f.field_value);
+            if (Number.isNaN(expectedNum)) return false;
+            const numericVals = actualValues.map((v: any) => Number(v)).filter((n: number) => !Number.isNaN(n));
+            if (numericVals.length === 0) return false;
+            if (f.operator === 'gt') return numericVals.some((n: number) => n > expectedNum);
+            if (f.operator === 'gte') return numericVals.some((n: number) => n >= expectedNum);
+            if (f.operator === 'lt') return numericVals.some((n: number) => n < expectedNum);
+            return numericVals.some((n: number) => n <= expectedNum);
           }
-          return String(fieldValue || '').toLowerCase().includes(String(f.field_value).toLowerCase());
+
+          if (f.operator === 'eq') {
+            return actualValues.some((v: any) => String(v || '').trim().toLowerCase() === expectedText);
+          }
+          if (f.operator === 'neq') {
+            return actualValues.every((v: any) => String(v || '').trim().toLowerCase() !== expectedText);
+          }
+          return actualValues.some((v: any) => String(v || '').toLowerCase().includes(expectedText));
         });
       });
     }
@@ -444,18 +478,46 @@ export default function ReviewSystem({ user }: { user: User }) {
                         const fields = getFormFilterFields();
                         const selectedField = fields.find(f => f.id === row.field_id);
                         const options = getFieldOptionValues(selectedField);
+                        const isNumber = selectedField?.type === 'number';
                         
                         return (
                           <div key={idx} className="p-2 rounded-lg bg-white border border-slate-200 space-y-2 relative group">
                             <button onClick={() => setFieldFilters(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 w-5 h-5 bg-red-100 text-red-500 rounded-full flex items-center justify-center hover:bg-red-200 transition-colors shadow-sm">
                               <XCircle size={12} />
                             </button>
-                            <select value={row.field_id} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_id: e.target.value, field_value: '' } : r))}
+                            <select value={row.field_id} onChange={e => setFieldFilters(prev => prev.map((r, i) => {
+                              if (i !== idx) return r;
+                              const nextField = fields.find((fld: any) => String(fld.id) === e.target.value);
+                              return { ...r, field_id: e.target.value, operator: getDefaultOperator(nextField), field_value: '' };
+                            }))}
                               className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none">
                               <option value="">Select field...</option>
                               {fields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
                             </select>
-                            
+
+                            <select
+                              value={row.operator}
+                              onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, operator: e.target.value as FieldFilterRow['operator'] } : r))}
+                              className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none"
+                            >
+                              {isNumber ? (
+                                <>
+                                  <option value="gt">Greater than (&gt;)</option>
+                                  <option value="gte">Greater/equal (&gt;=)</option>
+                                  <option value="lt">Less than (&lt;)</option>
+                                  <option value="lte">Less/equal (&lt;=)</option>
+                                  <option value="eq">Equals</option>
+                                  <option value="neq">Not equals</option>
+                                </>
+                              ) : (
+                                <>
+                                  <option value="contains">Contains</option>
+                                  <option value="eq">Equals</option>
+                                  <option value="neq">Not equals</option>
+                                </>
+                              )}
+                            </select>
+
                             {options.length > 0 ? (
                               <select value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
                                 className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none">
@@ -463,13 +525,13 @@ export default function ReviewSystem({ user }: { user: User }) {
                                 {options.map((o: string) => <option key={o} value={o}>{o}</option>)}
                               </select>
                             ) : (
-                              <input value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
-                                className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none" placeholder="Value to match..." />
+                              <input type={isNumber ? 'number' : 'text'} value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
+                                className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none" placeholder={isNumber ? 'Enter numeric value...' : 'Value to match...'} />
                             )}
                           </div>
                         );
                       })}
-                      <button onClick={() => setFieldFilters(prev => [...prev, { field_id: '', field_value: '' }])} className="w-full py-1.5 border border-dashed border-slate-300 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-white hover:border-primary transition-all flex items-center justify-center gap-1">
+                      <button onClick={() => setFieldFilters(prev => [...prev, { field_id: '', operator: 'contains', field_value: '' }])} className="w-full py-1.5 border border-dashed border-slate-300 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-white hover:border-primary transition-all flex items-center justify-center gap-1">
                         <Zap size={10} /> Add Field Condition
                       </button>
                     </div>

@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useSearchParams, Outlet } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { initTheme } from './lib/theme';
 import Layout from './components/Layout';
@@ -108,7 +108,7 @@ function AppContent() {
         {user?.role === 'admin' && <Route path="/exports" element={<Exports />} />}
         <Route path="/profile" element={user ? <Profile user={user} /> : <Navigate to="/login" />} />
         <Route path="/login" element={user ? <Navigate to={searchParams.get('redirect') || "/"} replace /> : <Login onLogin={refreshUser} />} />
-        <Route path="*" element={<Navigate to={user || isPublicFill ? undefined : "/login"} replace />} />
+        <Route path="*" element={<Navigate to={user || isPublicFill ? "/" : "/login"} replace />} />
       </Routes>
     </Layout>
   );

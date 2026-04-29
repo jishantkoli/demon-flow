@@ -244,6 +244,17 @@ export default function FormBuilder() {
 
   const patch = (p: Partial<FormState>) => { setForm(f => ({ ...f, ...p })); setIsDirty(true); };
   const patchSettings = (p: Record<string, unknown>) => { setForm(f => ({ ...f, settings: { ...f.settings, ...p } })); setIsDirty(true); };
+  const sanitizeSettingsForSave = (settings: Record<string, unknown>) => {
+    const next = { ...settings } as any;
+    if (Array.isArray(next.nomination_custom_fields)) {
+      next.nomination_custom_fields = next.nomination_custom_fields.map((cf: any) => {
+        const clean: any = { ...cf };
+        if (typeof clean.optionsInput === 'string') delete clean.optionsInput;
+        return clean;
+      });
+    }
+    return next;
+  };
   const patchSchema = (updater: (s: { sections: Section[] }) => { sections: Section[] }) => {
     setForm(f => ({ ...f, schema: updater(f.schema) }));
     setIsDirty(true);
@@ -289,13 +300,13 @@ export default function FormBuilder() {
         ...form,
         status: isManual ? form.status : 'draft',
         form_schema: form.schema,  // backend uses form_schema
-        settings: JSON.stringify(form.settings),
+        settings: JSON.stringify(sanitizeSettingsForSave(form.settings)),
       };
       if (isNew) {
         await api.post('/forms', payload);
       } else {
         const { id: _formId, ...formWithoutId } = form;
-        await api.put('/forms', { id, ...formWithoutId, form_schema: form.schema, settings: JSON.stringify(form.settings) });
+        await api.put('/forms', { id, ...formWithoutId, form_schema: form.schema, settings: JSON.stringify(sanitizeSettingsForSave(form.settings)) });
       }
       if (isManual) {
         alert('Changes saved successfully.');
@@ -602,10 +613,11 @@ export default function FormBuilder() {
                           </label>
                         </div>
                         {['dropdown', 'radio', 'checkbox'].includes(cf.type) && (
-                          <input className="input !py-1 text-[10px]" placeholder="Options (comma separated)" value={cf.options?.join(', ') || ''} 
+                          <input className="input !py-1 text-[10px]" placeholder="Options (comma separated)" value={cf.optionsInput ?? (cf.options?.join(', ') || '')} 
                             onChange={e => {
                               const newFields = [...(form.settings.nomination_custom_fields as any[])];
-                              newFields[cfi] = { ...cf, options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) };
+                              const raw = e.target.value;
+                              newFields[cfi] = { ...cf, optionsInput: raw, options: raw.split(',').map(s => s.trim()).filter(Boolean) };
                               patchSettings({ nomination_custom_fields: newFields });
                             }} />
                         )}

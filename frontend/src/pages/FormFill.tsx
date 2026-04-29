@@ -174,20 +174,6 @@ export default function FormFill({ user }: { user: User }) {
           console.error("Token verification failed", e);
         }
       }
-
-      // 2. If no token but user is logged in, fetch by form_id
-      if (user && user.id !== 'anon') {
-        try {
-          const res: any = await api.get(`/nominations?form_id=${id}`);
-          if (Array.isArray(res) && res.length > 0) {
-            setEmail(res[0].teacher_email);
-            setSchoolCode(res[0].school_code || '');
-            return res[0];
-          }
-        } catch (e) {
-          console.error("Failed to fetch nomination by form_id", e);
-        }
-      }
       return null;
     };
 
@@ -225,22 +211,15 @@ export default function FormFill({ user }: { user: User }) {
       if (nomination) setNomination(nomination);
 
       const isNominationForm = res.form_type === 'nomination';
-      const isAnon = user.id === 'anon';
-      const hasToken = !!token || !!nomination;
+      const hasToken = !!token;
 
       // ─── STRICT ACCESS LOGIC ───
-      // 1. If NOT a nomination form, always allow access (Anonymous by default)
-      if (!isNominationForm) {
-        // Normal forms are always public in this logic
-        console.log('Normal form detected, allowing public access');
-      } 
-      // 2. If it IS a nomination form, we MUST have a token or be logged in
-      else {
-        if (isAnon && !hasToken) {
-          // Redirect to teacher portal login if it's a nomination form without a token
-          nav(`/login?portal=teacher&redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`, { replace: true });
-          return;
-        }
+      // 1) Non-nomination forms => allow anonymous/direct access
+      // 2) Nomination forms => token-based access only
+      if (isNominationForm && !hasToken) {
+        setStep('error');
+        setError('This nomination form requires invite link access (token). Please use the nomination link sent to you.');
+        return;
       }
 
       if (res.status !== 'active') { setStep('error'); setError('This form is not active.'); return; }
@@ -313,7 +292,7 @@ export default function FormFill({ user }: { user: User }) {
   const formSettings = useMemo(() => parseObject(form?.settings), [form]);
 
   const visibleSections = useMemo(() => {
-    const base = sections.filter((s: Section) => {
+    return sections.filter((s: Section) => {
       // New format (visibleIf)
       if (s.visibleIf) {
         return checkVisibleIf(s.visibleIf, answers, sections);
@@ -325,25 +304,6 @@ export default function FormFill({ user }: { user: User }) {
       }
       return true;
     });
-
-    // If it's a nomination form and has custom nomination fields, 
-    // inject them into a virtual "Information" section at the beginning.
-    const customFields = (form?.settings?.nomination_custom_fields as any[]) || [];
-    if (form?.form_type === 'nomination' && customFields.length > 0) {
-      const infoSection: Section = {
-        id: 'nomination_info',
-        title: 'Nomination Information',
-        description: 'Please review or complete your nomination details.',
-        fields: customFields.map(cf => ({
-          id: cf.id,
-          type: cf.type as FieldType,
-          label: cf.label,
-          required: cf.required
-        }))
-      };
-      return [infoSection, ...base];
-    }
-    return base;
   }, [form, answers, sections]);
 
   const fieldVisible = (f: Field) => {
