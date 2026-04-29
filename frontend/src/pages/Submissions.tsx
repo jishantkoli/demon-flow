@@ -353,11 +353,13 @@ export default function Submissions({ user }: { user: User }) {
               )}
             </div>
 
-            {/* View full response button */}
-            <button onClick={() => { setSelected(null); navigate(`/forms/view?submission=${selected.id}`); }}
-              className="px-4 py-2 bg-primary/10 text-primary rounded-xl text-xs font-semibold hover:bg-primary/20 flex items-center gap-1.5 w-fit">
-              <ExternalLink size={13} /> View Full Response (with form layout{canSeeScore ? ' + scoring' : ''})
-            </button>
+            {/* View full response button - Hidden for functionaries */}
+            {canSeeScore && (
+              <button onClick={() => { setSelected(null); navigate(`/forms/view?submission=${selected.id}`); }}
+                className="px-4 py-2 bg-primary/10 text-primary rounded-xl text-xs font-semibold hover:bg-primary/20 flex items-center gap-1.5 w-fit">
+                <ExternalLink size={13} /> View Full Response (with form layout + scoring)
+              </button>
+            )}
 
             {/* Nomination Data (Filled by Head/Functionary) */}
             {selectedNomination && (
@@ -418,48 +420,50 @@ export default function Submissions({ user }: { user: User }) {
                   </div>
                 </div>
 
-                {/* Right Side: Teacher Form Responses */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold flex items-center gap-2 text-slate-700 border-b border-slate-200 pb-2">
-                    <Send size={14} /> 2. Teacher Form Responses
-                  </h4>
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 max-h-[400px] overflow-y-auto">
-                    {Object.keys(responses).length === 0 ? (
-                      <p className="text-sm text-muted">No response data from teacher yet.</p>
-                    ) : (
-                      Object.entries(responses).map(([key, val]) => {
-                        const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
-                        const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`) : '';
-                        const fieldMeta = fieldMap[key];
-                        const label = fieldMeta?.label || key;
+                {/* Right Side: Teacher Form Responses - ONLY for Admin/Reviewers */}
+                {canSeeScore && (
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-bold flex items-center gap-2 text-slate-700 border-b border-slate-200 pb-2">
+                      <Send size={14} /> 2. Teacher Form Responses
+                    </h4>
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 max-h-[400px] overflow-y-auto">
+                      {Object.keys(responses).length === 0 ? (
+                        <p className="text-sm text-muted">No response data from teacher yet.</p>
+                      ) : (
+                        Object.entries(responses).map(([key, val]) => {
+                          const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+                          const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`) : '';
+                          const fieldMeta = fieldMap[key];
+                          const label = fieldMeta?.label || key;
 
-                        const getDisplayValue = () => {
-                          if (Array.isArray(val)) return (val as any[]).join(', ');
-                          const options = Array.isArray(fieldMeta?.options) ? fieldMeta.options : [];
-                          if (options.length > 0) {
-                            const idx = Number(String(val));
-                            if (!Number.isNaN(idx) && options[idx] !== undefined) return String(options[idx]);
-                          }
-                          return String(val);
-                        };
+                          const getDisplayValue = () => {
+                            if (Array.isArray(val)) return (val as any[]).join(', ');
+                            const options = Array.isArray(fieldMeta?.options) ? fieldMeta.options : [];
+                            if (options.length > 0) {
+                              const idx = Number(String(val));
+                              if (!Number.isNaN(idx) && options[idx] !== undefined) return String(options[idx]);
+                            }
+                            return String(val);
+                          };
 
-                        return (
-                          <div key={key} className="space-y-1 pb-2 border-b border-slate-200 last:border-0">
-                            <p className="text-[10px] text-muted font-bold uppercase">{label}</p>
-                            <div className="text-sm font-semibold break-words">
-                              {isFile ? (
-                                <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
-                                  className="inline-flex items-center gap-1 text-primary hover:underline">
-                                  <ExternalLink size={10} /> View Uploaded File
-                                </a>
-                              ) : getDisplayValue()}
+                          return (
+                            <div key={key} className="space-y-1 pb-2 border-b border-slate-200 last:border-0">
+                              <p className="text-[10px] text-muted font-bold uppercase">{label}</p>
+                              <div className="text-sm font-semibold break-words">
+                                {isFile ? (
+                                  <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
+                                    className="inline-flex items-center gap-1 text-primary hover:underline">
+                                    <ExternalLink size={10} /> View Uploaded File
+                                  </a>
+                                ) : getDisplayValue()}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })
-                    )}
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
