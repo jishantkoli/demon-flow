@@ -56,6 +56,9 @@ export default function Forms({ user }: { user: User }) {
 
   // Filter
   const filtered = forms.filter(f => {
+    // Functionaries should only see nomination-enabled forms.
+    if (user.role === 'functionary' && f.form_type !== 'nomination') return false;
+
     const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
     let effectiveStatus = f.status;
     if (isExpired) effectiveStatus = 'expired';
@@ -193,25 +196,6 @@ export default function Forms({ user }: { user: User }) {
           </button>
         )}
       </div>
-
-      {/* Admin: Type quick-create cards */}
-      {isAdmin && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {Object.entries(typeLabels).map(([key, label]) => {
-            const Icon = typeIcons[key];
-            const c = typeColors[key];
-            const count = forms.filter(f => f.form_type === key).length;
-            return (
-              <button key={key} onClick={() => openCreateModal(key)}
-                className={`p-3.5 rounded-2xl border-2 ${c.border} ${c.bg} hover:shadow-md transition-all text-left group`}>
-                <Icon size={20} className={`${c.text} mb-1.5 group-hover:scale-110 transition-transform`} />
-                <p className="text-xs font-bold text-slate-900">{label}</p>
-                <p className="text-lg font-bold mt-1 text-slate-900">{count}</p>
-              </button>
-            );
-          })}
-        </div>
-      )}
 
       {/* Tabs + Search + Filter */}
       {(forms.length > 0 || isAdmin) && (

@@ -649,6 +649,8 @@ function BranchingEditor({ allFields, value, onChange }: {
 }) {
   const [open, setOpen] = useState(!!value);
   const eligible = allFields.filter(f => ['dropdown', 'radio', 'checkbox', 'text'].includes(f.type));
+  const selectedTrigger = eligible.find(f => f.id === value?.fieldId);
+  const triggerOptions = Array.isArray(selectedTrigger?.options) ? selectedTrigger.options : [];
   return (
     <div className="border border-dashed border-border rounded-xl p-3 bg-canvas">
       <button onClick={() => { setOpen(v => !v); if (!open && !value && eligible[0]) onChange({ fieldId: eligible[0].id, op: 'eq', value: '' }); if (open) onChange(undefined); }}
@@ -657,14 +659,30 @@ function BranchingEditor({ allFields, value, onChange }: {
       </button>
       {open && (
         <div className="mt-2 grid grid-cols-[1fr_auto_1fr] gap-2 items-center text-sm">
-          <select className="select !py-1.5" value={value?.fieldId || ''} onChange={e => onChange({ ...(value || { op: 'eq' as const, value: '' }), fieldId: e.target.value })}>
+          <select className="select !py-1.5" value={value?.fieldId || ''} onChange={e => onChange({ ...(value || { op: 'eq' as const, value: '' }), fieldId: e.target.value, value: '' })}>
             <option value="">Select field…</option>
             {eligible.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
           </select>
           <select className="select !py-1.5" value={value?.op || 'eq'} onChange={e => onChange({ ...(value || { fieldId: '', value: '' }), op: e.target.value as 'eq' | 'neq' })}>
             <option value="eq">equals</option><option value="neq">not equals</option>
           </select>
-          <input className="input !py-1.5" placeholder="value (e.g. Maths)" value={(value?.value as string) || ''} onChange={e => onChange({ ...(value || { fieldId: '', op: 'eq' as const }), value: e.target.value })} />
+          {triggerOptions.length > 0 ? (
+            <select
+              className="select !py-1.5"
+              value={(value?.value as string) || ''}
+              onChange={e => onChange({ ...(value || { fieldId: '', op: 'eq' as const }), value: e.target.value })}
+            >
+              <option value="">Select option…</option>
+              {triggerOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+          ) : (
+            <input
+              className="input !py-1.5"
+              placeholder="value (e.g. Maths)"
+              value={(value?.value as string) || ''}
+              onChange={e => onChange({ ...(value || { fieldId: '', op: 'eq' as const }), value: e.target.value })}
+            />
+          )}
         </div>
       )}
     </div>

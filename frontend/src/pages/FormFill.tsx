@@ -16,12 +16,12 @@ type Field = {
   id: string; type: FieldType; label: string; required?: boolean; placeholder?: string;
   options?: string[]; maxLength?: number; fileTypes?: string; maxSizeMB?: number;
   correct?: number | string; marks?: number; negative?: number;
-  visibleIf?: { fieldId: string; op: 'eq' | 'neq'; value: string };
+  visibleIf?: { fieldId: string; op: 'eq' | 'neq' | 'in'; value: string | string[] };
 };
 
 type Section = {
   id: string; title: string; description?: string; fields: Field[];
-  visibleIf?: { fieldId: string; op: 'eq' | 'neq'; value: string };
+  visibleIf?: { fieldId: string; op: 'eq' | 'neq' | 'in'; value: string | string[] };
 };
 
 type FormData = {
@@ -44,6 +44,56 @@ function relTime(iso: string) {
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function normCond(v: unknown) {
+  return String(v ?? '').trim().toLowerCase();
+}
+
+function checkCondition(actual: unknown, expected: string | string[], op: 'eq' | 'neq' | 'in') {
+  const expectedList = (Array.isArray(expected) ? expected : [expected]).map(normCond);
+  const actualList = Array.isArray(actual) ? actual.map(normCond) : [normCond(actual)];
+  const hasAny = expectedList.some(exp => actualList.includes(exp));
+
+  if (op === 'in') return hasAny;
+  if (Array.isArray(actual)) return op === 'eq' ? hasAny : !hasAny;
+
+  const target = expectedList[0] ?? '';
+  const ok = actualList[0] === target;
+  return op === 'eq' ? ok : !ok;
+}
+
+function getAnswerByRef(
+  ref: string,
+  answers: Record<string, unknown>,
+  sections: Section[]
+): unknown {
+  if (Object.prototype.hasOwnProperty.call(answers, ref)) return answers[ref];
+  const target = normCond(ref);
+  const allFields = sections.flatMap(s => s.fields || []);
+  const matched = allFields.find(f => normCond(f.id) === target || normCond(f.label) === target);
+  if (!matched) return undefined;
+  return answers[matched.id];
+}
+
+function checkVisibleIf(
+  condition: { fieldId: string; op: 'eq' | 'neq' | 'in'; value: string | string[] } | undefined,
+  answers: Record<string, unknown>,
+  sections: Section[]
+) {
+  if (!condition) return true;
+  const v = getAnswerByRef(condition.fieldId, answers, sections);
+  return checkCondition(v, condition.value, condition.op);
+}
+
+function checkShowWhen(
+  showWhen: { field: string; equals: string } | undefined,
+  answers: Record<string, unknown>,
+  sections: Section[]
+) {
+  if (!showWhen) return true;
+  const v = getAnswerByRef(showWhen.field, answers, sections);
+  return checkCondition(v, String(showWhen.equals || ''), 'eq');
 }
 
 // ─── Badge (App 1 style) ──────────────────────────────────────────────────────
@@ -266,15 +316,12 @@ export default function FormFill({ user }: { user: User }) {
     const base = sections.filter((s: Section) => {
       // New format (visibleIf)
       if (s.visibleIf) {
-        const v = answers[s.visibleIf.fieldId];
-        if (s.visibleIf.op === 'eq') return String(v) === s.visibleIf.value;
-        if (s.visibleIf.op === 'neq') return String(v) !== s.visibleIf.value;
-        return true;
+        return checkVisibleIf(s.visibleIf, answers, sections);
       }
       // Legacy support (show_when)
       const anyS = s as any;
       if (anyS.show_when) {
-        return String(answers[anyS.show_when.field]) === String(anyS.show_when.equals);
+        return checkShowWhen(anyS.show_when, answers, sections);
       }
       return true;
     });
@@ -302,18 +349,20 @@ export default function FormFill({ user }: { user: User }) {
   const fieldVisible = (f: Field) => {
     // New format (visibleIf)
     if (f.visibleIf) {
-      const v = answers[f.visibleIf.fieldId];
-      if (f.visibleIf.op === 'eq') return String(v) === f.visibleIf.value;
-      if (f.visibleIf.op === 'neq') return String(v) !== f.visibleIf.value;
-      return true;
+      return checkVisibleIf(f.visibleIf, answers, sections);
     }
     // Legacy support (show_when)
     const anyF = f as any;
     if (anyF.show_when) {
-      return String(answers[anyF.show_when.field]) === String(anyF.show_when.equals);
+      return checkShowWhen(anyF.show_when, answers, sections);
     }
     return true;
   };
+
+  useEffect(() => {
+    const lastIdx = Math.max(visibleSections.length - 1, 0);
+    if (sectionIdx > lastIdx) setSectionIdx(lastIdx);
+  }, [visibleSections.length, sectionIdx]);
 
   const handleSendOtp = async () => {
     if (!email || !email.includes('@')) { setError('Please enter a valid email.'); return; }

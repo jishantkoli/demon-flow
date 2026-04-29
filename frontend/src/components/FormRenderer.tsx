@@ -14,7 +14,7 @@ export interface FormField {
   allowedFormats?: string[];
   maxSizeMB?: number;
   is_trigger?: boolean;
-  visibleIf?: { fieldId: string; op: 'eq' | 'neq'; value: string };
+  visibleIf?: { fieldId: string; op: 'eq' | 'neq' | 'in'; value: string | string[] };
   show_when?: { field: string; equals: string }; // Legacy support
   children?: FormField[];
   correct?: string;
@@ -91,20 +91,42 @@ export default function FormRenderer({ fields, formType, settings, initialValues
   }, [toOptionText]);
 
   /* ═══ BRANCHING ═══ */
+  const resolveConditionValue = useCallback((ref: string) => {
+    if (Object.prototype.hasOwnProperty.call(valuesRef.current, ref)) return valuesRef.current[ref];
+    const target = String(ref || '').trim().toLowerCase();
+    const flat: FormField[] = [];
+    const walk = (list: FormField[]) => list.forEach(x => {
+      flat.push(x);
+      if (x.children) walk(x.children);
+    });
+    walk(fields);
+    const matched = flat.find(x => String(x.id || '').trim().toLowerCase() === target || String(x.label || '').trim().toLowerCase() === target);
+    return matched ? valuesRef.current[matched.id] : undefined;
+  }, [fields]);
+
+  const checkVisible = useCallback((actual: any, expected: string | string[], op: 'eq' | 'neq' | 'in') => {
+    const expectedList = (Array.isArray(expected) ? expected : [expected]).map(x => String(x ?? '').trim().toLowerCase());
+    const actualList = (Array.isArray(actual) ? actual : [actual]).map(x => String(x ?? '').trim().toLowerCase());
+    const hasAny = expectedList.some(x => actualList.includes(x));
+    if (op === 'in') return hasAny;
+    if (Array.isArray(actual)) return op === 'eq' ? hasAny : !hasAny;
+    const firstExpected = expectedList[0] ?? '';
+    return op === 'eq' ? actualList[0] === firstExpected : actualList[0] !== firstExpected;
+  }, []);
+
   const isVis = useCallback((f: FormField): boolean => {
     // New format (visibleIf)
     if (f.visibleIf) {
-      const v = valuesRef.current[f.visibleIf.fieldId];
-      if (f.visibleIf.op === 'eq') return String(v) === f.visibleIf.value;
-      if (f.visibleIf.op === 'neq') return String(v) !== f.visibleIf.value;
-      return true;
+      const v = resolveConditionValue(f.visibleIf.fieldId);
+      return checkVisible(v, f.visibleIf.value, f.visibleIf.op);
     }
     // Legacy format (show_when)
     if (f.show_when) {
-      return String(valuesRef.current[f.show_when.field]) === String(f.show_when.equals);
+      const v = resolveConditionValue(f.show_when.field);
+      return checkVisible(v, String(f.show_when.equals), 'eq');
     }
     return true;
-  }, []);
+  }, [checkVisible, resolveConditionValue]);
 
   const getVisible = useCallback((): FormField[] => {
     return fields.filter(f => f.type !== 'section' || isVis(f));

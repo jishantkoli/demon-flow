@@ -25,6 +25,97 @@ export default function Submissions({ user }: { user: User }) {
   const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const emailLocal = (v: any) => norm(v).split('@')[0];
   const compact = (v: any) => norm(v).replace(/[^a-z0-9]/g, '');
+  const parseObject = (raw: any): Record<string, any> => {
+    if (!raw) return {};
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+    return typeof raw === 'object' ? raw : {};
+  };
+
+  const parseResponses = (raw: any): Record<string, any> => {
+    if (!raw) return {};
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(parsed)) {
+        const out: Record<string, any> = {};
+        parsed.forEach((r: any) => {
+          if (r?.fieldId) out[r.fieldId] = r.value;
+        });
+        return out;
+      }
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const getFormForSubmission = (row: any) => {
+    const rawFormId = typeof row?.form_id === 'object' ? (row.form_id?._id || row.form_id?.id) : row?.form_id;
+    const target = String(rawFormId || '');
+    return forms.find((f: any) => String(f?.id || f?._id || '') === target) || null;
+  };
+
+  const isNominationSubmission = (row: any) => {
+    const f = getFormForSubmission(row);
+    const formType = f?.form_type || f?.formType || row?.form_type || row?.formType;
+    return formType === 'nomination';
+  };
+
+  const isAnonymousDirectForm = (row: any) => {
+    const f = getFormForSubmission(row);
+    const settings = parseObject(f?.settings);
+    return settings.auth_mode === 'anonymous' || settings.login_type === 'direct' || settings.teacher_login === 'direct';
+  };
+
+  const extractNameEmailFromSubmission = (row: any) => {
+    const responses = parseResponses(row?.responses);
+    const f = getFormForSubmission(row);
+    const schemaSource = f?.form_schema || f?.schema;
+    let schemaObj: any = null;
+    if (schemaSource) {
+      schemaObj = typeof schemaSource === 'string'
+        ? (() => { try { return JSON.parse(schemaSource); } catch { return null; } })()
+        : schemaSource;
+    }
+
+    const fieldList: any[] = [];
+    const collectFields = (list: any[]) => {
+      if (!Array.isArray(list)) return;
+      list.forEach((x: any) => {
+        if (!x || typeof x !== 'object') return;
+        fieldList.push(x);
+        if (Array.isArray(x.children)) collectFields(x.children);
+      });
+    };
+    if (Array.isArray(schemaObj?.sections)) schemaObj.sections.forEach((s: any) => collectFields(s?.fields || []));
+
+    const findById = (matcher: (fld: any) => boolean) => fieldList.find(matcher)?.id;
+    const nameFieldId = findById((fld: any) => /name/i.test(String(fld?.label || '')));
+    const emailFieldId = findById((fld: any) => fld?.type === 'email' || /email/i.test(String(fld?.label || '')));
+
+    let name = row?.user_name;
+    let email = row?.user_email;
+
+    if (!name || norm(name) === 'anonymous') {
+      if (nameFieldId && responses[nameFieldId]) name = responses[nameFieldId];
+      if ((!name || norm(name) === 'anonymous') && responses['name']) name = responses['name'];
+      if ((!name || norm(name) === 'anonymous') && responses['full_name']) name = responses['full_name'];
+    }
+
+    if (!email) {
+      if (emailFieldId && responses[emailFieldId]) email = responses[emailFieldId];
+      if (!email && responses['email']) email = responses['email'];
+      if (!email && responses['user_email']) email = responses['user_email'];
+    }
+
+    return { name, email };
+  };
 
   const pickBestNomination = (nominations: any[], sub: any, nominationIdParam?: any) => {
     if (!Array.isArray(nominations) || nominations.length === 0) return null;
@@ -245,19 +336,6 @@ export default function Submissions({ user }: { user: User }) {
     } 
   }
 
-  const parseObject = (raw: any): Record<string, any> => {
-    if (!raw) return {};
-    if (typeof raw === 'string') {
-      try {
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-      } catch {
-        return {};
-      }
-    }
-    return typeof raw === 'object' ? raw : {};
-  };
-
   const nominationAdditionalData = parseObject(selectedNomination?.additional_data);
   const nominationSettings = parseObject(selectedFormObj?.settings);
 
@@ -298,20 +376,44 @@ export default function Submissions({ user }: { user: User }) {
   const fieldMap = getFieldMap();
 
   const columns = [
-    { key: 'unique_token', label: 'Token ID', sortable: true, render: (v: string) => <span className="text-xs font-mono text-muted">{v || '—'}</span> },
+    {
+      key: 'id',
+      label: 'Reference ID',
+      sortable: true,
+      render: (_v: string, row: any) => {
+        const isNom = isNominationSubmission(row);
+        const refId = isNom ? (row.unique_token || row.nomination_token || row.id) : row.id;
+        return <span className="text-xs font-mono text-muted">{refId || '—'}</span>;
+      }
+    },
     { key: 'form_title', label: 'Form', sortable: true, render: (v: string) => <span className="font-medium text-sm">{v || 'Untitled'}</span> },
     { 
       key: 'user_name', 
       label: 'Submitted By', 
       sortable: true, 
       render: (v: string, row: any) => (
-        <div 
-          className="cursor-pointer hover:bg-primary/5 p-1 -m-1 rounded-lg transition-colors group"
-          onClick={(e) => { e.stopPropagation(); openNominationOnly(row); }}
-          title="Click to view nomination details"
+        <div
+          className={`p-1 -m-1 rounded-lg transition-colors group ${isNominationSubmission(row) ? 'cursor-pointer hover:bg-primary/5' : ''}`}
+          onClick={(e) => {
+            if (!isNominationSubmission(row)) return;
+            e.stopPropagation();
+            openNominationOnly(row);
+          }}
+          title={isNominationSubmission(row) ? 'Click to view nomination details' : ''}
         >
-          <p className="text-sm font-medium group-hover:text-primary">{v || 'Anonymous'}</p>
-          <p className="text-[10px] text-muted">{row.user_email}</p>
+          <p className="text-sm font-medium group-hover:text-primary">
+            {(() => {
+              const { name } = extractNameEmailFromSubmission(row);
+              if (isAnonymousDirectForm(row)) return name || 'Anonymous';
+              return v || name || 'Anonymous';
+            })()}
+          </p>
+          <p className="text-[10px] text-muted">
+            {(() => {
+              const { email } = extractNameEmailFromSubmission(row);
+              return row.user_email || email || '';
+            })()}
+          </p>
         </div>
       ) 
     },
@@ -339,12 +441,19 @@ export default function Submissions({ user }: { user: User }) {
         </div>}
       />
 
-      <Modal open={!!selected} onClose={() => setSelected(null)} title={selected?.unique_token ? `Token: ${selected.unique_token}` : `Submission #${selected?.id || ''}`} size="xl">
+      <Modal open={!!selected} onClose={() => setSelected(null)} title={isNominationSubmission(selected) ? `Token: ${selected?.unique_token || selected?.nomination_token || selected?.id || ''}` : `Submission #${selected?.id || ''}`} size="xl">
         {selected && (
           <div className="space-y-5">
             {/* Meta cards — score only shown to admin/reviewer */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Token</p><p className="text-sm font-bold mt-0.5 text-primary">{selected.unique_token || 'N/A'}</p></div>
+              <div className="bg-surface rounded-xl p-3">
+                <p className="text-[10px] text-muted uppercase font-semibold">{isNominationSubmission(selected) ? 'Token' : 'Submission ID'}</p>
+                <p className="text-sm font-bold mt-0.5 text-primary">
+                  {isNominationSubmission(selected)
+                    ? (selected.unique_token || selected.nomination_token || selected.id || 'N/A')
+                    : (selected.id || 'N/A')}
+                </p>
+              </div>
               <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Form</p><p className="text-sm font-bold mt-0.5">{selected.form_title || `#${selected.form_id}`}</p></div>
               <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Submitted By</p><p className="text-sm font-bold mt-0.5">{selected.user_name || 'Anonymous'}</p></div>
               <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Status</p><div className="mt-0.5"><StatusBadge status={selected.status} /></div></div>
