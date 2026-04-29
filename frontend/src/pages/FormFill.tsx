@@ -76,6 +76,11 @@ export default function FormFill({ user }: { user: User }) {
   const [otp, setOtp] = useState('');
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
+  const [nominationToken, setNominationToken] = useState('');
+  const urlToken = useMemo(() => {
+    try { return new URLSearchParams(window.location.search).get('token') || ''; }
+    catch { return ''; }
+  }, []);
 
   // Online/offline events
   useEffect(() => {
@@ -96,7 +101,8 @@ export default function FormFill({ user }: { user: User }) {
     }
 
     const query = new URLSearchParams(window.location.search);
-    const token = query.get('token');
+    const token = query.get('token') || urlToken;
+    if (token) setNominationToken(token);
 
     const getNomination = async () => {
       // 1. If token exists, use it (highest priority)
@@ -106,7 +112,12 @@ export default function FormFill({ user }: { user: User }) {
           if (res.success && res.data) {
             setEmail(res.data.teacher_email);
             setSchoolCode(res.data.school_code || '');
-            return res.data;
+            setNominationToken(res.data.unique_token || token);
+            const nomData = { ...res.data };
+            if (!nomData.id && !nomData._id && nomData.form) {
+              nomData._id = nomData._id || nomData.id;
+            }
+            return nomData;
           }
         } catch (e) {
           console.error("Token verification failed", e);
@@ -118,7 +129,6 @@ export default function FormFill({ user }: { user: User }) {
         try {
           const res: any = await api.get(`/nominations?form_id=${id}`);
           if (Array.isArray(res) && res.length > 0) {
-            // For teachers, backend filters by email automatically
             setEmail(res[0].teacher_email);
             setSchoolCode(res[0].school_code || '');
             return res[0];
@@ -137,7 +147,6 @@ export default function FormFill({ user }: { user: User }) {
     ]).then(([res, subs, nomination]: any[]) => {
       if (!res || res.error) { setStep('error'); setError('Form not found'); return; }
 
-      // Normalize schema: form_schema/schema/fields
       const schemaSource = res.form_schema || res.schema;
       if (schemaSource) {
         try {
@@ -161,27 +170,24 @@ export default function FormFill({ user }: { user: User }) {
       setForm(res);
       if (nomination) setNomination(nomination);
 
-      // Check auth mode
-      const authMode = res.settings.auth_mode || 'login';
+      const authModeRaw = String(res.settings.auth_mode || '').toLowerCase();
+      const teacherLoginRaw = String(res.settings.teacher_login || '').toLowerCase();
+      const authMode = authModeRaw || (teacherLoginRaw === 'direct' ? 'anonymous' : teacherLoginRaw === 'otp' ? 'otp' : 'login');
       const isAnon = user.id === 'anon';
 
-      if (authMode === 'login' && isAnon && !token) {
-        // Redirect to login page instead of just showing an error
+      if (authMode === 'login' && isAnon && !token && !nomination) {
         window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
         return;
       }
 
-      // Check status
       if (res.status !== 'active') { setStep('error'); setError('This form is not active.'); return; }
       if (res.expires_at && new Date(res.expires_at) < new Date()) { setStep('error'); setError('This form has closed.'); return; }
 
-      // If OTP mode and not verified yet, wait for OTP
       if (authMode === 'otp' && isAnon && !otpVerified) {
-        setStep('filling'); // We stay in filling step but render OTP UI
+        setStep('filling');
         return;
       }
 
-      // Check existing submission
       const existing = (subs || []).find((s: any) => !s.is_draft && !s.isDraft);
       const draft = (subs || []).find((s: any) => s.is_draft || s.isDraft);
 
@@ -202,7 +208,7 @@ export default function FormFill({ user }: { user: User }) {
         setStep('filling');
       }
     }).catch(err => { setStep('error'); setError(err.message || 'Failed to load form'); });
-  }, [id]);
+  }, [id, urlToken]);
 
   // Autosave every 30s
   useEffect(() => {
@@ -290,7 +296,6 @@ export default function FormFill({ user }: { user: User }) {
       }
       setOtpVerified(true);
       
-      // After OTP is verified, we should re-check for existing submissions/drafts for this email
       if (id) {
         const subs: any = await api.get(`/submissions?form_id=${id}&user_email=${encodeURIComponent(email)}`).catch(() => []);
         const existing = (subs || []).find((s: any) => !s.is_draft && !s.isDraft);
@@ -346,13 +351,18 @@ export default function FormFill({ user }: { user: User }) {
     if (!form || !online) return;
     setSaving(true);
     try {
+      const effectiveToken = nominationToken || nomination?.unique_token || urlToken;
       const payload = { 
-      form_id: form._id || form.id, responses: answers, status: 'draft', is_draft: true,
-      nomination_id: nomination?.id || nomination?._id,
-      user_email: user.id === 'anon' ? email : user.email,
-      user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
-      school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
-    };
+        form_id: form._id || form.id, 
+        responses: answers, 
+        status: 'draft', 
+        is_draft: true,
+        nomination_id: nomination?.id || nomination?._id,
+        nomination_token: effectiveToken,
+        user_email: user.id === 'anon' ? email : user.email,
+        user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
+        school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
+      };
       if (submissionId) {
         await api.put('/submissions', { id: submissionId, ...payload });
       } else {
@@ -366,7 +376,6 @@ export default function FormFill({ user }: { user: User }) {
 
   const submit = async () => {
     if (!form) return;
-    // Validate required fields
     for (const s of visibleSections) {
       for (const f of s.fields) {
         if (!fieldVisible(f)) continue;
@@ -380,23 +389,42 @@ export default function FormFill({ user }: { user: User }) {
     }
     setError('');
     const sc = computeScore();
+    const currentEmail = user.id === 'anon' ? (email || nomination?.teacher_email) : user.email;
+    const effectiveToken = nominationToken || nomination?.unique_token || urlToken;
     const payload = {
-      form_id: form._id || form.id, responses: answers,
-      status: 'submitted', is_draft: false,
+      form_id: form._id || form.id, 
+      responses: answers,
+      status: 'submitted', 
+      is_draft: false,
       nomination_id: nomination?.id || nomination?._id,
+      nomination_token: effectiveToken,
       score: sc?.score ?? null,
-      user_email: user.id === 'anon' ? email : user.email,
-      user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
-      school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
+      user_email: currentEmail,
+      user_name: user.id === 'anon' ? (nomination?.teacher_name || currentEmail?.split('@')[0]) : user.name,
+      school_code: schoolCode || nomination?.school_code || (user.id !== 'anon' ? user.school_code : '')
     };
+    
+    console.log('[FormFill] Submitting payload:', payload);
     try {
       let saved: any;
       if (submissionId) saved = await api.put('/submissions', { id: submissionId, ...payload });
       else saved = await api.post('/submissions', payload);
+      
       const realId = saved?.data?._id || saved?.data?.id || saved?._id || saved?.id || submissionId || 'DONE';
+      
+      const nomId = nomination?.id || nomination?._id;
+      if (nomId) {
+        try {
+          await api.put(`/nominations/${nomId}`, { id: nomId, status: 'completed' });
+        } catch (e) {
+          console.warn('Failed to update nomination status:', e);
+        }
+      }
+      
       setReceipt({ id: realId, score: sc?.score, max: sc?.max });
       setStep('submitted');
     } catch (err: any) {
+      console.error('[FormFill] Submission error:', err);
       setError(err.message || 'Failed to submit. Please try again.');
     }
   };
@@ -444,7 +472,9 @@ export default function FormFill({ user }: { user: User }) {
 
   if (!form || !currentSection) return null;
 
-  const authMode = form.settings.auth_mode || 'login';
+  const authModeRaw = String(form.settings.auth_mode || '').toLowerCase();
+  const teacherLoginRaw = String(form.settings.teacher_login || '').toLowerCase();
+  const authMode = authModeRaw || (teacherLoginRaw === 'direct' ? 'anonymous' : teacherLoginRaw === 'otp' ? 'otp' : 'login');
   const isAnon = user.id === 'anon';
 
   // Render OTP verification screen if required

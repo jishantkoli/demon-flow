@@ -52,6 +52,16 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
   const location = useLocation();
   const nav = getNav(user.role);
 
+  // CRITICAL: Bypass layout for anonymous users on public fill routes
+  const isPublicFill = location.pathname.startsWith('/fill/');
+  if (user.id === 'anon' || isPublicFill) {
+    return (
+      <div className="min-h-screen bg-canvas">
+        <main className="flex-1 overflow-x-hidden">{children}</main>
+      </div>
+    );
+  }
+
   const loadNotifications = () => {
     if (!user?.id || user.id === 'anon') {
       setNotifications([]);
@@ -113,6 +123,14 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
   const breadcrumbs = location.pathname.split('/').filter(Boolean);
   const match = user.email ? user.email.match(/^head\.([a-z0-9]+)@/i) : null;
   const schoolCode = user.school_code || (match ? match[1]?.toUpperCase() : undefined);
+
+  if (!user || user.id === 'anon') {
+    return (
+      <div className="min-h-screen bg-canvas">
+        <main className="flex-1 overflow-x-hidden">{children}</main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface text-fg flex">

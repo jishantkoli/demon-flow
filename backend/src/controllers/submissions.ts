@@ -34,50 +34,43 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Form not found' });
     }
 
+    // ─── NOMINATION LINKING (3-layer: ID → Token → Email) ───────────────
     let linkedNomination: any = null;
+
+    // Layer 1: Direct nomination ID (if frontend sent it)
     if (rawNominationId) {
-      linkedNomination = await Nomination.findById(rawNominationId);
-      if (!linkedNomination) {
-        return res.status(404).json({ error: 'Linked nomination not found' });
-      }
-      if (linkedNomination.form_id?.toString() !== form._id.toString()) {
-        return res.status(400).json({ error: 'Linked nomination does not belong to this form' });
+      try {
+        linkedNomination = await Nomination.findById(rawNominationId);
+      } catch (e) {
+        console.log('Nomination ID lookup failed (invalid ID format):', rawNominationId);
       }
     }
 
-    // Prevention of duplicate submissions/drafts:
-    // If no ID is provided, check if a draft already exists for this form and email
-    const userEmail = req.body.user_email || req.user?.email;
-    if (userEmail && (req.body.is_draft || req.body.status === 'draft')) {
-      const existingDraft = await Submission.findOne({
-        formId: form._id,
-        userEmail: { $regex: new RegExp(`^${userEmail}$`, 'i') },
-        isDraft: true
+    // Layer 2: Nomination token from URL (MOST RELIABLE - 1 token = 1 nomination)
+    const nominationToken = req.body.nomination_token;
+    if (!linkedNomination && nominationToken) {
+      linkedNomination = await Nomination.findOne({ unique_token: nominationToken });
+      if (linkedNomination) {
+        console.log('✅ Nomination linked via TOKEN:', nominationToken, '→', linkedNomination._id);
+      }
+    }
+
+    // Layer 3: Email + form_id fallback (works for OTP and login flows)
+    const searchEmail = req.body.user_email || req.user?.email;
+    if (!linkedNomination && searchEmail) {
+      linkedNomination = await Nomination.findOne({
+        form_id: form._id,
+        teacher_email: { $regex: new RegExp(`^${searchEmail.trim()}$`, 'i') }
       });
-      if (existingDraft) {
-        // Update the existing draft instead of creating a new one
-        existingDraft.responses = responses;
-        existingDraft.userName = req.body.user_name || existingDraft.userName;
-        existingDraft.schoolCode = req.body.school_code || existingDraft.schoolCode;
-        await existingDraft.save();
-        return res.status(200).json({ ...existingDraft.toObject(), id: existingDraft._id, is_draft: true });
+      if (linkedNomination) {
+        console.log('✅ Nomination linked via EMAIL:', searchEmail, '→', linkedNomination._id);
       }
     }
 
-    // Check authorization for teachers
-    if (req.user && req.user.role === 'teacher') {
-      if (!linkedNomination) {
-        linkedNomination = await Nomination.findOne({
-          form_id: form._id,
-          teacher_email: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
-        });
-      }
-      const isTeacherMatch = linkedNomination
-        ? new RegExp(`^${req.user.email}$`, 'i').test(linkedNomination.teacher_email || '')
-        : false;
-      if (!linkedNomination || !isTeacherMatch) {
-        return res.status(403).json({ error: 'You are not authorized to submit this form. Please contact your school functionary.' });
-      }
+    if (linkedNomination) {
+      console.log('✅ Final linked nomination:', linkedNomination._id, 'teacher:', linkedNomination.teacher_email);
+    } else {
+      console.log('ℹ️ No nomination found for this submission (form:', form._id, 'email:', searchEmail, ')');
     }
 
     // Expiration check
@@ -136,11 +129,12 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
 
     const submissionData: any = {
       formId: form._id,
+      nominationId: linkedNomination?._id || null,
+      nominationToken: req.body.nomination_token || null,
       userId: req.user?._id || null,
       userName: req.body.user_name || req.user?.profile?.fullName,
-      userEmail: req.body.user_email || req.user?.email,
-      schoolCode: req.body.school_code || req.user?.profile?.schoolCode,
-      nominationId: linkedNomination?._id || undefined,
+      userEmail: req.body.user_email || req.user?.email || linkedNomination?.teacher_email,
+      schoolCode: req.body.school_code || linkedNomination?.school_code || req.user?.profile?.schoolCode,
       formTitle: req.body.form_title || form.title,
       responses,
       score,
@@ -152,12 +146,18 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       }
     };
 
-    // If we have a nomination, use its ID as the submission ID to make them "same"
-    if (linkedNomination?._id) {
-      submissionData._id = linkedNomination._id;
-    }
+    console.log('📋 Submission data:', { formId: submissionData.formId, nominationId: submissionData.nominationId, userEmail: submissionData.userEmail, schoolCode: submissionData.schoolCode });
 
     const submission = await Submission.create(submissionData);
+
+    // Update nomination status to 'completed' after successful non-draft submission
+    if (linkedNomination && !submissionData.isDraft) {
+      try {
+        await Nomination.findByIdAndUpdate(linkedNomination._id, { status: 'completed' });
+      } catch (e) {
+        console.error('Failed to update nomination status:', e);
+      }
+    }
 
     res.status(201).json({ ...submission.toObject(), id: submission._id, is_draft: submission.isDraft, school_code: submission.schoolCode });
   } catch (err: any) {
@@ -180,6 +180,9 @@ export const updateSubmission = async (req: AuthRequest, res: Response) => {
     };
     if (req.body.nomination_id || req.body.nominationId) {
       payload.nominationId = req.body.nomination_id || req.body.nominationId;
+    }
+    if (req.body.nomination_token !== undefined) {
+      payload.nominationToken = req.body.nomination_token;
     }
 
     const submission = await Submission.findByIdAndUpdate(id, payload, { new: true });
@@ -231,6 +234,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
       .populate('nominationId')
       .sort({ createdAt: -1 });
       
+<<<<<<< HEAD
     const mapped = submissions.map(s => {
       const obj = s.toObject();
       return {
@@ -247,6 +251,21 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
         is_draft: obj.isDraft
       };
     });
+=======
+    const mapped = submissions.map(s => ({
+      ...s.toObject(),
+      id: s._id,
+      form_id: s.formId,
+      user_id: s.userId,
+      user_name: s.userName,
+      user_email: s.userEmail,
+      nomination_id: s.nominationId,
+      nomination_token: s.nominationToken,
+      form_title: s.formTitle,
+      submitted_at: s.createdAt,
+      is_draft: s.isDraft
+    }));
+>>>>>>> 4aae783baf246c4f87ef139bb155e50d31bcadd0
       
     res.status(200).json(mapped);
   } catch (err: any) {

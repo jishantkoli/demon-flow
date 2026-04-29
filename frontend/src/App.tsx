@@ -80,8 +80,10 @@ function AppContent() {
     );
   }
 
-  // Define public routes
-  const isPublicFill = window.location.pathname.startsWith('/fill/');
+  // Define public routes: explicitly /fill/ or any form route with a nomination token
+  const isPublicFill = 
+    window.location.pathname.startsWith('/fill/') || 
+    (window.location.pathname.includes('/forms/') && window.location.search.includes('token='));
 
   if (!user && !isPublicFill) {
     return <Login onLogin={refreshUser} />;

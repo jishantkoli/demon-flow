@@ -18,6 +18,7 @@ import reviewRoutes from './routes/reviews.js';
 import userRoutes from './routes/users.js';
 import settingsRoutes from './routes/settings.js';
 import uploadRoutes from './routes/uploads.js';
+import commentRoutes from './routes/comments.js';
 
 
 
@@ -64,6 +65,7 @@ app.use('/api/v1', reviewRoutes); // Handles /review-levels, /shortlist, /review
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/uploads', uploadRoutes);
+app.use('/api/v1/comments', commentRoutes);
 
 // Health check
 const dbStateLabel = (readyState: number): string => {
