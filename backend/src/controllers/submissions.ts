@@ -49,9 +49,16 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     // Layer 2: Nomination token from URL (MOST RELIABLE - 1 token = 1 nomination)
     const nominationToken = req.body.nomination_token;
     if (!linkedNomination && nominationToken) {
+      // First try exact match on unique_token
       linkedNomination = await Nomination.findOne({ unique_token: nominationToken });
+      // If not found, try matching by token field (some systems store it as just 'token')
+      if (!linkedNomination) {
+        linkedNomination = await Nomination.findOne({ token: nominationToken });
+      }
       if (linkedNomination) {
         console.log('✅ Nomination linked via TOKEN:', nominationToken, '→', linkedNomination._id);
+      } else {
+        console.log('❌ Token not found in any nomination:', nominationToken);
       }
     }
 
@@ -168,9 +175,40 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
 export const updateSubmission = async (req: AuthRequest, res: Response) => {
   try {
     let { id, is_draft, responses } = req.body;
-    
+
     if (responses && !Array.isArray(responses)) {
       responses = Object.entries(responses).map(([fieldId, value]) => ({ fieldId, value }));
+    }
+
+    // ─── NOMINATION LINKING ON UPDATE (if not already linked) ─────────────
+    const existingSub = await Submission.findById(id);
+    let nominationId = req.body.nomination_id || req.body.nominationId;
+    let nominationToken = req.body.nomination_token;
+
+    // Only try to link if not already linked
+    if (!existingSub?.nominationId && (nominationId || nominationToken)) {
+      let linkedNom: any = null;
+
+      // Try by nomination ID first
+      if (nominationId) {
+        try {
+          linkedNom = await Nomination.findById(nominationId);
+        } catch {}
+      }
+
+      // Try by token
+      if (!linkedNom && nominationToken) {
+        linkedNom = await Nomination.findOne({ unique_token: nominationToken });
+        if (!linkedNom) {
+          linkedNom = await Nomination.findOne({ token: nominationToken });
+        }
+      }
+
+      if (linkedNom) {
+        console.log('✅ Nomination linked during update:', linkedNom._id);
+        nominationId = linkedNom._id;
+        nominationToken = linkedNom.unique_token || nominationToken;
+      }
     }
 
     const payload: any = {
@@ -178,15 +216,25 @@ export const updateSubmission = async (req: AuthRequest, res: Response) => {
       responses: responses || req.body.responses,
       isDraft: is_draft !== undefined ? is_draft : req.body.isDraft
     };
-    if (req.body.nomination_id || req.body.nominationId) {
-      payload.nominationId = req.body.nomination_id || req.body.nominationId;
+    if (nominationId) {
+      payload.nominationId = nominationId;
     }
-    if (req.body.nomination_token !== undefined) {
-      payload.nominationToken = req.body.nomination_token;
+    if (nominationToken !== undefined) {
+      payload.nominationToken = nominationToken;
     }
 
     const submission = await Submission.findByIdAndUpdate(id, payload, { new: true });
     if (!submission) return res.status(404).json({ error: 'Submission not found' });
+
+    // Update nomination status if submitting (not drafting)
+    if (submission.nominationId && is_draft === false) {
+      try {
+        await Nomination.findByIdAndUpdate(submission.nominationId, { status: 'completed' });
+      } catch (e) {
+        console.error('Failed to update nomination status:', e);
+      }
+    }
+
     res.status(200).json({ ...submission.toObject(), id: submission._id, is_draft: submission.isDraft });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

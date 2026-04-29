@@ -404,7 +404,6 @@ export default function FormFill({ user }: { user: User }) {
       school_code: schoolCode || nomination?.school_code || (user.id !== 'anon' ? user.school_code : '')
     };
     
-    const effectiveToken = nominationToken || nomination?.unique_token || urlToken;
     try {
       let saved: any;
       if (submissionId) saved = await api.put('/submissions', { id: submissionId, ...payload });
