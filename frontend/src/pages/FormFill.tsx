@@ -184,8 +184,9 @@ export default function FormFill({ user }: { user: User }) {
       if (res.status !== 'active') { setStep('error'); setError('This form is not active.'); return; }
       if (res.expires_at && new Date(res.expires_at) < new Date()) { setStep('error'); setError('This form has closed.'); return; }
 
-      if (authMode === 'otp' && isAnon && !otpVerified) {
-        setStep('filling');
+      // If OTP required but not logged in/verified, STOP HERE and wait for render-level redirect
+      if (authMode === 'otp' && (isAnon || user.role === 'functionary') && !otpVerified) {
+        setStep('loading'); // Stay in loading state, render will handle redirect
         return;
       }
 
