@@ -282,7 +282,6 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
       .populate('nominationId')
       .sort({ createdAt: -1 });
       
-<<<<<<< HEAD
     const mapped = submissions.map(s => {
       const obj = s.toObject();
       return {
@@ -293,27 +292,13 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
         user_name: obj.userName,
         user_email: obj.userEmail,
         nomination_id: obj.nominationId,
-        unique_token: (obj.nominationId as any)?.unique_token || null,
+        nomination_token: obj.nominationToken || (obj.nominationId as any)?.unique_token || null,
+        unique_token: obj.nominationToken || (obj.nominationId as any)?.unique_token || null,
         form_title: obj.formTitle,
         submitted_at: obj.createdAt,
         is_draft: obj.isDraft
       };
     });
-=======
-    const mapped = submissions.map(s => ({
-      ...s.toObject(),
-      id: s._id,
-      form_id: s.formId,
-      user_id: s.userId,
-      user_name: s.userName,
-      user_email: s.userEmail,
-      nomination_id: s.nominationId,
-      nomination_token: s.nominationToken,
-      form_title: s.formTitle,
-      submitted_at: s.createdAt,
-      is_draft: s.isDraft
-    }));
->>>>>>> 4aae783baf246c4f87ef139bb155e50d31bcadd0
       
     res.status(200).json(mapped);
   } catch (err: any) {
