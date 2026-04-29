@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { User } from '../lib/auth';
 import { api } from '../lib/api';
+import { copyToClipboard } from '../lib/utils';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
@@ -188,9 +189,11 @@ export default function Nominations({ user }: { user: User }) {
     }
   };
 
-  const copyLink = (nom: any) => {
+  const copyLink = async (nom: any) => {
     const link = `${window.location.origin}/fill/${nom.form_id}?token=${nom.unique_token}&sc=${nom.school_code}`;
-    navigator.clipboard.writeText(link).then(() => alert('Link copied!'));
+    const success = await copyToClipboard(link);
+    if (success) alert('Link copied!');
+    else alert('Failed to copy link. Please select and copy manually.');
   };
 
   const columns = [

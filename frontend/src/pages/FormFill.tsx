@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   GraduationCap, Send, Save, CheckCircle2, Clock, AlertCircle,
-  Loader2, ChevronLeft, ChevronRight, Upload, Wifi, WifiOff
+  Loader2, ChevronLeft, ChevronRight, Upload, Wifi, WifiOff,
+  Inbox
 } from 'lucide-react';
 import { api } from '../lib/api';
 

@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001/api/v1`;
 
 async function request(url: string, options?: RequestInit) {
   // Global block for non-existent /comments endpoint to stop 404 logs/errors

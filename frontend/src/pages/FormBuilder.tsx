@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Pencil, Settings, History, Download, Trash, AlertCircle, PlusCircle, Check
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { copyToClipboard } from '../lib/utils';
 
 // ─── Types (matching App 1 exactly) ───────────────────────────────────────────
 type FieldType = 'text' | 'textarea' | 'number' | 'email' | 'phone' | 'date' | 'dropdown' | 'radio' | 'checkbox' | 'file' | 'mcq';
@@ -193,12 +194,10 @@ export default function FormBuilder() {
 
   const publicUrl = `${location.origin}/fill/${id || 'unsaved'}`;
   const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(publicUrl);
+    const success = await copyToClipboard(publicUrl);
+    if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch (e) {
-      console.error('Failed to copy link', e);
     }
   };
 
