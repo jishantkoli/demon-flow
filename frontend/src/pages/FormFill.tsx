@@ -404,13 +404,13 @@ export default function FormFill({ user }: { user: User }) {
       school_code: schoolCode || nomination?.school_code || (user.id !== 'anon' ? user.school_code : '')
     };
     
-    console.log('[FormFill] Submitting payload:', payload);
+    const effectiveToken = nominationToken || nomination?.unique_token || urlToken;
     try {
       let saved: any;
       if (submissionId) saved = await api.put('/submissions', { id: submissionId, ...payload });
       else saved = await api.post('/submissions', payload);
       
-      const realId = saved?.data?._id || saved?.data?.id || saved?._id || saved?.id || submissionId || 'DONE';
+      const realId = effectiveToken || saved?.data?._id || saved?.data?.id || saved?._id || saved?.id || submissionId || 'DONE';
       
       const nomId = nomination?.id || nomination?._id;
       if (nomId) {
@@ -459,7 +459,7 @@ export default function FormFill({ user }: { user: User }) {
           <div className="font-display text-2xl font-bold text-ink">Submission Complete!</div>
           <p className="text-muted mt-1">Your response for "{form.title}" has been recorded.</p>
           <div className="mt-5 bg-canvas rounded-xl p-4 text-left text-sm space-y-1">
-            <div className="flex justify-between"><span className="text-muted">Receipt #</span><span className="font-mono">R-{receipt.id.slice(-6).toUpperCase()}</span></div>
+            <div className="flex justify-between"><span className="text-muted">Token ID</span><span className="text-xs font-mono text-muted">{receipt.id}</span></div>
             <div className="flex justify-between"><span className="text-muted">Form</span><span>{form.title}</span></div>
             <div className="flex justify-between"><span className="text-muted">Submitted</span><span>{fmtDate(new Date().toISOString())}</span></div>
             {receipt.max ? <div className="flex justify-between"><span className="text-muted">Score</span><span className="font-semibold">{receipt.score}/{receipt.max}</span></div> : null}
