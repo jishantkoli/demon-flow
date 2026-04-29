@@ -472,34 +472,38 @@ export default function Submissions({ user }: { user: User }) {
                 <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   School functionary nomination is not linked to this submission.
                 </div>
-                {/* Fallback to show teacher responses anyway */}
-                <div className="space-y-4 mt-4">
-                  <h4 className="text-sm font-bold">Teacher Form Responses</h4>
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                    {Object.entries(responses).map(([key, val]) => (
-                      <div key={key} className="space-y-1 pb-2 border-b border-slate-200 last:border-0">
-                        <p className="text-[10px] text-muted font-bold uppercase">{fieldMap[key]?.label || key}</p>
-                        <p className="text-sm font-semibold">{String(val)}</p>
-                      </div>
-                    ))}
+                {/* Fallback to show teacher responses anyway - Only for Admin/Reviewers */}
+                {canSeeScore && (
+                  <div className="space-y-4 mt-4">
+                    <h4 className="text-sm font-bold">Teacher Form Responses</h4>
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                      {Object.entries(responses).map(([key, val]) => (
+                        <div key={key} className="space-y-1 pb-2 border-b border-slate-200 last:border-0">
+                          <p className="text-[10px] text-muted font-bold uppercase">{fieldMap[key]?.label || key}</p>
+                          <p className="text-sm font-semibold">{String(val)}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
-            {/* Comments */}
-            <div><h4 className="text-sm font-bold mb-2 flex items-center gap-2"><MessageSquare size={14} /> Comments ({comments.length})</h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {comments.map(c => (<div key={c.id} className="bg-surface rounded-xl p-3">
-                  <div className="flex items-center gap-2 mb-1"><span className="text-xs font-bold">{c.user_name}</span><span className="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-card border border-border capitalize">{c.user_role}</span><span className="text-[10px] text-muted ml-auto">{new Date(c.created_at).toLocaleString()}</span></div>
-                  <p className="text-sm">{c.content}</p></div>))}
+            {/* Comments - Only for Admin/Reviewers */}
+            {canSeeScore && (
+              <div><h4 className="text-sm font-bold mb-2 flex items-center gap-2"><MessageSquare size={14} /> Comments ({comments.length})</h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {comments.map(c => (<div key={c.id} className="bg-surface rounded-xl p-3">
+                    <div className="flex items-center gap-2 mb-1"><span className="text-xs font-bold">{c.user_name}</span><span className="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-card border border-border capitalize">{c.user_role}</span><span className="text-[10px] text-muted ml-auto">{new Date(c.created_at).toLocaleString()}</span></div>
+                    <p className="text-sm">{c.content}</p></div>))}
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <input value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Add a comment..." onKeyDown={e => e.key === 'Enter' && addComment()}
+                    className="flex-1 px-3 py-2 rounded-xl border border-border bg-surface text-sm outline-none focus:border-primary" />
+                  <button onClick={addComment} className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover min-h-[44px]"><Send size={14} /></button>
+                </div>
               </div>
-              <div className="flex gap-2 mt-3">
-                <input value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Add a comment..." onKeyDown={e => e.key === 'Enter' && addComment()}
-                  className="flex-1 px-3 py-2 rounded-xl border border-border bg-surface text-sm outline-none focus:border-primary" />
-                <button onClick={addComment} className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover min-h-[44px]"><Send size={14} /></button>
-              </div>
-            </div>
+            )}
           </div>
         )}
       </Modal>
