@@ -30,7 +30,7 @@ app.use(helmet({
   contentSecurityPolicy: false
 }));
 const allowedOrigins = process.env.FRONTEND_URL
-  ? [process.env.FRONTEND_URL]
+  ? process.env.FRONTEND_URL.split(',')
   : true; // Allow all in development
 app.use(cors({
   origin: allowedOrigins,
