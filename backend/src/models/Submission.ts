@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 
 const submissionSchema = new mongoose.Schema({
   formId: { type: mongoose.Schema.Types.ObjectId, ref: 'Form', required: true },
+  nominationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Nomination' },
+  nominationToken: String,
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   userName: String,
   userEmail: String,

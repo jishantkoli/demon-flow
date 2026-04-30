@@ -13,28 +13,34 @@ export default function Dashboard({ user }: { user: User }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchData = async () => {
       try {
-        const [s, subs] = await Promise.all([api.get('/stats'), api.get('/submissions')]);
-        setStats(s);
+        const [s, subs] = await Promise.all([
+          api.get('/stats').catch(() => ({})),
+          api.get('/submissions').catch(() => [])
+        ]);
+        setStats(s || {});
         setRecentSubs(Array.isArray(subs) ? subs.slice(0, 6) : []);
       } catch (err) {
         console.error('Error fetching dashboard stats:', err);
+        setStats({});
+        setRecentSubs([]);
       }
     };
 
     const fetchLogs = async () => {
-      if (user.role !== 'admin') return;
+      if (user?.role !== 'admin') return;
       try {
-        const logs = await api.get('/audit-logs?limit=10');
+        const logs = await api.get('/audit-logs?limit=10').catch(() => []);
         setRecentLogs(Array.isArray(logs) ? logs.slice(0, 10) : []);
       } catch (err) {
         console.error('Error fetching audit logs:', err);
+        setRecentLogs([]);
       }
     };
 
-    Promise.all([fetchStats(), fetchLogs()]).finally(() => setLoading(false));
-  }, [user.role]);
+    Promise.all([fetchData(), fetchLogs()]).finally(() => setLoading(false));
+  }, [user?.role]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div>;
   const s = stats || {};
@@ -84,7 +90,7 @@ export default function Dashboard({ user }: { user: User }) {
                 <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{(sub.user_name || 'U').charAt(0)}</div>
                 <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{sub.form_title || `Form #${sub.form_id}`}</p><p className="text-[11px] text-slate-500">{sub.user_name || sub.user_email || 'Anonymous'}</p></div>
                 <StatusBadge status={sub.status} />
-                {sub.score != null && <span className="text-xs font-bold text-primary">{sub.score}%</span>}
+                {sub.score != null && <span className="text-xs font-bold text-primary">{typeof sub.score === 'object' ? sub.score?.percentage : sub.score}%</span>}
                 <span className="text-[10px] text-slate-500 hidden sm:block">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : ''}</span>
               </div>
             ))}

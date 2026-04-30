@@ -101,7 +101,10 @@ export default function FormView({ user }: { user: User }) {
             <StatusBadge status={submission.status} size="xs" />
             {/* Score: only admin and reviewer see it */}
             {submission.score != null && viewMode !== 'user' && (
-              <span className="bg-emerald-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1"><Award size={10} /> Score: {submission.score}%</span>
+              <span className="bg-emerald-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                <Award size={10} /> 
+                Score: {typeof submission.score === 'object' ? submission.score?.percentage : submission.score}%
+              </span>
             )}
           </div>
         </div>

@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import path from 'path';
 import { rateLimit } from 'express-rate-limit';
 import mongoose from 'mongoose';
 
@@ -17,6 +18,7 @@ import reviewRoutes from './routes/reviews.js';
 import userRoutes from './routes/users.js';
 import settingsRoutes from './routes/settings.js';
 import uploadRoutes from './routes/uploads.js';
+import commentRoutes from './routes/comments.js';
 
 
 
@@ -28,7 +30,7 @@ app.use(helmet({
   contentSecurityPolicy: false
 }));
 const allowedOrigins = process.env.FRONTEND_URL
-  ? [process.env.FRONTEND_URL]
+  ? process.env.FRONTEND_URL.split(',')
   : true; // Allow all in development
 app.use(cors({
   origin: allowedOrigins,
@@ -41,12 +43,15 @@ app.use(morgan('dev'));
 // Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'development' ? 10000 : 100, // Relaxed for development
-  message: 'Too many requests from this IP, please try again after 15 minutes'
+  max: process.env.NODE_ENV === 'development' ? 10000 : 500, // 500 in prod (dashboard uses ~5 calls/load)
+  message: 'Too many requests from this IP, please try again after 15 minutes',
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use('/api', limiter);
 
-// Note: File uploads now served via Cloudinary — no local static folder needed
+// Static fallback for local uploads (used when Cloudinary is unavailable)
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Routes
 app.use('/api/v1/auth', authRoutes);
@@ -60,6 +65,7 @@ app.use('/api/v1', reviewRoutes); // Handles /review-levels, /shortlist, /review
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/uploads', uploadRoutes);
+app.use('/api/v1/comments', commentRoutes);
 
 // Health check
 const dbStateLabel = (readyState: number): string => {
@@ -93,6 +99,11 @@ app.get('/api/v1', (req, res) => {
     status: 'ok',
     health: '/health'
   });
+});
+
+// Dummy endpoint to prevent 404s from older frontend clients or unblocked calls requesting comments
+app.get('/api/v1/comments', (req, res) => {
+  res.status(200).json([]);
 });
 
 // Global error handler

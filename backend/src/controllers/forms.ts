@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { Form } from '../models/Form.js';
+import { Nomination } from '../models/Nomination.js';
 import { AuthRequest } from '../middleware/auth.js';
 
 export const getForms = async (req: AuthRequest, res: Response) => {
@@ -15,13 +16,37 @@ export const getForms = async (req: AuthRequest, res: Response) => {
       }
       
       if (!form) return res.status(404).json({ error: 'Form not found' });
+
+      // If user is a teacher, verify they are nominated for this form
+      if (req.user?.role === 'teacher') {
+        const nomination = await Nomination.findOne({
+          form_id: form._id,
+          teacher_email: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
+        });
+        if (!nomination) {
+          return res.status(403).json({ error: 'You are not authorized to access this form. Please contact your school functionary for assignment.' });
+        }
+      }
+
       return res.status(200).json({ ...form.toObject(), id: form._id });
     }
 
     if (status) query.status = status;
     
-    // Admins see all, reviewers see active
-    if (req.user.role === 'reviewer') query.status = 'active';
+    // Admins see all, others see active by default
+    if (req.user?.role !== 'admin') {
+      query.status = 'active';
+    }
+
+    // Teachers only see forms they are nominated for
+    if (req.user?.role === 'teacher') {
+      const userEmail = req.user.email;
+      const nominations = await Nomination.find({ 
+        teacher_email: { $regex: new RegExp(`^${userEmail}$`, 'i') } 
+      });
+      const assignedFormIds = nominations.map(n => n.form_id);
+      query._id = { $in: assignedFormIds };
+    }
 
     const forms = await Form.find(query).sort({ createdAt: -1 });
     const mapped = forms.map(f => ({ 

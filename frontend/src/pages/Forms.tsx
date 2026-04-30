@@ -26,6 +26,7 @@ const typeColors: Record<string, { bg: string; text: string; border: string }> =
 export default function Forms({ user }: { user: User }) {
   const navigate = useNavigate();
   const [forms, setForms] = useState<any[]>([]);
+  const [teacherNominationLinks, setTeacherNominationLinks] = useState<Record<string, { token?: string; schoolCode?: string }>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -52,10 +53,37 @@ export default function Forms({ user }: { user: User }) {
   };
   useEffect(() => { fetchForms(); }, []);
 
+  useEffect(() => {
+    const loadTeacherNominationLinks = async () => {
+      if (user.role !== 'teacher' || !user.email) {
+        setTeacherNominationLinks({});
+        return;
+      }
+      try {
+        const noms: any[] = await api.get(`/nominations?teacher_email=${encodeURIComponent(user.email)}`);
+        const byForm: Record<string, { token?: string; schoolCode?: string }> = {};
+        (Array.isArray(noms) ? noms : []).forEach((n: any) => {
+          const formId = String(n.form_id || n.formId || '');
+          if (!formId) return;
+          const token = n.unique_token || n.nomination_token || n.nominationToken;
+          byForm[formId] = { token, schoolCode: n.school_code || n.schoolCode };
+        });
+        setTeacherNominationLinks(byForm);
+      } catch (err) {
+        console.error('Failed to load teacher nomination links:', err);
+        setTeacherNominationLinks({});
+      }
+    };
+    loadTeacherNominationLinks();
+  }, [user.role, user.email]);
+
   const isAdmin = user.role === 'admin';
 
   // Filter
   const filtered = forms.filter(f => {
+    // Functionaries should only see nomination-enabled forms.
+    if (user.role === 'functionary' && f.form_type !== 'nomination') return false;
+
     const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
     let effectiveStatus = f.status;
     if (isExpired) effectiveStatus = 'expired';
@@ -125,28 +153,33 @@ export default function Forms({ user }: { user: User }) {
   };
 
   const openPreviewModal = (row: any) => {
+    if (!row) return;
     setActiveForm(row);
     let f: FormField[] = [];
     try {
       const schema = row.form_schema || row.schema;
       if (schema) {
         const parsed = typeof schema === 'string' ? JSON.parse(schema) : schema;
-        if (parsed.sections) {
+        if (parsed && parsed.sections) {
           // Map backend sections to FormRenderer sections
           f = parsed.sections.map((s: any) => ({
-            id: s.id,
+            id: s.id || Math.random().toString(36).substr(2, 9),
             type: 'section',
-            label: s.title,
+            label: s.title || s.label || 'Section',
             children: s.fields || [],
             section_type: row.form_type || row.formType || 'normal'
           }));
         }
       }
       
-      if (f.length === 0) {
-        f = typeof row.fields === 'string' ? JSON.parse(row.fields) : (row.fields || []);
+      if (f.length === 0 && row.fields) {
+        const fields = typeof row.fields === 'string' ? JSON.parse(row.fields) : row.fields;
+        f = Array.isArray(fields) ? fields : [];
       }
-    } catch {}
+    } catch (err) {
+      console.error('Error parsing form preview data:', err);
+      f = [];
+    }
     setBuilderFields(f);
     setShowPreview(true);
     setOpenMenu(null);
@@ -189,71 +222,67 @@ export default function Forms({ user }: { user: User }) {
         )}
       </div>
 
-      {/* Admin: Type quick-create cards */}
-      {isAdmin && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {Object.entries(typeLabels).map(([key, label]) => {
-            const Icon = typeIcons[key];
-            const c = typeColors[key];
-            const count = forms.filter(f => f.form_type === key).length;
-            return (
-              <button key={key} onClick={() => openCreateModal(key)}
-                className={`p-3.5 rounded-2xl border-2 ${c.border} ${c.bg} hover:shadow-md transition-all text-left group`}>
-                <Icon size={20} className={`${c.text} mb-1.5 group-hover:scale-110 transition-transform`} />
-                <p className="text-xs font-bold text-slate-900">{label}</p>
-                <p className="text-lg font-bold mt-1 text-slate-900">{count}</p>
+      {/* Tabs + Search + Filter */}
+      {(forms.length > 0 || isAdmin) && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+            {(['active', 'draft', 'expired'] as const)
+              .filter(t => !((user.role === 'functionary' || user.role === 'teacher') && t === 'draft'))
+              .map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${
+                  tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                }`}>
+                {t} <span className="ml-1 opacity-60">({
+                  forms.filter(f => {
+                    const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
+                    let finalStatus = f.status;
+                    if (isExpired) finalStatus = 'expired';
+                    return finalStatus === t;
+                  }).length
+                })</span>
               </button>
-            );
-          })}
+            ))}
+          </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 min-w-[180px]">
+              <Search size={14} className="text-slate-500 flex-shrink-0" />
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search forms..."
+                className="bg-transparent text-sm outline-none w-full placeholder-muted text-slate-900" />
+            </div>
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+              className="text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 outline-none">
+              <option value="">All Types</option>
+              {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
         </div>
       )}
-
-      {/* Tabs + Search + Filter */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
-          {(['active', 'draft', 'expired'] as const)
-            .filter(t => !((user.role === 'functionary' || user.role === 'teacher') && t === 'draft'))
-            .map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${
-                tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
-              }`}>
-              {t} <span className="ml-1 opacity-60">({
-                forms.filter(f => {
-                  const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
-                  let effectiveStatus = f.status;
-                  if (isExpired) effectiveStatus = t === 'expired' ? 'expired' : f.status; // Correctly count for the tab
-                  
-                  // Re-apply the same logic as the filter for consistency
-                  let finalStatus = f.status;
-                  if (isExpired) finalStatus = 'expired';
-                  return finalStatus === t;
-                }).length
-              })</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex-1" />
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 min-w-[180px]">
-            <Search size={14} className="text-slate-500 flex-shrink-0" />
-            <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search forms..."
-              className="bg-transparent text-sm outline-none w-full placeholder-muted text-slate-900" />
-          </div>
-          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-            className="text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 outline-none">
-            <option value="">All Types</option>
-            {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-        </div>
-      </div>
 
       {/* Form Cards Grid */}
       {filtered.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
-          <FileText size={40} className="mx-auto text-slate-500 mb-3" />
-          <p className="text-sm text-slate-500 font-medium">No {tab} forms found</p>
-          {isAdmin && tab === 'active' && <p className="text-xs text-slate-500 mt-1">Create a form and set status to Active</p>}
+          <div className="max-w-md mx-auto px-6">
+            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FileText size={32} className="text-slate-400" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 mb-2">
+              {user.role === 'teacher' ? 'No Forms Assigned' : `No ${tab} forms found`}
+            </h3>
+            <p className="text-sm text-slate-500 mb-6">
+              {user.role === 'teacher' 
+                ? "You don't have any forms assigned to you at the moment. Please contact your school functionary if you believe this is an error."
+                : tab === 'active' 
+                  ? "There are no active forms available right now."
+                  : `There are no forms in the ${tab} category.`}
+            </p>
+            {isAdmin && tab === 'active' && (
+              <button onClick={() => openCreateModal()} className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover shadow-sm transition-all">
+                <Plus size={16} /> Create Your First Form
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -333,7 +362,18 @@ export default function Forms({ user }: { user: User }) {
                   {/* Actions */}
                   <div className="flex gap-2 mt-4">
                     {canFill && user.role !== 'functionary' && (
-                      <button onClick={() => user.role === 'teacher' ? navigate(`/fill/${row.id}`) : openPreviewModal(row)}
+                      <button onClick={() => {
+                        if (user.role === 'teacher') {
+                          const linkMeta = teacherNominationLinks[String(row.id)] || {};
+                          const params = new URLSearchParams();
+                          if (linkMeta.token) params.set('token', linkMeta.token);
+                          if (linkMeta.schoolCode) params.set('sc', linkMeta.schoolCode);
+                          const qs = params.toString();
+                          navigate(`/fill/${row.id}${qs ? `?${qs}` : ''}`);
+                          return;
+                        }
+                        openPreviewModal(row);
+                      }}
                         className="flex-1 py-2.5 bg-accent-green text-white rounded-xl text-sm font-bold hover:bg-accent-green-hover transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm">
                         {user.role === 'teacher' ? <Play size={14} /> : <Eye size={14} />}
                         {user.role === 'teacher' ? 'Fill Form' : 'Preview Form'}

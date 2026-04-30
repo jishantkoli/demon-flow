@@ -27,8 +27,20 @@ export const createUser = async (req: AuthRequest, res: Response) => {
       const usersToCreate = await Promise.all(users.map(async (u: any) => {
         const password = u.password_hash || Math.random().toString(36).slice(-8);
         const salt = await bcrypt.genSalt(10);
-        u.passwordHash = await bcrypt.hash(password, salt);
-        return u;
+        const passwordHash = await bcrypt.hash(password, salt);
+        
+        return {
+          email: u.email,
+          passwordHash,
+          role: u.role || 'teacher',
+          profile: {
+            fullName: u.name || 'User',
+            phone: u.phone || '',
+            schoolName: u.school_name || '',
+            district: u.district || ''
+          },
+          isActive: true
+        };
       }));
       const created = await User.insertMany(usersToCreate);
       return res.status(201).json({ success: true, count: created.length });
@@ -64,11 +76,29 @@ export const createUser = async (req: AuthRequest, res: Response) => {
 
 export const updateUser = async (req: AuthRequest, res: Response) => {
   try {
-    const { id, password_hash, ...updates } = req.body;
+    const { id, password_hash, name, phone, school_name, district, status, ...otherUpdates } = req.body;
     
+    const updates: any = { ...otherUpdates };
+
     if (password_hash) {
       const salt = await bcrypt.genSalt(10);
-      (updates as any).passwordHash = await bcrypt.hash(password_hash, salt);
+      updates.passwordHash = await bcrypt.hash(password_hash, salt);
+    }
+
+    if (name || phone || school_name || district) {
+      const user = await User.findById(id);
+      if (user) {
+        updates.profile = {
+          fullName: name || user.profile.fullName,
+          phone: phone !== undefined ? phone : user.profile.phone,
+          schoolName: school_name !== undefined ? school_name : user.profile.schoolName,
+          district: district !== undefined ? district : user.profile.district,
+        };
+      }
+    }
+
+    if (status !== undefined) {
+      updates.isActive = status !== 'inactive';
     }
 
     const user = await User.findByIdAndUpdate(id, updates, { new: true });

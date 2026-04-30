@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   GraduationCap, Send, Save, CheckCircle2, Clock, AlertCircle,
-  Loader2, ChevronLeft, ChevronRight, Upload, Wifi, WifiOff
+  Loader2, ChevronLeft, ChevronRight, Upload, Wifi, WifiOff,
+  Inbox
 } from 'lucide-react';
 import { api } from '../lib/api';
 
@@ -15,12 +16,12 @@ type Field = {
   id: string; type: FieldType; label: string; required?: boolean; placeholder?: string;
   options?: string[]; maxLength?: number; fileTypes?: string; maxSizeMB?: number;
   correct?: number | string; marks?: number; negative?: number;
-  visibleIf?: { fieldId: string; op: 'eq' | 'neq'; value: string };
+  visibleIf?: { fieldId: string; op: 'eq' | 'neq' | 'in'; value: string | string[] };
 };
 
 type Section = {
   id: string; title: string; description?: string; fields: Field[];
-  visibleIf?: { fieldId: string; op: 'eq' | 'neq'; value: string };
+  visibleIf?: { fieldId: string; op: 'eq' | 'neq' | 'in'; value: string | string[] };
 };
 
 type FormData = {
@@ -45,6 +46,56 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function normCond(v: unknown) {
+  return String(v ?? '').trim().toLowerCase();
+}
+
+function checkCondition(actual: unknown, expected: string | string[], op: 'eq' | 'neq' | 'in') {
+  const expectedList = (Array.isArray(expected) ? expected : [expected]).map(normCond);
+  const actualList = Array.isArray(actual) ? actual.map(normCond) : [normCond(actual)];
+  const hasAny = expectedList.some(exp => actualList.includes(exp));
+
+  if (op === 'in') return hasAny;
+  if (Array.isArray(actual)) return op === 'eq' ? hasAny : !hasAny;
+
+  const target = expectedList[0] ?? '';
+  const ok = actualList[0] === target;
+  return op === 'eq' ? ok : !ok;
+}
+
+function getAnswerByRef(
+  ref: string,
+  answers: Record<string, unknown>,
+  sections: Section[]
+): unknown {
+  if (Object.prototype.hasOwnProperty.call(answers, ref)) return answers[ref];
+  const target = normCond(ref);
+  const allFields = sections.flatMap(s => s.fields || []);
+  const matched = allFields.find(f => normCond(f.id) === target || normCond(f.label) === target);
+  if (!matched) return undefined;
+  return answers[matched.id];
+}
+
+function checkVisibleIf(
+  condition: { fieldId: string; op: 'eq' | 'neq' | 'in'; value: string | string[] } | undefined,
+  answers: Record<string, unknown>,
+  sections: Section[]
+) {
+  if (!condition) return true;
+  const v = getAnswerByRef(condition.fieldId, answers, sections);
+  return checkCondition(v, condition.value, condition.op);
+}
+
+function checkShowWhen(
+  showWhen: { field: string; equals: string } | undefined,
+  answers: Record<string, unknown>,
+  sections: Section[]
+) {
+  if (!showWhen) return true;
+  const v = getAnswerByRef(showWhen.field, answers, sections);
+  return checkCondition(v, String(showWhen.equals || ''), 'eq');
+}
+
 // ─── Badge (App 1 style) ──────────────────────────────────────────────────────
 function Badge({ tone = 'blue', children }: { tone?: 'blue' | 'green' | 'amber' | 'rose' | 'slate'; children: React.ReactNode }) {
   return <span className={`badge badge-${tone} inline-flex items-center gap-1`}>{children}</span>;
@@ -56,6 +107,7 @@ export default function FormFill({ user }: { user: User }) {
   const nav = useNavigate();
 
   const [form, setForm] = useState<FormData | null>(null);
+  const [nomination, setNomination] = useState<any>(null);
   const [step, setStep] = useState<Step>('loading');
   const [error, setError] = useState('');
 
@@ -75,6 +127,11 @@ export default function FormFill({ user }: { user: User }) {
   const [otp, setOtp] = useState('');
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
+  const [nominationToken, setNominationToken] = useState('');
+  const urlToken = useMemo(() => {
+    try { return new URLSearchParams(window.location.search).get('token') || ''; }
+    catch { return ''; }
+  }, []);
 
   // Online/offline events
   useEffect(() => {
@@ -88,45 +145,57 @@ export default function FormFill({ user }: { user: User }) {
     if (!id) { setStep('error'); setError('No form specified'); return; }
     
     // School Functionaries should not be filling forms, they should be nominating
-    if (user.role === 'functionary') {
+    const query = new URLSearchParams(window.location.search);
+    const token = query.get('token') || urlToken;
+    if (token) setNominationToken(token);
+
+    if (user.role === 'functionary' && !token) {
       setStep('error');
       setError('School Functionaries cannot fill out forms. Please use the "Nominate Teachers" button on the Forms page.');
       return;
     }
 
-    const query = new URLSearchParams(window.location.search);
-    const token = query.get('token');
-
-    const verifyNomination = async () => {
-      if (!token) return null;
-      try {
-        const res: any = await api.get(`/nominations/token/${token}`);
-        if (res.success && res.data) {
-          setEmail(res.data.teacher_email);
-          setSchoolCode(res.data.school_code || '');
-          setOtpVerified(true);
-          return res.data;
+    const getNomination = async () => {
+      // 1. If token exists, use it (highest priority)
+      if (token) {
+        try {
+          const res: any = await api.get(`/nominations/token/${token}`);
+          if (res.success && res.data) {
+            setEmail(res.data.teacher_email);
+            setSchoolCode(res.data.school_code || '');
+            setNominationToken(res.data.unique_token || token);
+            const nomData = { ...res.data };
+            if (!nomData.id && !nomData._id && nomData.form) {
+              nomData._id = nomData._id || nomData.id;
+            }
+            return nomData;
+          }
+        } catch (e) {
+          console.error("Token verification failed", e);
         }
-      } catch (e) {
-        console.error("Token verification failed", e);
       }
       return null;
     };
 
     Promise.all([
       api.get(`/forms?id=${id}`),
-      api.get(`/submissions?form_id=${id}`),
-      verifyNomination()
+      api.get(`/submissions?form_id=${id}${token ? `&nomination_token=${token}` : ''}`),
+      getNomination()
     ]).then(([res, subs, nomination]: any[]) => {
       if (!res || res.error) { setStep('error'); setError('Form not found'); return; }
 
-      // Normalize schema: form_schema/schema/fields
-      const schemaSource = res.form_schema || res.schema;
-      if (schemaSource) {
-        try {
-          res.schema = typeof schemaSource === 'string' ? JSON.parse(schemaSource) : schemaSource;
-        } catch (e) {
-          console.error("Failed to parse schema", e);
+      res.form_type = res.form_type || res.formType || 'normal';
+      res.settings = typeof res.settings === 'string' ? (JSON.parse(res.settings) || {}) : (res.settings || {});
+
+      // Important: Ensure schema sections are loaded even if form_schema is missing
+      if (!res.schema || !res.schema.sections) {
+        const schemaSource = res.form_schema || res.schema;
+        if (schemaSource) {
+          try {
+            res.schema = typeof schemaSource === 'string' ? JSON.parse(schemaSource) : schemaSource;
+          } catch (e) {
+            console.error("Failed to parse schema", e);
+          }
         }
       }
 
@@ -138,36 +207,31 @@ export default function FormFill({ user }: { user: User }) {
       }
       if (!res.schema) res.schema = { sections: [] };
 
-      res.form_type = res.form_type || res.formType || 'normal';
-      res.settings = typeof res.settings === 'string' ? (JSON.parse(res.settings) || {}) : (res.settings || {});
-
       setForm(res);
+      if (nomination) setNomination(nomination);
 
-      // Check auth mode
-      const authMode = res.settings.auth_mode || 'login';
-      const isAnon = user.id === 'anon';
+      const isNominationForm = res.form_type === 'nomination';
+      const hasToken = !!token;
 
-      if (authMode === 'login' && isAnon && !token) {
+      // ─── STRICT ACCESS LOGIC ───
+      // 1) Non-nomination forms => allow anonymous/direct access
+      // 2) Nomination forms => token-based access only
+      if (isNominationForm && !hasToken) {
         setStep('error');
-        setError('Login required to fill this form.');
+        setError('This nomination form requires invite link access (token). Please use the nomination link sent to you.');
         return;
       }
 
-      // Check status
       if (res.status !== 'active') { setStep('error'); setError('This form is not active.'); return; }
       if (res.expires_at && new Date(res.expires_at) < new Date()) { setStep('error'); setError('This form has closed.'); return; }
 
-      // If OTP mode and not verified yet, wait for OTP
-      if (authMode === 'otp' && isAnon && !otpVerified && !token) {
-        setStep('filling'); // We stay in filling step but render OTP UI
-        return;
-      }
-
-      // Check existing submission
       const existing = (subs || []).find((s: any) => !s.is_draft && !s.isDraft);
       const draft = (subs || []).find((s: any) => s.is_draft || s.isDraft);
 
-      if (existing) {
+      // If it's a nomination form, we strictly check for existing submissions
+      // to prevent double-filling for the same teacher token.
+      // But if it's a normal anonymous form, we allow multiple submissions.
+      if (existing && isNominationForm) {
         const score = typeof existing.score === 'object' && existing.score !== null
           ? existing.score.earnedPoints
           : existing.score ?? null;
@@ -184,7 +248,7 @@ export default function FormFill({ user }: { user: User }) {
         setStep('filling');
       }
     }).catch(err => { setStep('error'); setError(err.message || 'Failed to load form'); });
-  }, [id]);
+  }, [id, urlToken]);
 
   // Autosave every 30s
   useEffect(() => {
@@ -211,23 +275,54 @@ export default function FormFill({ user }: { user: User }) {
 
   const sections = form?.schema?.sections || form?.form_schema?.sections || [];
 
+  const parseObject = (raw: any): Record<string, any> => {
+    if (!raw) return {};
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+    return typeof raw === 'object' ? raw : {};
+  };
+
+  const nominationAdditionalData = useMemo(() => parseObject(nomination?.additional_data), [nomination]);
+  const formSettings = useMemo(() => parseObject(form?.settings), [form]);
+
   const visibleSections = useMemo(() => {
     return sections.filter((s: Section) => {
-      if (!s.visibleIf) return true;
-      const v = answers[s.visibleIf.fieldId];
-      if (s.visibleIf.op === 'eq') return String(v) === s.visibleIf.value;
-      if (s.visibleIf.op === 'neq') return String(v) !== s.visibleIf.value;
+      // New format (visibleIf)
+      if (s.visibleIf) {
+        return checkVisibleIf(s.visibleIf, answers, sections);
+      }
+      // Legacy support (show_when)
+      const anyS = s as any;
+      if (anyS.show_when) {
+        return checkShowWhen(anyS.show_when, answers, sections);
+      }
       return true;
     });
-  }, [form, answers]);
+  }, [form, answers, sections]);
 
   const fieldVisible = (f: Field) => {
-    if (!f.visibleIf) return true;
-    const v = answers[f.visibleIf.fieldId];
-    if (f.visibleIf.op === 'eq') return String(v) === f.visibleIf.value;
-    if (f.visibleIf.op === 'neq') return String(v) !== f.visibleIf.value;
+    // New format (visibleIf)
+    if (f.visibleIf) {
+      return checkVisibleIf(f.visibleIf, answers, sections);
+    }
+    // Legacy support (show_when)
+    const anyF = f as any;
+    if (anyF.show_when) {
+      return checkShowWhen(anyF.show_when, answers, sections);
+    }
     return true;
   };
+
+  useEffect(() => {
+    const lastIdx = Math.max(visibleSections.length - 1, 0);
+    if (sectionIdx > lastIdx) setSectionIdx(lastIdx);
+  }, [visibleSections.length, sectionIdx]);
 
   const handleSendOtp = async () => {
     if (!email || !email.includes('@')) { setError('Please enter a valid email.'); return; }
@@ -255,6 +350,34 @@ export default function FormFill({ user }: { user: User }) {
         localStorage.setItem('auth_user', JSON.stringify(res.user));
       }
       setOtpVerified(true);
+      
+      if (id) {
+        const subs: any = await api.get(`/submissions?form_id=${id}&user_email=${encodeURIComponent(email)}`).catch(() => []);
+        const existing = (subs || []).find((s: any) => !s.is_draft && !s.isDraft);
+        const draft = (subs || []).find((s: any) => s.is_draft || s.isDraft);
+
+        // Consistency: Only block if it's a nomination form
+        if (existing && form?.form_type === 'nomination') {
+          const score = typeof existing.score === 'object' && existing.score !== null
+            ? existing.score.earnedPoints
+            : existing.score ?? null;
+          const max = typeof existing.score === 'object' && existing.score !== null
+            ? existing.score.totalPoints
+            : null;
+          setReceipt({ id: existing._id || existing.id, score, max });
+          setStep('submitted');
+        } else if (draft) {
+          try { 
+            setAnswers(typeof draft.responses === 'string' 
+              ? JSON.parse(draft.responses) 
+              : Array.isArray(draft.responses) 
+                ? Object.fromEntries(draft.responses.map((r: any) => [r.fieldId, r.value])) 
+                : (draft.responses || {})
+            ); 
+          } catch {}
+          setSubmissionId(draft._id || draft.id);
+        }
+      }
     } catch (err: any) {
       setError(err.message || 'Invalid OTP');
     } finally {
@@ -284,12 +407,18 @@ export default function FormFill({ user }: { user: User }) {
     if (!form || !online) return;
     setSaving(true);
     try {
+      const effectiveToken = nominationToken || nomination?.unique_token || urlToken;
       const payload = { 
-      form_id: form._id || form.id, responses: answers, status: 'draft', is_draft: true,
-      user_email: user.id === 'anon' ? email : user.email,
-      user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
-      school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
-    };
+        form_id: form._id || form.id, 
+        responses: answers, 
+        status: 'draft', 
+        is_draft: true,
+        nomination_id: nomination?.id || nomination?._id,
+        nomination_token: effectiveToken,
+        user_email: user.id === 'anon' ? email : user.email,
+        user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
+        school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
+      };
       if (submissionId) {
         await api.put('/submissions', { id: submissionId, ...payload });
       } else {
@@ -303,7 +432,6 @@ export default function FormFill({ user }: { user: User }) {
 
   const submit = async () => {
     if (!form) return;
-    // Validate required fields
     for (const s of visibleSections) {
       for (const f of s.fields) {
         if (!fieldVisible(f)) continue;
@@ -317,22 +445,41 @@ export default function FormFill({ user }: { user: User }) {
     }
     setError('');
     const sc = computeScore();
+    const currentEmail = user.id === 'anon' ? (email || nomination?.teacher_email) : user.email;
+    const effectiveToken = nominationToken || nomination?.unique_token || urlToken;
     const payload = {
-      form_id: form._id || form.id, responses: answers,
-      status: 'submitted', is_draft: false,
+      form_id: form._id || form.id, 
+      responses: answers,
+      status: 'submitted', 
+      is_draft: false,
+      nomination_id: nomination?.id || nomination?._id,
+      nomination_token: effectiveToken,
       score: sc?.score ?? null,
-      user_email: user.id === 'anon' ? email : user.email,
-      user_name: user.id === 'anon' ? (email.split('@')[0]) : user.name,
-      school_code: schoolCode || (user.id !== 'anon' ? user.school_code : '')
+      user_email: currentEmail,
+      user_name: user.id === 'anon' ? (nomination?.teacher_name || currentEmail?.split('@')[0]) : user.name,
+      school_code: schoolCode || nomination?.school_code || (user.id !== 'anon' ? user.school_code : '')
     };
+    
     try {
       let saved: any;
       if (submissionId) saved = await api.put('/submissions', { id: submissionId, ...payload });
       else saved = await api.post('/submissions', payload);
-      const realId = saved?.data?._id || saved?.data?.id || saved?._id || saved?.id || submissionId || 'DONE';
+      
+      const realId = effectiveToken || saved?.data?._id || saved?.data?.id || saved?._id || saved?.id || submissionId || 'DONE';
+      
+      const nomId = nomination?.id || nomination?._id;
+      if (nomId) {
+        try {
+          await api.put(`/nominations/${nomId}`, { id: nomId, status: 'completed' });
+        } catch (e) {
+          console.warn('Failed to update nomination status:', e);
+        }
+      }
+      
       setReceipt({ id: realId, score: sc?.score, max: sc?.max });
       setStep('submitted');
     } catch (err: any) {
+      console.error('[FormFill] Submission error:', err);
       setError(err.message || 'Failed to submit. Please try again.');
     }
   };
@@ -367,73 +514,35 @@ export default function FormFill({ user }: { user: User }) {
           <div className="font-display text-2xl font-bold text-ink">Submission Complete!</div>
           <p className="text-muted mt-1">Your response for "{form.title}" has been recorded.</p>
           <div className="mt-5 bg-canvas rounded-xl p-4 text-left text-sm space-y-1">
-            <div className="flex justify-between"><span className="text-muted">Receipt #</span><span className="font-mono">R-{receipt.id.slice(-6).toUpperCase()}</span></div>
+            <div className="flex justify-between"><span className="text-muted">Token ID</span><span className="text-xs font-mono text-muted">{receipt.id}</span></div>
             <div className="flex justify-between"><span className="text-muted">Form</span><span>{form.title}</span></div>
             <div className="flex justify-between"><span className="text-muted">Submitted</span><span>{fmtDate(new Date().toISOString())}</span></div>
             {receipt.max ? <div className="flex justify-between"><span className="text-muted">Score</span><span className="font-semibold">{receipt.score}/{receipt.max}</span></div> : null}
           </div>
-          <button onClick={() => nav('/forms')} className="btn btn-ghost mt-5">Back to Forms</button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!form || !currentSection) return null;
-
-  const authMode = form.settings.auth_mode || 'login';
-  const isAnon = user.id === 'anon';
-
-  // Render OTP verification screen if required
-  if (authMode === 'otp' && isAnon && !otpVerified) {
-    return (
-      <div className="min-h-screen bg-canvas grid place-items-center p-6">
-        <div className="card max-w-md w-full p-8">
-          <div className="w-16 h-16 rounded-full bg-blue-soft text-blue grid place-items-center mx-auto mb-4">
-            <GraduationCap size={34}/>
-          </div>
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-ink">Verification Required</h2>
-            <p className="text-sm text-muted mt-1">Please verify your email to access this form.</p>
-          </div>
-
-          <div className="space-y-4">
-            {!otpSent ? (
-              <>
-                <label className="block">
-                  <span className="text-xs font-semibold text-muted mb-1 block">School Email</span>
-                  <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                    className="input" placeholder="teacher@school.edu" />
-                </label>
-                <button onClick={handleSendOtp} disabled={otpLoading}
-                  className="btn btn-primary w-full flex items-center justify-center gap-2">
-                  {otpLoading ? <Loader2 className="animate-spin" size={18}/> : <Send size={18}/>}
-                  Send Verification Code
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700 mb-4">
-                  Code sent to <strong>{email}</strong>. Check your inbox.
-                </div>
-                <label className="block">
-                  <span className="text-xs font-semibold text-muted mb-1 block">Verification Code</span>
-                  <input type="text" value={otp} onChange={e => setOtp(e.target.value)}
-                    className="input text-center text-xl tracking-widest font-bold" placeholder="••••••" maxLength={6} />
-                </label>
-                {error && <p className="text-xs text-rose-500 font-medium">{error}</p>}
-                <button onClick={handleVerifyOtp} className="btn btn-primary w-full">
-                  Verify & Access Form
-                </button>
-                <button onClick={() => setOtpSent(false)} className="btn btn-ghost w-full text-xs">
-                  Change email address
-                </button>
-              </>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6">
+            <button onClick={() => nav('/forms')} className="btn btn-ghost">Back to Forms</button>
+            {form.form_type !== 'nomination' && (
+              <button 
+                onClick={() => {
+                  setAnswers({});
+                  setSubmissionId(null);
+                  setReceipt(null);
+                  setSectionIdx(0);
+                  setStep('filling');
+                  setError('');
+                }} 
+                className="btn btn-primary"
+              >
+                Submit Another Response
+              </button>
             )}
           </div>
         </div>
       </div>
     );
   }
+
+  if (!form || !currentSection) return null;
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -444,7 +553,12 @@ export default function FormFill({ user }: { user: User }) {
             <button onClick={() => nav('/forms')} className="p-2 hover:bg-slate-100 rounded-lg text-muted hover:text-ink transition-colors" title="Back to Forms">
               <ChevronLeft size={20}/>
             </button>
-            <div className="w-9 h-9 rounded-xl bg-navy text-white grid place-items-center"><GraduationCap size={18}/></div>
+            <div className="w-10 h-10 flex items-center justify-center overflow-hidden">
+              <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.parentElement!.innerHTML = '<div class="w-8 h-8 rounded-lg bg-navy text-white flex items-center justify-center"><span class="font-bold text-xs">C</span></div>';
+              }} />
+            </div>
             <div>
               <div className="font-display font-bold text-sm text-ink">{form.title}</div>
               <div className="text-[11px] text-muted">Section {sectionIdx + 1} of {visibleSections.length}</div>

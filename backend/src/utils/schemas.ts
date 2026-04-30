@@ -23,6 +23,7 @@ export const submissionSchema = z.object({
     responses: z.any(), // Accept both array and object formats (controller normalizes)
     user_name: z.string().optional(),
     user_email: z.string().optional(),
+    nomination_id: z.string().optional(),
     form_title: z.string().optional(),
     status: z.string().optional(),
     score: z.any().optional(),

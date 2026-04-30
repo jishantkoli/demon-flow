@@ -13,6 +13,12 @@ import {
 } from 'lucide-react';
 
 export default function ReviewSystem({ user }: { user: User }) {
+  type FieldFilterRow = {
+    field_id: string;
+    operator: 'contains' | 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte';
+    field_value: string;
+  };
+
   const navigate = useNavigate();
   const [forms, setForms] = useState<any[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<string>('');
@@ -28,7 +34,7 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [showShortlist, setShowShortlist] = useState(false);
   const [levelForm, setLevelForm] = useState({ name: '', level_number: 1, scoring_type: 'form_level', grade_scale: 'A,B,C,D', blind_review: false, reviewer_ids: [] as string[] });
   const [shortlistFilter, setShortlistFilter] = useState({ filter_type: 'all', filter_value: '0', source_level_id: '', field_id: '', field_value: '' });
-  const [fieldFilters, setFieldFilters] = useState([{ field_id: '', field_value: '' }]);
+  const [fieldFilters, setFieldFilters] = useState<FieldFilterRow[]>([{ field_id: '', operator: 'contains', field_value: '' }]);
   const [shortlistResult, setShortlistResult] = useState<any>(null);
   const [isFiltering, setIsFiltering] = useState(false);
   const [filteredResults, setFilteredResults] = useState<any[] | null>(null);
@@ -52,17 +58,36 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [reviewTab, setReviewTab] = useState<'pending' | 'completed'>('pending');
 
   useEffect(() => {
-    Promise.all([api.get('/forms'), api.get('/users?role=reviewer'), api.get('/review-levels')])
-      .then(([f, u, l]) => { setForms(f.filter((fm: any) => fm.status === 'active' || fm.status === 'expired')); setReviewers(u); setLevels(l); })
-      .catch(console.error).finally(() => setLoading(false));
+    Promise.all([
+      api.get('/forms').catch(() => []),
+      api.get('/users?role=reviewer').catch(() => []),
+      api.get('/review-levels').catch(() => [])
+    ])
+      .then(([f, u, l]) => { 
+        setForms(Array.isArray(f) ? f.filter((fm: any) => fm.status === 'active' || fm.status === 'expired') : []); 
+        setReviewers(Array.isArray(u) ? u : []); 
+        setLevels(Array.isArray(l) ? l : []); 
+      })
+      .catch(err => {
+        console.error('Error initializing ReviewSystem:', err);
+        setForms([]);
+        setReviewers([]);
+        setLevels([]);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   // Load reviews for reviewer
   useEffect(() => {
     if (user.role === 'reviewer') {
-      api.get(`/reviews?reviewer_id=${user.id}`).then(setReviews).catch(console.error);
+      api.get(`/reviews?reviewer_id=${user.id}`)
+        .then(res => setReviews(Array.isArray(res) ? res : []))
+        .catch(err => {
+          console.error('Error fetching reviewer reviews:', err);
+          setReviews([]);
+        });
     }
-  }, [user]);
+  }, [user.id, user.role]);
 
   const loadFormData = async (formId: string) => {
     setSelectedFormId(formId);
@@ -105,6 +130,13 @@ export default function ReviewSystem({ user }: { user: User }) {
       .filter(Boolean);
   };
 
+  const getDefaultOperator = (field: any): FieldFilterRow['operator'] => {
+    if (!field) return 'contains';
+    if (field.type === 'number') return 'gte';
+    if (Array.isArray(field.options) && field.options.length > 0) return 'eq';
+    return 'contains';
+  };
+
   const openProfile = async (submissionId: string) => {
     setProfileLoading(true); setShowProfile(true);
     try {
@@ -131,7 +163,10 @@ export default function ReviewSystem({ user }: { user: User }) {
     // Filter by Score
     if (shortlistFilter.filter_type === 'form_score_gte') {
       const val = parseFloat(shortlistFilter.filter_value);
-      results = results.filter(s => (s.score || 0) >= val);
+      results = results.filter(s => {
+        const scoreVal = typeof s.score === 'object' ? s.score?.percentage : s.score;
+        return (scoreVal || 0) >= val;
+      });
     }
 
     // Filter by Level Avg
@@ -144,7 +179,10 @@ export default function ReviewSystem({ user }: { user: User }) {
     }
 
     // Filter by Fields (AND logic)
-    const activeFieldFilters = fieldFilters.filter(f => f.field_id && f.field_value);
+    const activeFieldFilters = fieldFilters.filter(f => f.field_id && String(f.field_value).trim() !== '');
+    const formFieldMap = new Map(
+      getFormFilterFields().map((f: any) => [String(f.id), f])
+    );
     if (activeFieldFilters.length > 0) {
       results = results.filter(s => {
         let responseArray: any[] = [];
@@ -155,11 +193,29 @@ export default function ReviewSystem({ user }: { user: User }) {
         return activeFieldFilters.every(f => {
           const fieldResp = responseArray.find((r: any) => String(r.fieldId) === String(f.field_id));
           const fieldValue = fieldResp ? fieldResp.value : null;
-          
-          if (Array.isArray(fieldValue)) {
-            return fieldValue.some(v => String(v || '').toLowerCase().includes(String(f.field_value).toLowerCase()));
+
+          const actualValues = Array.isArray(fieldValue) ? fieldValue : [fieldValue];
+          const expectedText = String(f.field_value).trim().toLowerCase();
+          const selectedField = formFieldMap.get(String(f.field_id));
+
+          if (['gt', 'gte', 'lt', 'lte'].includes(f.operator) || selectedField?.type === 'number') {
+            const expectedNum = Number(f.field_value);
+            if (Number.isNaN(expectedNum)) return false;
+            const numericVals = actualValues.map((v: any) => Number(v)).filter((n: number) => !Number.isNaN(n));
+            if (numericVals.length === 0) return false;
+            if (f.operator === 'gt') return numericVals.some((n: number) => n > expectedNum);
+            if (f.operator === 'gte') return numericVals.some((n: number) => n >= expectedNum);
+            if (f.operator === 'lt') return numericVals.some((n: number) => n < expectedNum);
+            return numericVals.some((n: number) => n <= expectedNum);
           }
-          return String(fieldValue || '').toLowerCase().includes(String(f.field_value).toLowerCase());
+
+          if (f.operator === 'eq') {
+            return actualValues.some((v: any) => String(v || '').trim().toLowerCase() === expectedText);
+          }
+          if (f.operator === 'neq') {
+            return actualValues.every((v: any) => String(v || '').trim().toLowerCase() !== expectedText);
+          }
+          return actualValues.some((v: any) => String(v || '').toLowerCase().includes(expectedText));
         });
       });
     }
@@ -353,7 +409,7 @@ export default function ReviewSystem({ user }: { user: User }) {
       { key: 'user_name', label: 'Name', sortable: true, render: (v: string, r: any) => (
         <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">{(v||'?')[0]}</div>
           <div><p className="text-sm font-medium">{v || 'Anonymous'}</p><p className="text-[10px] text-slate-500">{r.user_email}</p></div></div>) },
-      { key: 'score', label: 'Form Score', sortable: true, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{v}%</span> : <span className="text-slate-500">—</span> },
+      { key: 'score', label: 'Form Score', sortable: true, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{typeof v === 'object' ? v?.percentage : v}%</span> : <span className="text-slate-500">—</span> },
       ...formLevels.map((l: any) => ({
         key: `level_${l.level_number}`, label: `L{l.level_number} Avg`, sortable: true,
         render: (_: any, r: any) => {
@@ -422,18 +478,46 @@ export default function ReviewSystem({ user }: { user: User }) {
                         const fields = getFormFilterFields();
                         const selectedField = fields.find(f => f.id === row.field_id);
                         const options = getFieldOptionValues(selectedField);
+                        const isNumber = selectedField?.type === 'number';
                         
                         return (
                           <div key={idx} className="p-2 rounded-lg bg-white border border-slate-200 space-y-2 relative group">
                             <button onClick={() => setFieldFilters(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 w-5 h-5 bg-red-100 text-red-500 rounded-full flex items-center justify-center hover:bg-red-200 transition-colors shadow-sm">
                               <XCircle size={12} />
                             </button>
-                            <select value={row.field_id} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_id: e.target.value, field_value: '' } : r))}
+                            <select value={row.field_id} onChange={e => setFieldFilters(prev => prev.map((r, i) => {
+                              if (i !== idx) return r;
+                              const nextField = fields.find((fld: any) => String(fld.id) === e.target.value);
+                              return { ...r, field_id: e.target.value, operator: getDefaultOperator(nextField), field_value: '' };
+                            }))}
                               className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none">
                               <option value="">Select field...</option>
                               {fields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
                             </select>
-                            
+
+                            <select
+                              value={row.operator}
+                              onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, operator: e.target.value as FieldFilterRow['operator'] } : r))}
+                              className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none"
+                            >
+                              {isNumber ? (
+                                <>
+                                  <option value="gt">Greater than (&gt;)</option>
+                                  <option value="gte">Greater/equal (&gt;=)</option>
+                                  <option value="lt">Less than (&lt;)</option>
+                                  <option value="lte">Less/equal (&lt;=)</option>
+                                  <option value="eq">Equals</option>
+                                  <option value="neq">Not equals</option>
+                                </>
+                              ) : (
+                                <>
+                                  <option value="contains">Contains</option>
+                                  <option value="eq">Equals</option>
+                                  <option value="neq">Not equals</option>
+                                </>
+                              )}
+                            </select>
+
                             {options.length > 0 ? (
                               <select value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
                                 className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none">
@@ -441,13 +525,13 @@ export default function ReviewSystem({ user }: { user: User }) {
                                 {options.map((o: string) => <option key={o} value={o}>{o}</option>)}
                               </select>
                             ) : (
-                              <input value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
-                                className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none" placeholder="Value to match..." />
+                              <input type={isNumber ? 'number' : 'text'} value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
+                                className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none" placeholder={isNumber ? 'Enter numeric value...' : 'Value to match...'} />
                             )}
                           </div>
                         );
                       })}
-                      <button onClick={() => setFieldFilters(prev => [...prev, { field_id: '', field_value: '' }])} className="w-full py-1.5 border border-dashed border-slate-300 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-white hover:border-primary transition-all flex items-center justify-center gap-1">
+                      <button onClick={() => setFieldFilters(prev => [...prev, { field_id: '', operator: 'contains', field_value: '' }])} className="w-full py-1.5 border border-dashed border-slate-300 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-white hover:border-primary transition-all flex items-center justify-center gap-1">
                         <Zap size={10} /> Add Field Condition
                       </button>
                     </div>
@@ -649,7 +733,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                       <div className="flex items-center gap-3 mt-1 text-[11px]">
                         <span className="bg-white/15 px-2 py-0.5 rounded-full">{sub.form_title}</span>
                         <StatusBadge status={sub.status} size="xs" />
-                        {sub.score != null && <span className="bg-emerald-500/30 px-2 py-0.5 rounded-full">Form Score: {sub.score}%</span>}
+                        {sub.score != null && <span className="bg-emerald-500/30 px-2 py-0.5 rounded-full">Form Score: {typeof sub.score === 'object' ? sub.score?.percentage : sub.score}%</span>}
                         <span className="bg-white/15 px-2 py-0.5 rounded-full">Level {profileData.highest_level}/{profileData.total_levels}</span>
                       </div>
                     </div>

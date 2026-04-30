@@ -16,8 +16,25 @@ export default function UserManagement() {
   const [importText, setImportText] = useState('');
 
   const fetchUsers = async () => {
-    try { const params = roleFilter ? `?role=${roleFilter}` : ''; const data = await api.get(`/users${params}`); setUsers(data); }
-    catch (err) { console.error(err); } finally { setLoading(false); }
+    try { 
+      const params = roleFilter ? `?role=${roleFilter}` : ''; 
+      const data = await api.get(`/users${params}`).catch(() => []); 
+      const flattened = (Array.isArray(data) ? data : []).map(u => ({
+        ...u,
+        name: u.profile?.fullName || '—',
+        phone: u.profile?.phone || '',
+        school_name: u.profile?.schoolName || '',
+        district: u.profile?.district || '',
+        status: u.isActive ? 'active' : 'inactive'
+      }));
+      setUsers(flattened); 
+    }
+    catch (err) { 
+      console.error('Error fetching users:', err); 
+      setUsers([]);
+    } finally { 
+      setLoading(false); 
+    }
   };
   useEffect(() => { fetchUsers(); }, [roleFilter]);
 
@@ -47,8 +64,16 @@ export default function UserManagement() {
   };
 
   const exportCSV = () => {
-    const headers = ['Name', 'Email', 'Phone', 'Role', 'School', 'District', 'Status'];
-    const rows = users.map(u => [u.name, u.email, u.phone || '', u.role, u.school_name || '', u.district || '', u.status || '']);
+    const headers = ['Name', 'Email', 'Phone', 'Role', 'School', 'Status', 'Account Created'];
+    const rows = users.map(u => [
+      u.name, 
+      u.email, 
+      u.phone || '', 
+      u.role, 
+      u.school_name || '', 
+      u.status || '',
+      u.created_at ? new Date(u.created_at).toLocaleString() : ''
+    ]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' }); const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'users-export.csv'; a.click();
@@ -60,9 +85,13 @@ export default function UserManagement() {
         <div><p className="font-medium text-sm">{v}</p><p className="text-[10px] text-slate-500">{row.email}</p></div></div>) },
     { key: 'role', label: 'Role', sortable: true, render: (v: string) => <span className="capitalize text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100">{v}</span> },
     { key: 'school_name', label: 'School', sortable: true, render: (v: string) => <span className="text-sm">{v || '—'}</span> },
-    { key: 'district', label: 'District', sortable: true },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v || 'active'} /> },
-    { key: 'created_at', label: 'Joined', sortable: true, render: (v: string) => v ? <span className="text-xs text-slate-500">{new Date(v).toLocaleDateString()}</span> : '—' },
+    { key: 'created_at', label: 'Account Created', sortable: true, render: (v: string) => v ? (
+      <div className="flex flex-col">
+        <span className="text-xs font-medium text-slate-700">{new Date(v).toLocaleDateString()}</span>
+        <span className="text-[10px] text-slate-500">{new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+      </div>
+    ) : '—' },
   ];
 
   return (

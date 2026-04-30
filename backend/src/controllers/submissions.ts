@@ -1,11 +1,13 @@
 import { Request, Response } from 'express';
 import { Submission } from '../models/Submission.js';
 import { Form } from '../models/Form.js';
+import { Nomination } from '../models/Nomination.js';
 import { AuthRequest } from '../middleware/auth.js';
 
 export const submitForm = async (req: AuthRequest, res: Response) => {
   try {
     let { form_id, formId, responses } = req.body;
+    const rawNominationId = req.body.nomination_id || req.body.nominationId;
     const actualFormId = form_id || formId || req.body.formId;
     
     // Convert object responses to array if needed
@@ -30,6 +32,52 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     if (!form) {
       console.log('Submission failed: Form not found with ID/Link', actualFormId, 'from payload', req.body);
       return res.status(404).json({ error: 'Form not found' });
+    }
+
+    // ─── NOMINATION LINKING (3-layer: ID → Token → Email) ───────────────
+    let linkedNomination: any = null;
+
+    // Layer 1: Direct nomination ID (if frontend sent it)
+    if (rawNominationId) {
+      try {
+        linkedNomination = await Nomination.findById(rawNominationId);
+      } catch (e) {
+        console.log('Nomination ID lookup failed (invalid ID format):', rawNominationId);
+      }
+    }
+
+    // Layer 2: Nomination token from URL (MOST RELIABLE - 1 token = 1 nomination)
+    const nominationToken = req.body.nomination_token;
+    if (!linkedNomination && nominationToken) {
+      // First try exact match on unique_token
+      linkedNomination = await Nomination.findOne({ unique_token: nominationToken });
+      // If not found, try matching by token field (some systems store it as just 'token')
+      if (!linkedNomination) {
+        linkedNomination = await Nomination.findOne({ token: nominationToken });
+      }
+      if (linkedNomination) {
+        console.log('✅ Nomination linked via TOKEN:', nominationToken, '→', linkedNomination._id);
+      } else {
+        console.log('❌ Token not found in any nomination:', nominationToken);
+      }
+    }
+
+    // Layer 3: Email + form_id fallback (works for OTP and login flows)
+    const searchEmail = req.body.user_email || req.user?.email;
+    if (!linkedNomination && searchEmail) {
+      linkedNomination = await Nomination.findOne({
+        form_id: form._id,
+        teacher_email: { $regex: new RegExp(`^${searchEmail.trim()}$`, 'i') }
+      });
+      if (linkedNomination) {
+        console.log('✅ Nomination linked via EMAIL:', searchEmail, '→', linkedNomination._id);
+      }
+    }
+
+    if (linkedNomination) {
+      console.log('✅ Final linked nomination:', linkedNomination._id, 'teacher:', linkedNomination.teacher_email);
+    } else {
+      console.log('ℹ️ No nomination found for this submission (form:', form._id, 'email:', searchEmail, ')');
     }
 
     // Expiration check
@@ -86,12 +134,14 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const submission = await Submission.create({
+    const submissionData: any = {
       formId: form._id,
+      nominationId: linkedNomination?._id || null,
+      nominationToken: req.body.nomination_token || null,
       userId: req.user?._id || null,
       userName: req.body.user_name || req.user?.profile?.fullName,
-      userEmail: req.body.user_email || req.user?.email,
-      schoolCode: req.body.school_code || req.user?.profile?.schoolCode,
+      userEmail: req.body.user_email || req.user?.email || linkedNomination?.teacher_email,
+      schoolCode: req.body.school_code || linkedNomination?.school_code || req.user?.profile?.schoolCode,
       formTitle: req.body.form_title || form.title,
       responses,
       score,
@@ -101,7 +151,20 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
         ip: req.ip,
         userAgent: req.headers['user-agent']
       }
-    });
+    };
+
+    console.log('📋 Submission data:', { formId: submissionData.formId, nominationId: submissionData.nominationId, userEmail: submissionData.userEmail, schoolCode: submissionData.schoolCode });
+
+    const submission = await Submission.create(submissionData);
+
+    // Update nomination status to 'completed' after successful non-draft submission
+    if (linkedNomination && !submissionData.isDraft) {
+      try {
+        await Nomination.findByIdAndUpdate(linkedNomination._id, { status: 'completed' });
+      } catch (e) {
+        console.error('Failed to update nomination status:', e);
+      }
+    }
 
     res.status(201).json({ ...submission.toObject(), id: submission._id, is_draft: submission.isDraft, school_code: submission.schoolCode });
   } catch (err: any) {
@@ -112,17 +175,66 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
 export const updateSubmission = async (req: AuthRequest, res: Response) => {
   try {
     let { id, is_draft, responses } = req.body;
-    
+
     if (responses && !Array.isArray(responses)) {
       responses = Object.entries(responses).map(([fieldId, value]) => ({ fieldId, value }));
     }
 
-    const submission = await Submission.findByIdAndUpdate(id, {
+    // ─── NOMINATION LINKING ON UPDATE (if not already linked) ─────────────
+    const existingSub = await Submission.findById(id);
+    let nominationId = req.body.nomination_id || req.body.nominationId;
+    let nominationToken = req.body.nomination_token;
+
+    // Only try to link if not already linked
+    if (!existingSub?.nominationId && (nominationId || nominationToken)) {
+      let linkedNom: any = null;
+
+      // Try by nomination ID first
+      if (nominationId) {
+        try {
+          linkedNom = await Nomination.findById(nominationId);
+        } catch {}
+      }
+
+      // Try by token
+      if (!linkedNom && nominationToken) {
+        linkedNom = await Nomination.findOne({ unique_token: nominationToken });
+        if (!linkedNom) {
+          linkedNom = await Nomination.findOne({ token: nominationToken });
+        }
+      }
+
+      if (linkedNom) {
+        console.log('✅ Nomination linked during update:', linkedNom._id);
+        nominationId = linkedNom._id;
+        nominationToken = linkedNom.unique_token || nominationToken;
+      }
+    }
+
+    const payload: any = {
       ...req.body,
       responses: responses || req.body.responses,
       isDraft: is_draft !== undefined ? is_draft : req.body.isDraft
-    }, { new: true });
+    };
+    if (nominationId) {
+      payload.nominationId = nominationId;
+    }
+    if (nominationToken !== undefined) {
+      payload.nominationToken = nominationToken;
+    }
+
+    const submission = await Submission.findByIdAndUpdate(id, payload, { new: true });
     if (!submission) return res.status(404).json({ error: 'Submission not found' });
+
+    // Update nomination status if submitting (not drafting)
+    if (submission.nominationId && is_draft === false) {
+      try {
+        await Nomination.findByIdAndUpdate(submission.nominationId, { status: 'completed' });
+      } catch (e) {
+        console.error('Failed to update nomination status:', e);
+      }
+    }
+
     res.status(200).json({ ...submission.toObject(), id: submission._id, is_draft: submission.isDraft });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -131,7 +243,7 @@ export const updateSubmission = async (req: AuthRequest, res: Response) => {
 
 export const getSubmissions = async (req: AuthRequest, res: Response) => {
   try {
-    const { formId, form_id, user_id } = req.query;
+    const { formId, form_id, user_id, user_email } = req.query;
     const actualFormId = formId || form_id;
     const query: any = {};
     if (actualFormId) {
@@ -144,33 +256,49 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
       }
     }
     if (user_id) query.userId = user_id;
+    if (user_email) query.userEmail = { $regex: new RegExp(`^${user_email}$`, 'i') };
 
     if (req.user) {
       if (req.user.role === 'teacher') {
-        query.userId = req.user._id;
+        // Teachers see submissions matching their ID OR their email
+        query.$or = [
+          { userId: req.user._id },
+          { userEmail: { $regex: new RegExp(`^${req.user.email}$`, 'i') } }
+        ];
+      } else if (req.user.role === 'functionary') {
+        // Functionaries see submissions for teachers they nominated
+        const myNominations = await Nomination.find({ functionary_id: req.user._id });
+        const teacherEmails = myNominations.map(n => n.teacher_email);
+        query.userEmail = { $in: teacherEmails.map(email => new RegExp(`^${email}$`, 'i')) };
       }
     } else {
-      // Anonymous users can only see their own submissions if we had a session, 
-      // but for now they see nothing to protect privacy.
-      if (!actualFormId) return res.status(200).json([]);
-      query.userId = null; // Only show anonymous submissions for this form? No, still risky.
-      return res.status(200).json([]); 
+      // For truly anonymous requests (before OTP), we can only filter by email if provided
+      // and only if the form is found. But to be safe, we only allow this if user_email is explicitly requested.
+      if (!user_email) return res.status(200).json([]);
+      query.userEmail = { $regex: new RegExp(`^${user_email}$`, 'i') };
     }
 
     const submissions = await Submission.find(query)
+      .populate('nominationId')
       .sort({ createdAt: -1 });
       
-    const mapped = submissions.map(s => ({
-      ...s.toObject(),
-      id: s._id,
-      form_id: s.formId,
-      user_id: s.userId,
-      user_name: s.userName,
-      user_email: s.userEmail,
-      form_title: s.formTitle,
-      submitted_at: s.createdAt,
-      is_draft: s.isDraft
-    }));
+    const mapped = submissions.map(s => {
+      const obj = s.toObject();
+      return {
+        ...obj,
+        id: obj._id,
+        form_id: obj.formId,
+        user_id: obj.userId,
+        user_name: obj.userName,
+        user_email: obj.userEmail,
+        nomination_id: obj.nominationId,
+        nomination_token: obj.nominationToken || (obj.nominationId as any)?.unique_token || null,
+        unique_token: obj.nominationToken || (obj.nominationId as any)?.unique_token || null,
+        form_title: obj.formTitle,
+        submitted_at: obj.createdAt,
+        is_draft: obj.isDraft
+      };
+    });
       
     res.status(200).json(mapped);
   } catch (err: any) {

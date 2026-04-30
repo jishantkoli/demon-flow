@@ -63,17 +63,27 @@ const ensureTeacherUser = async (teacherData: any) => {
 
 export const getNominations = async (req: AuthRequest, res: Response) => {
   try {
-    const { functionary_id, form_id, teacher_email } = req.query;
+    const { id, functionary_id, form_id, teacher_email, school_code } = req.query;
     const query: any = {};
+    if (id) query._id = id;
     if (functionary_id) query.functionary_id = functionary_id;
     if (form_id) query.form_id = form_id;
     if (teacher_email) {
       query.teacher_email = { $regex: new RegExp(`^${teacher_email}$`, 'i') };
     }
+    if (school_code) query.school_code = school_code;
     
-    // Admins can see all, functionaries see theirs
-    if (req.user.role === 'functionary') {
+    // Admins can see all.
+    // If a specific form_id is provided (submission detail linking), allow lookup by form.
+    // Otherwise, restrict by role.
+    if (req.user.role === 'admin') {
+      // No filter
+    } else if (form_id || id) {
+      // Allow lookup for linking submissions by direct nomination id (preferred) or form_id.
+    } else if (req.user.role === 'functionary') {
       query.functionary_id = req.user._id;
+    } else if (req.user.role === 'teacher') {
+      query.teacher_email = { $regex: new RegExp(`^${req.user.email}$`, 'i') };
     }
 
     const nominations = await Nomination.find(query)
@@ -154,15 +164,20 @@ export const deleteNomination = async (req: AuthRequest, res: Response) => {
 export const getNominationByToken = async (req: Request, res: Response) => {
   try {
     const { token } = req.params;
-    const nomination = await Nomination.findOne({ unique_token: token }).populate('form_id');
+    const nomination = await Nomination.findOne({ unique_token: token })
+      .populate('form_id')
+      .populate('functionary_id', 'profile.fullName email');
+      
     if (!nomination) return res.status(404).json({ error: 'Nomination link invalid or expired' });
     
+    const obj = nomination.toObject();
     res.status(200).json({ 
       success: true, 
       data: {
-        ...nomination.toObject(),
+        ...obj,
         id: nomination._id,
-        form: nomination.form_id // This is now the populated form object
+        form: nomination.form_id, // This is now the populated form object
+        functionary_name: (obj.functionary_id as any)?.profile?.fullName || (obj.functionary_id as any)?.email || 'School Head'
       } 
     });
   } catch (err: any) {

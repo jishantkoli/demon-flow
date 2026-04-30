@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, useBlocker } from 'react-router-dom';
+import { Reorder, useDragControls } from 'framer-motion';
 import {
   Save, Plus, Trash2, GripVertical, ArrowLeft, Eye, Settings2,
   Type, AlignLeft, Hash, Mail, Phone, CalendarDays, ListChecks, CheckSquare, Radio, Upload, HelpCircle,
@@ -7,6 +8,7 @@ import {
   LayoutDashboard, Pencil, Settings, History, Download, Trash, AlertCircle, PlusCircle, Check
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { copyToClipboard } from '../lib/utils';
 
 // ─── Types (matching App 1 exactly) ───────────────────────────────────────────
 type FieldType = 'text' | 'textarea' | 'number' | 'email' | 'phone' | 'date' | 'dropdown' | 'radio' | 'checkbox' | 'file' | 'mcq';
@@ -65,17 +67,137 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
     </label>
   );
 }
-function Breadcrumbs({ items }: { items: { label: string; to?: string }[] }) {
+function Breadcrumbs({ items, onNavigate }: { items: { label: string; to?: string }[]; onNavigate?: (to: string) => void }) {
   const nav = useNavigate();
   return (
     <nav className="text-sm text-muted flex items-center gap-1.5 flex-wrap">
       {items.map((it, i) => (
         <span key={i} className="flex items-center gap-1.5">
           {i > 0 && <span className="text-slate-300">/</span>}
-          {it.to ? <button onClick={() => nav(it.to!)} className="hover:text-navy">{it.label}</button> : <span className="font-medium text-ink">{it.label}</span>}
+          {it.to ? (
+            <button
+              onClick={() => (onNavigate ? onNavigate(it.to!) : nav(it.to!))}
+              className="hover:text-navy"
+            >
+              {it.label}
+            </button>
+          ) : (
+            <span className="font-medium text-ink">{it.label}</span>
+          )}
         </span>
       ))}
     </nav>
+  );
+}
+
+function DraggableField({ f, i, activeSection, activeField, setActiveField, updateField, removeField, moveField, form, section }: {
+  f: Field; i: number; activeSection: number; activeField: string | null;
+  setActiveField: (id: string | null) => void;
+  updateField: (sIdx: number, fid: string, p: Partial<Field>) => void;
+  removeField: (fid: string) => void;
+  moveField: (fid: string, dir: -1 | 1) => void;
+  form: FormState;
+  section: Section;
+}) {
+  const controls = useDragControls();
+  const Icon = fieldIcons[f.type];
+  const open = activeField === f.id;
+
+  return (
+    <Reorder.Item
+      value={f}
+      id={f.id}
+      dragListener={false}
+      dragControls={controls}
+      className={`card ${open ? '!border-blue' : ''}`}
+    >
+      <div className="flex items-start gap-3">
+        <div 
+          onPointerDown={(e) => controls.start(e)}
+          className="cursor-grab active:cursor-grabbing text-muted mt-1 p-1 -m-1 hover:bg-slate-100 rounded"
+        >
+          <GripVertical size={16} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <Icon size={15} />
+            <input className="input !py-1.5 flex-1" value={f.label}
+              onChange={e => updateField(activeSection, f.id, { label: e.target.value })} placeholder="Question label" />
+            {f.required && <Badge tone="rose">required</Badge>}
+          </div>
+          {!open && (
+            <button onClick={() => setActiveField(f.id)} className="text-xs text-blue hover:underline mt-2">Configure →</button>
+          )}
+          {open && (
+            <div className="mt-3 space-y-3 animate-in">
+              {(f.type === 'text' || f.type === 'textarea' || f.type === 'email' || f.type === 'phone') && (
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-xs"><span className="text-muted">Placeholder</span>
+                    <input className="input !py-1.5 mt-1" value={f.placeholder || ''} onChange={e => updateField(activeSection, f.id, { placeholder: e.target.value })} /></label>
+                  <label className="text-xs"><span className="text-muted">Max length</span>
+                    <input type="number" className="input !py-1.5 mt-1" value={f.maxLength || ''} onChange={e => updateField(activeSection, f.id, { maxLength: +e.target.value || undefined })} /></label>
+                </div>
+              )}
+              {(f.type === 'dropdown' || f.type === 'radio' || f.type === 'checkbox' || f.type === 'mcq') && (
+                <div>
+                  <div className="text-xs text-muted mb-1">Options</div>
+                  <div className="space-y-1">
+                    {f.options?.map((opt, oi) => (
+                      <div key={oi} className="flex items-center gap-2">
+                        {f.type === 'mcq' && (
+                          <input type="radio" checked={f.correct === oi} onChange={() => updateField(activeSection, f.id, { correct: oi })} className="w-4 h-4" />
+                        )}
+                        <input className="input !py-1.5" value={opt}
+                          onChange={e => updateField(activeSection, f.id, { options: f.options!.map((x, j) => j === oi ? e.target.value : x) })} />
+                        <button onClick={() => updateField(activeSection, f.id, { options: f.options!.filter((_, j) => j !== oi) })} className="btn btn-danger !py-1 !px-2"><Trash2 size={14} /></button>
+                      </div>
+                    ))}
+                    <button onClick={() => updateField(activeSection, f.id, { options: [...(f.options || []), `Option ${(f.options?.length || 0) + 1}`] })} className="text-xs text-blue hover:underline">+ add option</button>
+                  </div>
+                </div>
+              )}
+              {f.type === 'mcq' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-xs"><span className="text-muted">Marks</span>
+                    <input type="number" className="input !py-1.5 mt-1" value={f.marks || 1} onChange={e => updateField(activeSection, f.id, { marks: +e.target.value })} /></label>
+                  <label className="text-xs"><span className="text-muted">Negative</span>
+                    <input type="number" step="0.25" className="input !py-1.5 mt-1" value={f.negative || 0} onChange={e => updateField(activeSection, f.id, { negative: +e.target.value })} /></label>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/30 mt-2">
+                <label className="text-xs"><span className="text-muted font-bold text-primary">Reviewer Max Marks</span>
+                  <input type="number" className="input !py-1.5 mt-1 border-primary/30 focus:border-primary"
+                    placeholder="Max score reviewer can give"
+                    value={f.reviewer_max_marks || ''}
+                    onChange={e => updateField(activeSection, f.id, { reviewer_max_marks: +e.target.value || 0 })} /></label>
+              </div>
+              {f.type === 'file' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-xs"><span className="text-muted">Allowed types</span>
+                    <input className="input !py-1.5 mt-1" placeholder="pdf,jpg,png" value={f.fileTypes || ''} onChange={e => updateField(activeSection, f.id, { fileTypes: e.target.value })} /></label>
+                  <label className="text-xs"><span className="text-muted">Max size MB</span>
+                    <input type="number" className="input !py-1.5 mt-1" value={f.maxSizeMB || 5} onChange={e => updateField(activeSection, f.id, { maxSizeMB: +e.target.value })} /></label>
+                </div>
+              )}
+              {(form.form_type === 'branching' || form.form_type === 'multi' || true) && (
+                <BranchingEditor allFields={section.fields.filter(x => x.id !== f.id)} value={f.visibleIf}
+                  onChange={v => updateField(activeSection, f.id, { visibleIf: v })} />
+              )}
+              <div className="flex items-center justify-between pt-2 border-t border-border/30">
+                <div className="flex items-center gap-2">
+                  <Toggle checked={f.required || false} onChange={v => updateField(activeSection, f.id, { required: v })} label="Required" />
+                </div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => moveField(f.id, -1)} className="btn btn-ghost !p-1.5"><ChevronDown className="rotate-180" size={16} /></button>
+                  <button onClick={() => moveField(f.id, 1)} className="btn btn-ghost !p-1.5"><ChevronDown size={16} /></button>
+                  <button onClick={() => removeField(f.id)} className="btn btn-ghost !p-1.5 text-rose-500"><Trash2 size={16} /></button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </Reorder.Item>
   );
 }
 
@@ -100,6 +222,7 @@ export default function FormBuilder() {
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -119,10 +242,23 @@ export default function FormBuilder() {
 
   const section = form.schema.sections[activeSection];
 
-  const patch = (p: Partial<FormState>) => setForm(f => ({ ...f, ...p }));
-  const patchSettings = (p: Record<string, unknown>) => setForm(f => ({ ...f, settings: { ...f.settings, ...p } }));
-  const patchSchema = (updater: (s: { sections: Section[] }) => { sections: Section[] }) =>
+  const patch = (p: Partial<FormState>) => { setForm(f => ({ ...f, ...p })); setIsDirty(true); };
+  const patchSettings = (p: Record<string, unknown>) => { setForm(f => ({ ...f, settings: { ...f.settings, ...p } })); setIsDirty(true); };
+  const sanitizeSettingsForSave = (settings: Record<string, unknown>) => {
+    const next = { ...settings } as any;
+    if (Array.isArray(next.nomination_custom_fields)) {
+      next.nomination_custom_fields = next.nomination_custom_fields.map((cf: any) => {
+        const clean: any = { ...cf };
+        if (typeof clean.optionsInput === 'string') delete clean.optionsInput;
+        return clean;
+      });
+    }
+    return next;
+  };
+  const patchSchema = (updater: (s: { sections: Section[] }) => { sections: Section[] }) => {
     setForm(f => ({ ...f, schema: updater(f.schema) }));
+    setIsDirty(true);
+  };
   const updateSection = (i: number, p: Partial<Section>) =>
     patchSchema(s => ({ sections: s.sections.map((x, idx) => idx === i ? { ...x, ...p } : x) }));
   const updateField = (sIdx: number, fid: string, p: Partial<Field>) =>
@@ -156,26 +292,69 @@ export default function FormBuilder() {
     setActiveSection(0);
   };
 
-  const save = async () => {
+  const save = async (isManual = true, shouldNavigate = true) => {
+    if (saving) return;
     setSaving(true);
     try {
       const payload = {
         ...form,
+        status: isManual ? form.status : 'draft',
         form_schema: form.schema,  // backend uses form_schema
-        settings: JSON.stringify(form.settings),
+        settings: JSON.stringify(sanitizeSettingsForSave(form.settings)),
       };
       if (isNew) {
         await api.post('/forms', payload);
       } else {
         const { id: _formId, ...formWithoutId } = form;
-        await api.put('/forms', { id, ...formWithoutId, form_schema: form.schema, settings: JSON.stringify(form.settings) });
+        await api.put('/forms', { id, ...formWithoutId, form_schema: form.schema, settings: JSON.stringify(sanitizeSettingsForSave(form.settings)) });
       }
-      alert('Changes saved successfully.');
-      nav('/forms');
+      if (isManual) {
+        alert('Changes saved successfully.');
+      }
+      setIsDirty(false);
+      if (shouldNavigate) nav('/forms');
     } catch (err: any) {
-      alert(err.message);
+      if (isManual) alert(err.message);
+      else console.error('Auto-save failed:', err);
+      if (shouldNavigate) nav('/forms');
     } finally { setSaving(false); }
   };
+
+  const handleBack = () => {
+    if (isDirty) {
+      save(false, true); // Save as draft silently and then navigate to /forms
+    } else {
+      nav('/forms');
+    }
+  };
+
+  // Block navigation if dirty and save as draft
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      isDirty && currentLocation.pathname !== nextLocation.pathname
+  );
+
+  useEffect(() => {
+    if (blocker.state === 'blocked') {
+      // If the user is navigating away (sidebar, back button, etc.)
+      // we save as draft silently and then proceed.
+      save(false, false).finally(() => {
+        blocker.proceed();
+      });
+    }
+  }, [blocker.state]);
+
+  // Handle browser close/refresh
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
   const fieldButtons: { type: FieldType; label: string }[] = [
     { type: 'text', label: 'Short text' },
@@ -188,17 +367,15 @@ export default function FormBuilder() {
     { type: 'radio', label: 'Radio' },
     { type: 'checkbox', label: 'Checkbox' },
     { type: 'file', label: 'File upload' },
-    ...(form.form_type === 'quiz' || form.form_type === 'multi' ? [{ type: 'mcq' as FieldType, label: 'MCQ (auto-score)' }] : []),
+    { type: 'mcq', label: 'MCQ (auto-score)' },
   ];
 
   const publicUrl = `${location.origin}/fill/${id || 'unsaved'}`;
   const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(publicUrl);
+    const success = await copyToClipboard(publicUrl);
+    if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch (e) {
-      console.error('Failed to copy link', e);
     }
   };
 
@@ -206,7 +383,10 @@ export default function FormBuilder() {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <Breadcrumbs items={[{ label: 'Forms', to: '/forms' }, { label: isNew ? 'New form' : 'Edit form' }]} />
+          <Breadcrumbs 
+            items={[{ label: 'Forms', to: '/forms' }, { label: isNew ? 'New form' : 'Edit form' }]} 
+            onNavigate={handleBack}
+          />
           <div className="flex items-center gap-2 mt-1">
             <input
               className="font-display text-2xl font-bold text-ink bg-transparent outline-none border-b-2 border-transparent focus:border-blue transition-colors"
@@ -217,9 +397,9 @@ export default function FormBuilder() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => nav('/forms')} className="btn btn-ghost"><ArrowLeft size={16}/> Back</button>
+          <button onClick={handleBack} className="btn btn-ghost"><ArrowLeft size={16}/> Back</button>
           <button onClick={() => setShowPreview(p => !p)} className="btn btn-ghost"><Eye size={16}/> {showPreview ? 'Hide preview' : 'Preview'}</button>
-          <button onClick={save} disabled={saving} className="btn btn-primary"><Save size={16}/> {saving ? 'Saving…' : 'Save'}</button>
+          <button onClick={() => save(true)} disabled={saving} className="btn btn-primary"><Save size={16}/> {saving ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
 
@@ -278,93 +458,15 @@ export default function FormBuilder() {
             </Card>
           )}
 
-          {section?.fields.map((f, i) => {
-            const Icon = fieldIcons[f.type];
-            const open = activeField === f.id;
-            return (
-              <Card key={f.id} className={open ? '!border-blue' : ''}>
-                <div className="flex items-start gap-3">
-                  <div className="cursor-grab text-muted mt-1"><GripVertical size={16}/></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Icon size={15} />
-                      <input className="input !py-1.5 flex-1" value={f.label}
-                        onChange={e => updateField(activeSection, f.id, { label: e.target.value })} placeholder="Question label" />
-                      {f.required && <Badge tone="rose">required</Badge>}
-                    </div>
-                    {!open && (
-                      <button onClick={() => setActiveField(f.id)} className="text-xs text-blue hover:underline mt-2">Configure →</button>
-                    )}
-                    {open && (
-                      <div className="mt-3 space-y-3 animate-in">
-                        {(f.type === 'text' || f.type === 'textarea' || f.type === 'email' || f.type === 'phone') && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <label className="text-xs"><span className="text-muted">Placeholder</span>
-                              <input className="input !py-1.5 mt-1" value={f.placeholder || ''} onChange={e => updateField(activeSection, f.id, { placeholder: e.target.value })} /></label>
-                            <label className="text-xs"><span className="text-muted">Max length</span>
-                              <input type="number" className="input !py-1.5 mt-1" value={f.maxLength || ''} onChange={e => updateField(activeSection, f.id, { maxLength: +e.target.value || undefined })} /></label>
-                          </div>
-                        )}
-                        {(f.type === 'dropdown' || f.type === 'radio' || f.type === 'checkbox' || f.type === 'mcq') && (
-                          <div>
-                            <div className="text-xs text-muted mb-1">Options</div>
-                            <div className="space-y-1">
-                              {f.options?.map((opt, oi) => (
-                                <div key={oi} className="flex items-center gap-2">
-                                  {f.type === 'mcq' && (
-                                    <input type="radio" checked={f.correct === oi} onChange={() => updateField(activeSection, f.id, { correct: oi })} className="w-4 h-4" />
-                                  )}
-                                  <input className="input !py-1.5" value={opt}
-                                    onChange={e => updateField(activeSection, f.id, { options: f.options!.map((x, j) => j === oi ? e.target.value : x) })} />
-                                  <button onClick={() => updateField(activeSection, f.id, { options: f.options!.filter((_, j) => j !== oi) })} className="btn btn-danger !py-1 !px-2"><Trash2 size={14}/></button>
-                                </div>
-                              ))}
-                              <button onClick={() => updateField(activeSection, f.id, { options: [...(f.options || []), `Option ${(f.options?.length || 0) + 1}`] })} className="text-xs text-blue hover:underline">+ add option</button>
-                            </div>
-                          </div>
-                        )}
-                        {f.type === 'mcq' && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <label className="text-xs"><span className="text-muted">Marks</span>
-                              <input type="number" className="input !py-1.5 mt-1" value={f.marks || 1} onChange={e => updateField(activeSection, f.id, { marks: +e.target.value })} /></label>
-                            <label className="text-xs"><span className="text-muted">Negative</span>
-                              <input type="number" step="0.25" className="input !py-1.5 mt-1" value={f.negative || 0} onChange={e => updateField(activeSection, f.id, { negative: +e.target.value })} /></label>
-                          </div>
-                        )}
-                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/30 mt-2">
-                          <label className="text-xs"><span className="text-muted font-bold text-primary">Reviewer Max Marks</span>
-                            <input type="number" className="input !py-1.5 mt-1 border-primary/30 focus:border-primary" 
-                              placeholder="Max score reviewer can give"
-                              value={f.reviewer_max_marks || ''} 
-                              onChange={e => updateField(activeSection, f.id, { reviewer_max_marks: +e.target.value || 0 })} /></label>
-                        </div>
-                        {f.type === 'file' && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <label className="text-xs"><span className="text-muted">Allowed types</span>
-                              <input className="input !py-1.5 mt-1" placeholder="pdf,jpg,png" value={f.fileTypes || ''} onChange={e => updateField(activeSection, f.id, { fileTypes: e.target.value })} /></label>
-                            <label className="text-xs"><span className="text-muted">Max size MB</span>
-                              <input type="number" className="input !py-1.5 mt-1" value={f.maxSizeMB || 5} onChange={e => updateField(activeSection, f.id, { maxSizeMB: +e.target.value })} /></label>
-                          </div>
-                        )}
-                        {(form.form_type === 'branching' || form.form_type === 'multi') && (
-                          <BranchingEditor allFields={section.fields.filter(x => x.id !== f.id)} value={f.visibleIf}
-                            onChange={v => updateField(activeSection, f.id, { visibleIf: v })} />
-                        )}
-                        <div className="flex items-center justify-between">
-                          <Toggle checked={!!f.required} onChange={v => updateField(activeSection, f.id, { required: v })} label="Required" />
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => moveField(f.id, -1)} disabled={i === 0} className="btn btn-ghost !py-1 !px-2 disabled:opacity-40">↑</button>
-                            <button onClick={() => moveField(f.id, 1)} disabled={i === section.fields.length - 1} className="btn btn-ghost !py-1 !px-2 disabled:opacity-40">↓</button>
-                            <button onClick={() => { removeField(f.id); setActiveField(null); }} className="btn btn-danger !py-1 !px-2"><Trash2 size={14}/></button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
+          <Reorder.Group axis="y" values={section?.fields || []} onReorder={(newFields) => updateSection(activeSection, { fields: newFields })} className="space-y-4">
+            {section?.fields.map((f, i) => (
+              <DraggableField
+                key={f.id} f={f} i={i} activeSection={activeSection} activeField={activeField}
+                setActiveField={setActiveField} updateField={updateField} removeField={removeField}
+                moveField={moveField} form={form} section={section}
+              />
+            ))}
+          </Reorder.Group>
 
           {section?.fields.length === 0 && (
             <Card className="text-center text-muted">No fields yet. Add one from the left panel.</Card>
@@ -380,6 +482,7 @@ export default function FormBuilder() {
                   <button
                     onClick={() => setShowPreview(false)}
                     className="bg-white p-2 rounded-full shadow-lg hover:scale-110 transition-transform"
+                    title="Back to editor"
                   >
                     <ArrowLeft size={24} />
                   </button>
@@ -401,15 +504,7 @@ export default function FormBuilder() {
                 </select></label>
             </div>
 
-            <div className="mt-3">
-              <label className="text-xs block"><span className="text-muted">Access Mode</span>
-                <select className="select mt-1" value={(form.settings.auth_mode as string) || 'otp'} onChange={e => patchSettings({ auth_mode: e.target.value })}>
-                  <option value="otp">OTP based (Email)</option>
-                  <option value="anonymous">No Login (Anonymous)</option>
-                </select></label>
-            </div>
-
-            {(form.form_type === 'quiz' || form.form_type === 'multi') && (
+            {(form.form_type === 'quiz' || form.form_type === 'multi' || true) && (
               <div className="mt-3 pt-3 border-t border-border space-y-2">
                 <div className="text-xs font-semibold text-ink">Quiz Settings</div>
                 <label className="text-xs"><span className="text-muted">Time limit (minutes)</span>
@@ -419,30 +514,75 @@ export default function FormBuilder() {
               </div>
             )}
 
-            {(form.form_type === 'nomination' || form.form_type === 'multi') && (
-              <div className="mt-3 pt-3 border-t border-border space-y-2">
+            <div className="mt-3 pt-3 border-t border-border space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold text-ink">Nomination Mode</div>
+                <Toggle 
+                  checked={form.form_type === 'nomination'} 
+                  onChange={v => {
+                    patch({ form_type: v ? 'nomination' : 'normal' });
+                    // Automatically switch auth_mode based on nomination mode
+                    patchSettings({ auth_mode: v ? 'otp' : 'anonymous' });
+                  }} 
+                />
+              </div>
+              <p className="text-[10px] text-muted leading-tight">Enable this to use this form for school-based teacher nominations.</p>
+              
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-[10px] font-bold text-muted uppercase tracking-tight">Access Mode</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                   (form.settings.auth_mode as string) === 'otp' 
+                     ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                     : 'bg-slate-50 text-slate-500 border-slate-100'
+                 }`}>
+                   {(form.settings.auth_mode as string) === 'otp' ? 'OTP Verification' : 'Direct Access'}
+                 </span>
+              </div>
+            </div>
+
+            {(form.form_type === 'nomination') && (
+              <div className="mt-3 pt-3 border-t border-border space-y-4">
                 <div className="text-xs font-semibold text-ink">Nomination Settings</div>
-                <label className="text-xs"><span className="text-muted">Nomination limit (per school)</span>
-                  <input type="number" className="input !py-1.5 mt-1" value={(form.settings.nomination_limit as number) || 5} onChange={e => patchSettings({ nomination_limit: +e.target.value })} /></label>
-                <label className="text-xs block"><span className="text-muted">Teacher Login Type</span>
-                  <select className="select mt-1" value={(form.settings.teacher_login as string) || 'otp'} onChange={e => patchSettings({ teacher_login: e.target.value })}>
-                    <option value="otp">OTP via Link</option>
-                    <option value="direct">Direct Access (Link only)</option>
-                  </select></label>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-xs"><span className="text-muted">Limit (per school)</span>
+                    <input type="number" className="input !py-1.5 mt-1" value={(form.settings.nomination_limit as number) || 5} onChange={e => patchSettings({ nomination_limit: +e.target.value })} /></label>
+                  <label className="text-xs block"><span className="text-muted">Login Type</span>
+                    <select className="select mt-1" value={(form.settings.teacher_login as string) || 'otp'} onChange={e => patchSettings({ teacher_login: e.target.value })}>
+                      <option value="otp">OTP via Link</option>
+                      <option value="direct">Direct Access</option>
+                    </select></label>
+                </div>
                 
                 <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center justify-between opacity-60"><span className="text-sm">Require Teacher Name</span><div className="w-8 h-4 rounded-full bg-mint relative"><div className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-white shadow" /></div></div>
                   <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Email</span><Toggle checked={form.settings.require_email !== false} onChange={v => patchSettings({ require_email: v })} /></div>
                   <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Phone</span><Toggle checked={!!form.settings.require_phone} onChange={v => patchSettings({ require_phone: v })} /></div>
                 </div>
 
-                <div className="pt-2 border-t border-border mt-2">
-                  <div className="text-[10px] font-bold uppercase text-muted mb-2">Custom Nomination Fields</div>
+                <div className="pt-2 border-t border-border">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-[10px] font-bold uppercase text-muted">Custom Nomination Fields</div>
+                    <button 
+                      onClick={() => {
+                        const current = (form.settings.nomination_custom_fields as any[]) || [];
+                        patchSettings({ 
+                          nomination_custom_fields: [
+                            ...current, 
+                            { id: `cf_${Date.now()}`, label: '', type: 'text', required: false }
+                          ] 
+                        });
+                      }}
+                      className="text-[10px] text-primary hover:underline font-bold"
+                    >
+                      + Add Field
+                    </button>
+                  </div>
+                  
                   <div className="space-y-2">
                     {((form.settings.nomination_custom_fields as any[]) || []).map((cf, cfi) => (
-                      <div key={cfi} className="flex flex-col gap-1.5 p-2 bg-canvas rounded-lg border border-border">
+                      <div key={cf.id || cfi} className="flex flex-col gap-1.5 p-2 bg-slate-50 rounded-lg border border-slate-200">
                         <div className="flex items-center gap-2">
-                          <input className="input !py-1 flex-1" placeholder="Field Label (e.g. Employee ID)" value={cf.label} 
+                          <input className="input !py-1 flex-1 text-xs" placeholder="Field Label" value={cf.label} 
                             onChange={e => {
                               const newFields = [...(form.settings.nomination_custom_fields as any[])];
                               newFields[cfi] = { ...cf, label: e.target.value };
@@ -451,46 +591,44 @@ export default function FormBuilder() {
                           <button onClick={() => {
                             const newFields = (form.settings.nomination_custom_fields as any[]).filter((_, i) => i !== cfi);
                             patchSettings({ nomination_custom_fields: newFields });
-                          }} className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg"><Trash2 size={12} /></button>
+                          }} className="text-rose-500 p-1 hover:bg-rose-50 rounded"><Trash2 size={12} /></button>
                         </div>
                         <div className="flex items-center gap-2">
-                          <select className="select !py-1 flex-1" value={cf.type} 
+                          <select className="select !py-1 text-[10px] flex-1" value={cf.type} 
                             onChange={e => {
                               const newFields = [...(form.settings.nomination_custom_fields as any[])];
                               newFields[cfi] = { ...cf, type: e.target.value };
                               patchSettings({ nomination_custom_fields: newFields });
                             }}>
-                            <option value="text">Short Text</option>
-                            <option value="textarea">Paragraph (Long Text)</option>
+                            <option value="text">Text</option>
+                            <option value="textarea">Paragraph</option>
                             <option value="number">Number</option>
                             <option value="date">Date</option>
+                            <option value="file">File Upload</option>
                             <option value="dropdown">Dropdown</option>
-                            <option value="radio">Radio Buttons</option>
-                            <option value="checkbox">Checkboxes</option>
-                            <option value="file">File Upload (PDF, JPG, PNG)</option>
                           </select>
-                          <Toggle checked={!!cf.required} onChange={v => {
-                            const newFields = [...(form.settings.nomination_custom_fields as any[])];
-                            newFields[cfi] = { ...cf, required: v };
-                            patchSettings({ nomination_custom_fields: newFields });
-                          }} label="Req" />
+                          <label className="flex items-center gap-1 text-[10px] cursor-pointer">
+                            <input type="checkbox" checked={cf.required} onChange={e => {
+                              const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                              newFields[cfi] = { ...cf, required: e.target.checked };
+                              patchSettings({ nomination_custom_fields: newFields });
+                            }} /> Req
+                          </label>
                         </div>
                         {['dropdown', 'radio', 'checkbox'].includes(cf.type) && (
-                          <input className="input !py-1" placeholder="Options (comma separated)" value={cf.options?.join(', ') || ''} 
+                          <input className="input !py-1 text-[10px]" placeholder="Options (comma separated)" value={cf.optionsInput ?? (cf.options?.join(', ') || '')} 
                             onChange={e => {
                               const newFields = [...(form.settings.nomination_custom_fields as any[])];
-                              newFields[cfi] = { ...cf, options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) };
+                              const raw = e.target.value;
+                              newFields[cfi] = { ...cf, optionsInput: raw, options: raw.split(',').map(s => s.trim()).filter(Boolean) };
                               patchSettings({ nomination_custom_fields: newFields });
                             }} />
                         )}
                       </div>
                     ))}
-                    <button onClick={() => {
-                      const newFields = [...((form.settings.nomination_custom_fields as any[]) || []), { id: `cf_${Date.now()}`, label: '', type: 'text', required: false }];
-                      patchSettings({ nomination_custom_fields: newFields });
-                    }} className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline">
-                      <Plus size={10} /> Add Custom Field
-                    </button>
+                    {((form.settings.nomination_custom_fields as any[]) || []).length === 0 && (
+                      <p className="text-[10px] text-muted text-center py-2 italic">No custom fields added yet.</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -526,6 +664,8 @@ function BranchingEditor({ allFields, value, onChange }: {
 }) {
   const [open, setOpen] = useState(!!value);
   const eligible = allFields.filter(f => ['dropdown', 'radio', 'checkbox', 'text'].includes(f.type));
+  const selectedTrigger = eligible.find(f => f.id === value?.fieldId);
+  const triggerOptions = Array.isArray(selectedTrigger?.options) ? selectedTrigger.options : [];
   return (
     <div className="border border-dashed border-border rounded-xl p-3 bg-canvas">
       <button onClick={() => { setOpen(v => !v); if (!open && !value && eligible[0]) onChange({ fieldId: eligible[0].id, op: 'eq', value: '' }); if (open) onChange(undefined); }}
@@ -534,14 +674,30 @@ function BranchingEditor({ allFields, value, onChange }: {
       </button>
       {open && (
         <div className="mt-2 grid grid-cols-[1fr_auto_1fr] gap-2 items-center text-sm">
-          <select className="select !py-1.5" value={value?.fieldId || ''} onChange={e => onChange({ ...(value || { op: 'eq' as const, value: '' }), fieldId: e.target.value })}>
+          <select className="select !py-1.5" value={value?.fieldId || ''} onChange={e => onChange({ ...(value || { op: 'eq' as const, value: '' }), fieldId: e.target.value, value: '' })}>
             <option value="">Select field…</option>
             {eligible.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
           </select>
           <select className="select !py-1.5" value={value?.op || 'eq'} onChange={e => onChange({ ...(value || { fieldId: '', value: '' }), op: e.target.value as 'eq' | 'neq' })}>
             <option value="eq">equals</option><option value="neq">not equals</option>
           </select>
-          <input className="input !py-1.5" placeholder="value (e.g. Maths)" value={(value?.value as string) || ''} onChange={e => onChange({ ...(value || { fieldId: '', op: 'eq' as const }), value: e.target.value })} />
+          {triggerOptions.length > 0 ? (
+            <select
+              className="select !py-1.5"
+              value={(value?.value as string) || ''}
+              onChange={e => onChange({ ...(value || { fieldId: '', op: 'eq' as const }), value: e.target.value })}
+            >
+              <option value="">Select option…</option>
+              {triggerOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+          ) : (
+            <input
+              className="input !py-1.5"
+              placeholder="value (e.g. Maths)"
+              value={(value?.value as string) || ''}
+              onChange={e => onChange({ ...(value || { fieldId: '', op: 'eq' as const }), value: e.target.value })}
+            />
+          )}
         </div>
       )}
     </div>

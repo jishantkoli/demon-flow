@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { loginWithPassword, requestOTP, verifyOTP } from '../lib/auth';
 import { motion } from 'framer-motion';
 import { GraduationCap, Mail, Key, Phone, ArrowRight, Eye, EyeOff, AlertCircle, CheckCircle, Info } from 'lucide-react';
@@ -6,8 +7,27 @@ import { GraduationCap, Mail, Key, Phone, ArrowRight, Eye, EyeOff, AlertCircle, 
 type Portal = 'select' | 'admin' | 'functionary' | 'teacher';
 
 export default function Login({ onLogin }: { onLogin: (u: any) => void }) {
+  const [searchParams] = useSearchParams();
   const [portal, setPortal] = useState<Portal>('select');
   const [email, setEmail] = useState('');
+  
+  // Auto-select portal and pre-fill email if provided in query params
+  useEffect(() => {
+    const portalParam = searchParams.get('portal') as Portal;
+    const emailParam = searchParams.get('email');
+    const redirectParam = searchParams.get('redirect');
+
+    if (portalParam && ['admin', 'functionary', 'teacher'].includes(portalParam)) {
+      setPortal(portalParam);
+    } else if (redirectParam?.startsWith('/fill/')) {
+      setPortal('teacher');
+    }
+
+    if (emailParam) {
+      setEmail(emailParam);
+    }
+  }, [searchParams]);
+
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -24,7 +44,16 @@ export default function Login({ onLogin }: { onLogin: (u: any) => void }) {
     try { 
       const res = await loginWithPassword(email, password); 
       console.log('Admin Login success:', res);
-      onLogin(res.user); 
+      
+      const redirect = searchParams.get('redirect');
+      if (redirect) {
+        setSuccess('Login successful! Redirecting...');
+        setTimeout(() => {
+          window.location.href = redirect;
+        }, 800);
+      } else {
+        onLogin(res.user); 
+      }
     }
     catch (err: any) { 
        console.error('Admin Login failed:', err);
@@ -47,7 +76,17 @@ export default function Login({ onLogin }: { onLogin: (u: any) => void }) {
       try { 
         const res = await verifyOTP(email, otp); 
         console.log('OTP Verify success:', res);
-        onLogin(res.user); 
+        
+        const redirect = searchParams.get('redirect');
+        if (redirect) {
+          // If there's a redirect URL, go there after a brief success message
+          setSuccess('Login successful! Redirecting...');
+          setTimeout(() => {
+            window.location.href = redirect;
+          }, 1000);
+        } else {
+          onLogin(res.user); 
+        }
       }
       catch (err: any) { 
         console.error('OTP Verify failed:', err);
@@ -62,11 +101,14 @@ export default function Login({ onLogin }: { onLogin: (u: any) => void }) {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/60 to-sky-50/40 flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="w-full max-w-[420px]">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-sidebar text-white flex items-center justify-center mx-auto mb-4 shadow-xl shadow-primary/25">
-            <GraduationCap size={30} />
+          <div className="w-48 h-48 mx-auto mb-4 overflow-hidden flex items-center justify-center">
+            <img src="/logo.png" alt="CISCE Logo" className="w-full h-full object-contain drop-shadow-xl" onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.parentElement!.innerHTML = '<div class="w-24 h-24 rounded-full bg-primary text-white flex items-center justify-center font-bold text-2xl shadow-xl border-4 border-white">CISCE</div>';
+            }} />
           </div>
-          <h1 className="text-2xl font-bold font-heading text-primary">SchoolData Collection Portal</h1>
-          <p className="text-sm text-muted mt-1">Secure School Data Collection System</p>
+          <h1 className="text-3xl font-bold font-heading text-primary tracking-tight">CISCE Data Collection Portal</h1>
+          <p className="text-sm text-muted mt-2 font-medium">Council for the Indian School Certificate Examinations</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-200/80 overflow-hidden">
