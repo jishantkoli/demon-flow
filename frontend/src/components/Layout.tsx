@@ -141,13 +141,18 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
         </div>
       )}
 
-      {/* ===== SIDEBAR — Vibrant Indigo ===== */}
+      {/* ===== SIDEBAR — CISCE Deep Blue ===== */}
       <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-[260px] bg-gradient-to-b from-sidebar-light to-sidebar text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="p-5 flex items-center gap-3 border-b border-white/10">
-          <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center font-bold text-sm shadow-inner backdrop-blur-md">SD</div>
-          <div className="flex-1">
-            <h1 className="font-heading font-bold text-[14px] leading-tight tracking-tight text-white">SchoolData</h1>
-            <p className="text-[9px] text-white/50 uppercase tracking-[0.15em]">Collection Portal</p>
+        <div className="p-4 flex items-center gap-3 border-b border-white/10 bg-white/[0.03]">
+          <div className="w-20 h-20 flex items-center justify-center overflow-hidden shrink-0">
+            <img src="/logo-sidebar.png" alt="Logo" className="w-20 h-20 object-contain" onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.parentElement!.innerHTML = '<span class="text-white font-extrabold text-xs">CISCE</span>';
+            }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-heading font-bold text-[15px] leading-tight tracking-tight text-white">CISCE Portal</h1>
+            <p className="text-[9px] text-white/60 uppercase tracking-[0.15em]">Official System</p>
           </div>
           <button className="lg:hidden text-white/60 hover:text-white" onClick={() => setSidebarOpen(false)}><X size={20} /></button>
         </div>

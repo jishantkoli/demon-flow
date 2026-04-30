@@ -125,10 +125,6 @@ export default function Nominations({ user }: { user: User }) {
       alert('Teacher nominated successfully! Email link has been sent.');
       fetchData();
       setAddForm({ teacher_name: '', teacher_email: '', teacher_phone: '', link_type: 'otp' });
-      // Redirect back to forms if we came from there
-      if (initialFormId) {
-        setTimeout(() => navigate('/forms'), 1000);
-      }
     } catch (err: any) {
       alert(err.message || 'Failed to add teacher');
     } finally {
@@ -150,10 +146,6 @@ export default function Nominations({ user }: { user: User }) {
       await api.post('/nominations', { action: 'bulk-nominate', nominations: nomList });
       setShowBulk(false); setBulkText(''); 
       fetchData();
-      // Redirect back to forms if we came from there
-      if (initialFormId) {
-        setTimeout(() => navigate('/forms'), 1000);
-      }
     } catch (err: any) {
       alert(err.message || 'Failed to bulk import teachers');
     } finally {

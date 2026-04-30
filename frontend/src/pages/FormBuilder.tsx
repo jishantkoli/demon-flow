@@ -504,14 +504,6 @@ export default function FormBuilder() {
                 </select></label>
             </div>
 
-            <div className="mt-3">
-              <label className="text-xs block"><span className="text-muted">Access Mode</span>
-                <select className="select mt-1" value={(form.settings.auth_mode as string) || 'anonymous'} onChange={e => patchSettings({ auth_mode: e.target.value })}>
-                  <option value="anonymous">No Login (Anonymous)</option>
-                  <option value="otp">OTP based (Email)</option>
-                </select></label>
-            </div>
-
             {(form.form_type === 'quiz' || form.form_type === 'multi' || true) && (
               <div className="mt-3 pt-3 border-t border-border space-y-2">
                 <div className="text-xs font-semibold text-ink">Quiz Settings</div>
@@ -535,6 +527,17 @@ export default function FormBuilder() {
                 />
               </div>
               <p className="text-[10px] text-muted leading-tight">Enable this to use this form for school-based teacher nominations.</p>
+              
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-[10px] font-bold text-muted uppercase tracking-tight">Access Mode</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                   (form.settings.auth_mode as string) === 'otp' 
+                     ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                     : 'bg-slate-50 text-slate-500 border-slate-100'
+                 }`}>
+                   {(form.settings.auth_mode as string) === 'otp' ? 'OTP Verification' : 'Direct Access'}
+                 </span>
+              </div>
             </div>
 
             {(form.form_type === 'nomination') && (

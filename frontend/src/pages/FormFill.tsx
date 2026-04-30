@@ -553,7 +553,12 @@ export default function FormFill({ user }: { user: User }) {
             <button onClick={() => nav('/forms')} className="p-2 hover:bg-slate-100 rounded-lg text-muted hover:text-ink transition-colors" title="Back to Forms">
               <ChevronLeft size={20}/>
             </button>
-            <div className="w-9 h-9 rounded-xl bg-navy text-white grid place-items-center"><GraduationCap size={18}/></div>
+            <div className="w-10 h-10 flex items-center justify-center overflow-hidden">
+              <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.parentElement!.innerHTML = '<div class="w-8 h-8 rounded-lg bg-navy text-white flex items-center justify-center"><span class="font-bold text-xs">C</span></div>';
+              }} />
+            </div>
             <div>
               <div className="font-display font-bold text-sm text-ink">{form.title}</div>
               <div className="text-[11px] text-muted">Section {sectionIdx + 1} of {visibleSections.length}</div>

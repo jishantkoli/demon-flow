@@ -6,37 +6,37 @@
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-display: 'Poppins', 'Inter', sans-serif;
 
-  /* ── App 2 Premium Palette ── */
+  /* ── CISCE Premium Palette ── */
   --color-surface: #f8fafc;
   --color-card: #ffffff;
   --color-fg: #0f172a;
   --color-muted: #64748b;
   --color-border: #e2e8f0;
-  --color-primary: #5e5ce6;
-  --color-primary-hover: #4e4cb6;
-  --color-sidebar: #1e1b4b;
-  --color-sidebar-light: #4338ca;
+  --color-primary: #004b93;
+  --color-primary-hover: #003a72;
+  --color-sidebar: #002d59;
+  --color-sidebar-light: #004b93;
   --color-accent-purple: #8b5cf6;
   --color-accent-blue: #3b82f6;
   --color-accent-red: #ef4444;
   --color-accent-orange: #f59e0b;
   --color-success: #10b981;
-  --color-accent-green: #22c55e; /* Vibrant Green 500 */
-  --color-accent-green-hover: #16a34a; /* Green 600 */
+  --color-accent-green: #22c55e;
+  --color-accent-green-hover: #16a34a;
   --color-danger: #ef4444;
   --color-warning: #f59e0b;
 
   /* ── App 1 RAJU Token Mirror ── */
   --color-ink: #0b1d3a;
   --color-ink-soft: #1b2e52;
-  --color-navy: #102a5c;
-  --color-navy-deep: #081a42;
-  --color-blue: #2563eb;
+  --color-navy: #004b93;
+  --color-navy-deep: #002d59;
+  --color-blue: #004b93;
   --color-blue-soft: #eff4ff;
   --color-sky: #e8f1ff;
   --color-mint: #10b981;
   --color-mint-soft: #ecfdf5;
-  --color-amber: #f59e0b;
+  --color-amber: #ffd700;
   --color-rose: #ef4444;
   --color-canvas: #f6f9ff;
 }
