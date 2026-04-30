@@ -30,3 +30,5 @@ uploads/
 *.png
 *.webp
 *.jpg
+!frontend/public/logo.png
+!frontend/public/logo-sidebar.png
