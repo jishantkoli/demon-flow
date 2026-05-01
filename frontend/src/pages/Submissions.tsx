@@ -155,7 +155,6 @@ export default function Submissions({ user }: { user: User }) {
     }).sort((a, b) => b.score - a.score);
 
     if (scored[0]?.score > 0) return scored[0].n;
-    if (nominations.length === 1) return nominations[0];
     return null;
   };
 
@@ -210,12 +209,11 @@ export default function Submissions({ user }: { user: User }) {
         : nominationIdParamRaw;
       const nominationTokenParam = sub.nomination_token || sub.nominationToken;
 
-      const [comms, formRes, nomsRes, fallbackRes, allFormNomsRes, tokenRes] = await Promise.allSettled([
+      const [comms, formRes, nomsRes, fallbackRes, tokenRes] = await Promise.allSettled([
         api.get(`/comments?submission_id=${sub.id}`).catch(() => []),
         formIdParam ? api.get(`/forms?id=${formIdParam}`) : Promise.resolve(null),
         nominationIdParam ? api.get(`/nominations?id=${nominationIdParam}`) : Promise.resolve([]),
         sub.user_email ? api.get(`/nominations?teacher_email=${encodeURIComponent(sub.user_email)}&form_id=${formIdParam}`) : Promise.resolve([]),
-        formIdParam ? api.get(`/nominations?form_id=${formIdParam}`) : Promise.resolve([]),
         nominationTokenParam ? api.get(`/nominations/token/${encodeURIComponent(nominationTokenParam)}`) : Promise.resolve(null)
       ]);
 
@@ -224,7 +222,7 @@ export default function Submissions({ user }: { user: User }) {
 
       // Robust matching logic for nomination
       const allPossibleNoms: any[] = [];
-      [nomsRes, fallbackRes, allFormNomsRes, tokenRes].forEach(res => {
+      [nomsRes, fallbackRes, tokenRes].forEach(res => {
         if (res.status === 'fulfilled' && res.value) {
           const payload: any = res.value;
           const data = Array.isArray(payload)
@@ -271,13 +269,11 @@ export default function Submissions({ user }: { user: User }) {
         : nominationIdParamRaw;
       const nominationTokenParam = sub.nomination_token || sub.nominationToken;
 
-      const [formNomsRaw, byEmailRaw, byIdRaw, byTokenRaw] = await Promise.all([
-        api.get(`/nominations?form_id=${sub.form_id}`).catch(() => []),
+      const [byEmailRaw, byIdRaw, byTokenRaw] = await Promise.all([
         sub.user_email ? api.get(`/nominations?form_id=${sub.form_id}&teacher_email=${encodeURIComponent(sub.user_email)}`).catch(() => []) : Promise.resolve([]),
         nominationIdParam ? api.get(`/nominations?id=${nominationIdParam}`).catch(() => []) : Promise.resolve([]),
         nominationTokenParam ? api.get(`/nominations/token/${encodeURIComponent(nominationTokenParam)}`).catch(() => null) : Promise.resolve(null)
       ]);
-      const formNoms = Array.isArray(formNomsRaw) ? formNomsRaw : [];
       const byEmailNoms = Array.isArray(byEmailRaw) ? byEmailRaw : [];
       const byIdNoms = Array.isArray(byIdRaw) ? byIdRaw : [];
       const byTokenNoms = (byTokenRaw as any)?.data
@@ -285,7 +281,7 @@ export default function Submissions({ user }: { user: User }) {
         : Array.isArray((byTokenRaw as any)) ? (byTokenRaw as any) : [];
         
       const nomMap = new Map<string, any>();
-      [...byTokenNoms, ...byIdNoms, ...formNoms, ...byEmailNoms].forEach((n: any) => {
+      [...byTokenNoms, ...byIdNoms, ...byEmailNoms].forEach((n: any) => {
         const key = String(n?.id || n?._id || `${n?.teacher_email || ''}-${n?.createdAt || ''}`);
         if (key) nomMap.set(key, n);
       });
@@ -419,7 +415,7 @@ export default function Submissions({ user }: { user: User }) {
     },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
     // Score column: hidden for teacher/functionary — they should NEVER see quiz scores
-    { key: 'score', label: 'Score', sortable: true, hidden: !canSeeScore, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{typeof v === 'object' ? v?.percentage : v}%</span> : <span className="text-muted">—</span> },
+    { key: 'score', label: 'Score', sortable: true, hidden: !canSeeScore, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{Number(typeof v === 'object' ? v?.percentage : v).toFixed(2)}%</span> : <span className="text-muted">—</span> },
     { key: 'submitted_at', label: 'Date', sortable: true, render: (v: string) => v ? <span className="text-xs text-muted">{new Date(v).toLocaleDateString()}</span> : '—' },
   ];
 
@@ -458,7 +454,7 @@ export default function Submissions({ user }: { user: User }) {
               <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Submitted By</p><p className="text-sm font-bold mt-0.5">{selected.user_name || 'Anonymous'}</p></div>
               <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Status</p><div className="mt-0.5"><StatusBadge status={selected.status} /></div></div>
               {canSeeScore && (
-                <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Score</p><p className="text-sm font-bold mt-0.5">{selected.score != null ? `${typeof selected.score === 'object' ? selected.score?.percentage : selected.score}%` : 'N/A'}</p></div>
+                <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Score</p><p className="text-sm font-bold mt-0.5">{selected.score != null ? `${Number(typeof selected.score === 'object' ? selected.score?.percentage : selected.score).toFixed(2)}%` : 'N/A'}</p></div>
               )}
             </div>
 

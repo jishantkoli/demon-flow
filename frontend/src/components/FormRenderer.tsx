@@ -514,7 +514,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
         <div className="mt-6 p-5 bg-slate-100 rounded-xl border-2 border-slate-200">
           <h4 className="text-sm font-bold text-slate-900 mb-3">Quiz Score</h4>
           <div className="flex items-center gap-5">
-            <div className="text-4xl font-black text-blue-600">{calcScore()}%</div>
+            <div className="text-4xl font-black text-blue-600">{calcScore().toFixed(2)}%</div>
             <div className="text-sm">
               {viewMode === 'admin' && (
                 <p className="text-slate-700 font-medium">

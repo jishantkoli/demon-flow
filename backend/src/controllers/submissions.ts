@@ -92,7 +92,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     
     // Fallback to recalculate if not provided by frontend
     if (req.body.score !== undefined && req.body.score !== null) {
-      earnedPoints = req.body.score;
+      earnedPoints = Number(req.body.score);
       // Extract max score
       if (form.form_schema && form.form_schema.sections) {
         form.form_schema.sections.forEach((sec: any) => {
@@ -109,15 +109,30 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
         passed: percentage >= (form.settings?.passing_score || 0)
       };
     } else if (form.form_schema && form.form_schema.sections) {
+      const toOptionText = (raw: any, options: string[] = []) => {
+        if (raw === undefined || raw === null) return raw;
+        if (typeof raw === 'number' && options[raw] !== undefined) return options[raw];
+        const n = Number(String(raw));
+        if (!Number.isNaN(n) && String(raw).trim() !== '' && options[n] !== undefined) return options[n];
+        return raw;
+      };
+
       form.form_schema.sections.forEach((sec: any) => {
         sec.fields?.forEach((field: any) => {
           if (field.type === 'mcq' && field.correct !== undefined) {
-            totalPoints += field.marks || 1;
+            const qMarks = field.marks || 1;
+            totalPoints += qMarks;
             const resp = responses.find((r: any) => r.fieldId === field.id);
-            if (resp && String(resp.value) === String(field.correct)) {
-              earnedPoints += field.marks || 1;
-            } else if (resp && form.settings?.negative_marking) {
-              earnedPoints -= field.negative || 0;
+            if (resp) {
+              const options = Array.isArray(field.options) ? field.options : [];
+              const ansText = toOptionText(resp.value, options);
+              const corrText = toOptionText(field.correct, options);
+
+              if (String(ansText).trim() === String(corrText).trim()) {
+                earnedPoints += qMarks;
+              } else if (form.settings?.negative_marking) {
+                earnedPoints -= field.negative || 0;
+              }
             }
           }
         });

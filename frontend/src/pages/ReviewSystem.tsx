@@ -409,7 +409,7 @@ export default function ReviewSystem({ user }: { user: User }) {
       { key: 'user_name', label: 'Name', sortable: true, render: (v: string, r: any) => (
         <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">{(v||'?')[0]}</div>
           <div><p className="text-sm font-medium">{v || 'Anonymous'}</p><p className="text-[10px] text-slate-500">{r.user_email}</p></div></div>) },
-      { key: 'score', label: 'Form Score', sortable: true, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{typeof v === 'object' ? v?.percentage : v}%</span> : <span className="text-slate-500">—</span> },
+      { key: 'score', label: 'Form Score', sortable: true, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{Number(typeof v === 'object' ? v?.percentage : v).toFixed(2)}%</span> : <span className="text-slate-500">—</span> },
       ...formLevels.map((l: any) => ({
         key: `level_${l.level_number}`, label: `L{l.level_number} Avg`, sortable: true,
         render: (_: any, r: any) => {
@@ -733,7 +733,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                       <div className="flex items-center gap-3 mt-1 text-[11px]">
                         <span className="bg-white/15 px-2 py-0.5 rounded-full">{sub.form_title}</span>
                         <StatusBadge status={sub.status} size="xs" />
-                        {sub.score != null && <span className="bg-emerald-500/30 px-2 py-0.5 rounded-full">Form Score: {typeof sub.score === 'object' ? sub.score?.percentage : sub.score}%</span>}
+                        {sub.score != null && <span className="bg-emerald-500/30 px-2 py-0.5 rounded-full">Form Score: {Number(typeof sub.score === 'object' ? sub.score?.percentage : sub.score).toFixed(2)}%</span>}
                         <span className="bg-white/15 px-2 py-0.5 rounded-full">Level {profileData.highest_level}/{profileData.total_levels}</span>
                       </div>
                     </div>

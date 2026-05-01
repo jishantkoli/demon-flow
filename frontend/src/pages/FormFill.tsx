@@ -393,12 +393,30 @@ export default function FormFill({ user }: { user: User }) {
     const mcqs = sections.flatMap((s: Section) => s.fields).filter((f: Field) => f.type === 'mcq');
     if (!mcqs.length) return null;
     let score = 0, max = 0;
+
+    const toOptionText = (raw: any, options: string[] = []) => {
+      if (raw === undefined || raw === null) return raw;
+      if (typeof raw === 'number' && options[raw] !== undefined) return options[raw];
+      const n = Number(String(raw));
+      if (!Number.isNaN(n) && String(raw).trim() !== '' && options[n] !== undefined) return options[n];
+      return raw;
+    };
+
     mcqs.forEach((f: Field) => {
-      max += f.marks || 1;
+      const qMarks = f.marks || 1;
+      max += qMarks;
       const ans = answers[f.id];
-      if (ans === undefined) return;
-      if (String(ans) === String(f.correct)) score += f.marks || 1;
-      else if (form.settings.negative_marking) score -= f.negative || 0;
+      if (ans === undefined || ans === null) return;
+
+      const options = Array.isArray(f.options) ? f.options : [];
+      const ansText = toOptionText(ans, options);
+      const corrText = toOptionText(f.correct, options);
+
+      if (String(ansText).trim() === String(corrText).trim()) {
+        score += qMarks;
+      } else if (form.settings?.negative_marking) {
+        score -= f.negative || 0;
+      }
     });
     return { score: Math.max(0, score), max };
   };
@@ -683,7 +701,7 @@ function FieldRenderer({ f, value, onChange, shuffle }: { f: Field; value: unkno
             return (
               <div className="mt-2 space-y-1.5">
                 {opts.map((o, i) => {
-                  const val = f.type === 'mcq' ? String(i) : o;
+                  const val = o; // Always use text value for consistency and to avoid shuffle bugs
                   const checked = String(value) === val;
                   return (
                     <label key={o} className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${checked ? 'border-blue bg-blue-soft' : 'border-border hover:bg-canvas'}`}>

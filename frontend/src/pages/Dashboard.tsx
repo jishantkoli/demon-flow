@@ -90,7 +90,7 @@ export default function Dashboard({ user }: { user: User }) {
                 <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{(sub.user_name || 'U').charAt(0)}</div>
                 <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{sub.form_title || `Form #${sub.form_id}`}</p><p className="text-[11px] text-slate-500">{sub.user_name || sub.user_email || 'Anonymous'}</p></div>
                 <StatusBadge status={sub.status} />
-                {sub.score != null && <span className="text-xs font-bold text-primary">{typeof sub.score === 'object' ? sub.score?.percentage : sub.score}%</span>}
+                {sub.score != null && <span className="text-xs font-bold text-primary">{Number(typeof sub.score === 'object' ? sub.score?.percentage : sub.score).toFixed(2)}%</span>}
                 <span className="text-[10px] text-slate-500 hidden sm:block">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : ''}</span>
               </div>
             ))}
