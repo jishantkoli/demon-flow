@@ -9,7 +9,7 @@ import { motion } from 'framer-motion';
 import {
   CheckCircle, XCircle, Clock, Filter, Layers, Save, Star, BarChart3,
   Users, ChevronRight, Eye, ArrowRight, Award, TrendingUp, UserCheck,
-  Zap, FileText, Settings
+  Zap, FileText, Settings, History, Plus
 } from 'lucide-react';
 
 export default function ReviewSystem({ user }: { user: User }) {
@@ -32,22 +32,33 @@ export default function ReviewSystem({ user }: { user: User }) {
   // Shortlist creation
   const [showCreateLevel, setShowCreateLevel] = useState(false);
   const [showShortlist, setShowShortlist] = useState(false);
-  const [levelForm, setLevelForm] = useState({ name: '', level_number: 1, scoring_type: 'form_level', grade_scale: 'A,B,C,D', blind_review: false, reviewer_ids: [] as string[] });
+  const [levelForm, setLevelForm] = useState({ 
+    name: '', 
+    level_number: 1, 
+    scoring_type: 'form_level', 
+    assignment_type: 'all', // 'all' or 'divide_sections'
+    section_id: null as string | null, // NEW: Specific section filter
+    blind_review: false, 
+    reviewer_ids: [] as string[] 
+  });
   const [shortlistFilter, setShortlistFilter] = useState({ filter_type: 'all', filter_value: '0', source_level_id: '', field_id: '', field_value: '' });
   const [fieldFilters, setFieldFilters] = useState<FieldFilterRow[]>([{ field_id: '', operator: 'contains', field_value: '' }]);
   const [shortlistResult, setShortlistResult] = useState<any>(null);
   const [isFiltering, setIsFiltering] = useState(false);
   const [filteredResults, setFilteredResults] = useState<any[] | null>(null);
+  const [activeFilterLevel, setActiveFilterLevel] = useState(1); // Track which level we are currently filtering for
 
   // Reviewer modal
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedReview, setSelectedReview] = useState<any>(null);
   const [selectedSub, setSelectedSub] = useState<any>(null);
+  const [reviewHistory, setReviewHistory] = useState<any[]>([]);
   const [reviewComment, setReviewComment] = useState('');
   const [overallScore, setOverallScore] = useState(0);
   const [questionScores, setQuestionScores] = useState<Record<string, number>>({});
   const [grade, setGrade] = useState('');
   const [recommendation, setRecommendation] = useState('');
+  const [selectedFormObj, setSelectedFormObj] = useState<any>(null);
 
   // Profile detail
   const [showProfile, setShowProfile] = useState(false);
@@ -93,10 +104,14 @@ export default function ReviewSystem({ user }: { user: User }) {
     setSelectedFormId(formId);
     setLoadingSubs(true);
     try {
-      const data = await api.get(`/shortlist?form_id=${formId}`);
+      const [data, lvls, formObj] = await Promise.all([
+        api.get(`/shortlist?form_id=${formId}`),
+        api.get(`/review-levels?form_id=${formId}`),
+        api.get(`/forms?id=${formId}`)
+      ]);
       setShortlistData(data);
-      const lvls = await api.get(`/review-levels?form_id=${formId}`);
       setLevels(lvls);
+      setSelectedFormObj(formObj);
     } catch (err) { console.error(err); }
     finally { setLoadingSubs(false); }
   };
@@ -117,7 +132,13 @@ export default function ReviewSystem({ user }: { user: User }) {
       }
     } catch {}
     const flat: any[] = [];
-    const walk = (list: any[]) => list.forEach((f: any) => { if (f.type !== 'section') flat.push(f); if (f.children) walk(f.children); });
+    const walk = (list: any[]) => {
+      if (!Array.isArray(list)) return;
+      list.forEach((f: any) => { 
+        if (f.type !== 'section') flat.push(f); 
+        if (f.children) walk(f.children); 
+      });
+    };
     walk(formFields);
     return flat;
   };
@@ -169,13 +190,18 @@ export default function ReviewSystem({ user }: { user: User }) {
       });
     }
 
-    // Filter by Level Avg
-    if (shortlistFilter.filter_type === 'review_avg_gte' && shortlistFilter.source_level_id) {
-      const val = parseFloat(shortlistFilter.filter_value);
-      const levelNum = levels.find(l => l.id === shortlistFilter.source_level_id)?.level_number;
-      if (levelNum) {
-        results = results.filter(s => (s.level_averages?.[`level_${levelNum}`] || 0) >= val);
-      }
+    // Filter by Recommendation
+    if (shortlistFilter.filter_type === 'next_level_only') {
+      results = results.filter(s => {
+        const reviews = s.level_reviews || [];
+        if (shortlistFilter.source_level_id) {
+          return reviews.some((r: any) => 
+            (r.level_id === shortlistFilter.source_level_id || r.level === levels.find(l => l.id === shortlistFilter.source_level_id)?.level_number) 
+            && r.recommendation === 'next_level'
+          );
+        }
+        return reviews.some((r: any) => r.recommendation === 'next_level');
+      });
     }
 
     // Filter by Fields (AND logic)
@@ -224,12 +250,21 @@ export default function ReviewSystem({ user }: { user: User }) {
     setIsFiltering(false);
   };
 
+  useEffect(() => {
+    if (selectedFormId && shortlistData) {
+      applyFilters();
+    }
+  }, [activeFilterLevel]);
+
   const createLevel = async () => {
     if (!selectedFormId || !levelForm.name) return alert('Fill all fields');
     await api.post('/review-levels', {
-      form_id: selectedFormId, level_number: levelForm.level_number, name: levelForm.name,
-      scoring_type: levelForm.scoring_type, blind_review: levelForm.blind_review,
-      grade_scale: levelForm.grade_scale.split(',').map((s: string) => s.trim()),
+      form_id: selectedFormId, 
+      level_number: levelForm.level_number, 
+      name: levelForm.name,
+      scoring_type: levelForm.scoring_type, 
+      assignment_type: levelForm.assignment_type,
+      blind_review: levelForm.blind_review,
       reviewer_ids: levelForm.reviewer_ids
     });
     setShowCreateLevel(false);
@@ -242,9 +277,13 @@ export default function ReviewSystem({ user }: { user: User }) {
     let levelId = levels.find((l: any) => l.level_number === levelForm.level_number)?.id;
     if (!levelId) {
       const newLevel = await api.post('/review-levels', {
-        form_id: selectedFormId, level_number: levelForm.level_number, name: levelForm.name || `Level ${levelForm.level_number}`,
-        scoring_type: levelForm.scoring_type, blind_review: levelForm.blind_review,
-        grade_scale: levelForm.grade_scale.split(',').map((s: string) => s.trim()),
+        form_id: selectedFormId, 
+        level_number: levelForm.level_number, 
+        name: levelForm.name || `Level ${levelForm.level_number}`,
+        scoring_type: levelForm.scoring_type, 
+        assignment_type: levelForm.assignment_type,
+        section_id: levelForm.section_id, // Pass section filter
+        blind_review: levelForm.blind_review,
         reviewer_ids: levelForm.reviewer_ids
       });
       levelId = newLevel.id;
@@ -283,8 +322,15 @@ export default function ReviewSystem({ user }: { user: User }) {
       if (res.success && res.data) {
         setSelectedSub(res.data);
       }
+      
+      // Fetch review history for this submission to show previous reviewers' marks
+      const historyRes = await api.get(`/reviews?submission_id=${review.submission_id}`);
+      if (Array.isArray(historyRes)) {
+        // Only show completed reviews from previous levels
+        setReviewHistory(historyRes.filter(r => r.status === 'completed' && r.level < review.level));
+      }
     } catch (err) {
-      console.error("Failed to fetch submission:", err);
+      console.error("Failed to fetch review data:", err);
     }
     setReviewComment(review.comments || '');
     setOverallScore(review.overall_score || 0);
@@ -296,14 +342,22 @@ export default function ReviewSystem({ user }: { user: User }) {
     setShowReviewModal(true);
   };
 
-  const submitReview = async (action: 'approved' | 'rejected') => {
+  const submitReview = async () => {
     if (!selectedReview) return;
+    if (!recommendation) return alert('Please select a final recommendation');
+
     if (selectedReview.scoring_type === 'question_level') {
       const scoreError = validateQuestionScores();
       if (scoreError) return alert(scoreError);
     }
-    await api.put('/reviews', { id: selectedReview.id, status: action, comments: reviewComment });
-    await api.put('/submissions', { id: selectedReview.submission_id, status: action });
+
+    // Decision logic: Reviewer can only Reject or move to Next Level
+    const submissionStatus = recommendation === 'reject' ? 'rejected' : 'under_review';
+    const reviewStatus = 'completed'; // Review itself is done
+
+    await api.put('/reviews', { id: selectedReview.id, status: reviewStatus, comments: reviewComment });
+    await api.put('/submissions', { id: selectedReview.submission_id, status: submissionStatus });
+    
     // Find the level for this review
     const levelId = levels.find((l: any) => l.level_number === selectedReview.level)?.id;
     const qsArray = buildQuestionScoresPayload();
@@ -411,10 +465,24 @@ export default function ReviewSystem({ user }: { user: User }) {
           <div><p className="text-sm font-medium">{v || 'Anonymous'}</p><p className="text-[10px] text-slate-500">{r.user_email}</p></div></div>) },
       { key: 'score', label: 'Form Score', sortable: true, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{Number(typeof v === 'object' ? v?.percentage : v).toFixed(2)}%</span> : <span className="text-slate-500">—</span> },
       ...formLevels.map((l: any) => ({
-        key: `level_${l.level_number}`, label: `L{l.level_number} Avg`, sortable: true,
+        key: `level_${l.level_number}`, label: `L${l.level_number}`, sortable: true,
         render: (_: any, r: any) => {
-          const avg = r.level_averages?.[`level_${l.level_number}`];
-          return avg != null ? <span className="font-bold text-sm">{avg}</span> : <span className="text-slate-500 text-xs">—</span>;
+          const reviews = (r.level_reviews || []).filter((rv: any) => rv.level === l.level_number);
+          if (reviews.length === 0) return <span className="text-slate-400 text-[10px]">—</span>;
+          
+          return (
+            <div className="flex flex-wrap gap-1">
+              {reviews.map((rv: any, idx: number) => (
+                <div key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                  rv.recommendation === 'reject' ? 'bg-red-50 border-red-200 text-red-600' :
+                  rv.recommendation === 'next_level' ? 'bg-amber-50 border-amber-200 text-amber-600' :
+                  'bg-slate-50 border-slate-200 text-slate-600'
+                }`} title={rv.recommendation}>
+                  {rv.overall_score}
+                </div>
+              ))}
+            </div>
+          );
         }
       })),
       { key: 'highest_level', label: 'Reached', sortable: true, render: (v: number) => v > 0 ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">L{v}</span> : <span className="text-slate-500 text-xs">—</span> },
@@ -424,55 +492,131 @@ export default function ReviewSystem({ user }: { user: User }) {
     return (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div><h1 className="text-xl font-bold font-heading">Review & Shortlisting</h1>
-            <p className="text-sm text-slate-500">Select form → filter teachers → assign to level</p></div>
+          <div>
+            <h1 className="text-xl font-bold font-heading">Review & Shortlisting</h1>
+            <p className="text-sm text-slate-500">Manage teacher selection process in 3 simple steps</p>
+          </div>
         </div>
 
-        {/* 1. Form Selector */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-          <label className="text-xs font-semibold text-slate-500 mb-2 block">Step 1: Select Form to Review</label>
-          <select value={selectedFormId} onChange={e => { const id = e.target.value; if (id) loadFormData(id); else { setSelectedFormId(''); setShortlistData(null); setFilteredResults(null); } }}
-            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none focus:border-primary">
-            <option value="">Choose a form...</option>
-            {forms.map(f => <option key={f.id} value={f.id}>{f.title} ({f.form_type}) — {f.status}</option>)}
-          </select>
+        {/* STEP 1: Form Selection */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">1</span>
+              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Select Form</h2>
+            </div>
+            <select 
+              value={selectedFormId} 
+              onChange={e => { const id = e.target.value; if (id) loadFormData(id); else { setSelectedFormId(''); setShortlistData(null); setFilteredResults(null); } }}
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+            >
+              <option value="">Choose a form to start review process...</option>
+              {forms.map(f => <option key={f.id} value={f.id}>{f.title} ({f.form_type}) — {f.status}</option>)}
+            </select>
+          </div>
         </div>
 
-        {loadingSubs && <div className="flex justify-center py-8"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div>}
+        {loadingSubs && <div className="flex justify-center py-12"><div className="w-10 h-10 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div>}
 
         {selectedFormId && shortlistData && !loadingSubs && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column: Filters */}
+            {/* STEP 2: Filters (Left Column) */}
             <div className="lg:col-span-1 space-y-6">
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-                <h3 className="text-sm font-bold font-heading mb-4 flex items-center gap-2"><Filter size={15} className="text-primary" /> Filter Submissions</h3>
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm sticky top-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">2</span>
+                  <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Filter Teachers</h2>
+                </div>
                 
-                <div className="space-y-4">
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">1. Basic Filter</label>
-                    <div className="space-y-3">
-                      <select value={shortlistFilter.filter_type} onChange={e => setShortlistFilter(p => ({ ...p, filter_type: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:border-primary">
-                        <option value="all">All Submissions</option>
-                        <option value="form_score_gte">Form Auto-Score ≥</option>
-                        <option value="review_avg_gte">Previous Level Avg ≥</option>
-                      </select>
-
-                      {(shortlistFilter.filter_type === 'form_score_gte' || shortlistFilter.filter_type === 'review_avg_gte') && (
-                        <div className="flex gap-2">
-                          <input type="number" value={shortlistFilter.filter_value} onChange={e => setShortlistFilter(p => ({ ...p, filter_value: e.target.value }))} className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none" placeholder="Value (e.g. 80)" />
-                          {shortlistFilter.filter_type === 'review_avg_gte' && (
-                            <select value={shortlistFilter.source_level_id} onChange={e => setShortlistFilter(p => ({ ...p, source_level_id: e.target.value }))} className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs outline-none">
-                              <option value="">Source Level</option>
-                              {(shortlistData?.levels || []).map((l: any) => <option key={l.id} value={l.id}>L{l.level_number}</option>)}
-                            </select>
-                          )}
-                        </div>
-                      )}
+                <div className="space-y-6">
+                  {/* Section 1: Selection Levels */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Selection Stages</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        onClick={() => {
+                          setActiveFilterLevel(1);
+                          setShortlistFilter(p => ({ ...p, filter_type: 'all', source_level_id: '' }));
+                        }}
+                        className={`px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-tight border transition-all ${activeFilterLevel === 1 ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-primary/50'}`}
+                      >
+                        Level 1
+                      </button>
+                      {(levels || []).map((l: any, idx: number) => (
+                        <button 
+                          key={l.id}
+                          onClick={() => {
+                            setActiveFilterLevel(idx + 2);
+                            setShortlistFilter(p => ({ ...p, filter_type: 'next_level_only', source_level_id: l.id }));
+                          }}
+                          className={`px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-tight border transition-all ${activeFilterLevel === idx + 2 ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-primary/50'}`}
+                        >
+                          Level {idx + 2}
+                        </button>
+                      ))}
+                      <button 
+                        onClick={() => {
+                          setLevelForm(p => ({ 
+                            ...p, 
+                            level_number: (levels?.length || 0) + 2, 
+                            name: `Level ${(levels?.length || 0) + 2}`,
+                            reviewer_ids: []
+                          }));
+                          setShowShortlist(true);
+                        }}
+                        className="px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-tight border border-dashed border-slate-300 text-slate-400 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-1"
+                      >
+                        <Plus size={10} /> Add Level
+                      </button>
                     </div>
                   </div>
 
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">2. Field-Specific Filters</label>
+                  {/* Section 2: Filter Logic */}
+                  <div className="space-y-6 pt-6 border-t border-slate-100">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Filter Logic</label>
+                      {activeFilterLevel === 1 ? (
+                        <select value={shortlistFilter.filter_type} onChange={e => setShortlistFilter(p => ({ ...p, filter_type: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium outline-none focus:border-primary">
+                          <option value="all">View All Submissions</option>
+                          <option value="form_score_gte">Score Based Filter</option>
+                          <option value="next_level_only">Next Level Recommendations</option>
+                        </select>
+                      ) : (
+                        <div className="p-4 bg-primary/5 border border-primary/10 rounded-2xl">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Zap size={14} className="text-primary" />
+                            <p className="text-[11px] font-black text-primary uppercase tracking-tighter">Automatic Pipeline Filter</p>
+                          </div>
+                          <p className="text-[10px] text-slate-600 leading-relaxed font-medium">
+                            Currently showing candidates recommended for the next level in 
+                            <span className="text-primary font-bold ml-1">Stage {activeFilterLevel - 1}</span>.
+                          </p>
+                        </div>
+                      )}
+
+                      {(shortlistFilter.filter_type === 'form_score_gte' || (shortlistFilter.filter_type === 'next_level_only' && activeFilterLevel === 1)) && (
+                        <div className="grid grid-cols-1 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          {shortlistFilter.filter_type === 'form_score_gte' && (
+                            <div>
+                              <p className="text-[9px] font-bold text-slate-400 mb-1">Minimum Score %</p>
+                              <input type="number" value={shortlistFilter.filter_value} onChange={e => setShortlistFilter(p => ({ ...p, filter_value: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none" placeholder="e.g. 80" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-[9px] font-bold text-slate-400 mb-1">{shortlistFilter.filter_type === 'next_level_only' ? 'Filter From Level' : 'Specific Level (Optional)'}</p>
+                            <select value={shortlistFilter.source_level_id} onChange={e => setShortlistFilter(p => ({ ...p, source_level_id: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs outline-none">
+                              <option value="">Any Level</option>
+                              {(shortlistData?.levels || []).map((l: any) => <option key={l.id} value={l.id}>L{l.level_number}: {l.name}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Advanced Filters */}
+                  <div className="space-y-3 pt-4 border-t border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Advanced Field Filters</label>
                     <div className="space-y-3">
                       {fieldFilters.map((row, idx) => {
                         const fields = getFormFilterFields();
@@ -481,120 +625,151 @@ export default function ReviewSystem({ user }: { user: User }) {
                         const isNumber = selectedField?.type === 'number';
                         
                         return (
-                          <div key={idx} className="p-2 rounded-lg bg-white border border-slate-200 space-y-2 relative group">
-                            <button onClick={() => setFieldFilters(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 w-5 h-5 bg-red-100 text-red-500 rounded-full flex items-center justify-center hover:bg-red-200 transition-colors shadow-sm">
-                              <XCircle size={12} />
+                          <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-3 relative">
+                            <button onClick={() => setFieldFilters(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-all shadow-md">
+                              <XCircle size={14} />
                             </button>
                             <select value={row.field_id} onChange={e => setFieldFilters(prev => prev.map((r, i) => {
                               if (i !== idx) return r;
                               const nextField = fields.find((fld: any) => String(fld.id) === e.target.value);
                               return { ...r, field_id: e.target.value, operator: getDefaultOperator(nextField), field_value: '' };
                             }))}
-                              className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none">
-                              <option value="">Select field...</option>
+                              className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs outline-none font-medium">
+                              <option value="">Select specific field...</option>
                               {fields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
                             </select>
 
-                            <select
-                              value={row.operator}
-                              onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, operator: e.target.value as FieldFilterRow['operator'] } : r))}
-                              className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none"
-                            >
-                              {isNumber ? (
-                                <>
-                                  <option value="gt">Greater than (&gt;)</option>
-                                  <option value="gte">Greater/equal (&gt;=)</option>
-                                  <option value="lt">Less than (&lt;)</option>
-                                  <option value="lte">Less/equal (&lt;=)</option>
-                                  <option value="eq">Equals</option>
-                                  <option value="neq">Not equals</option>
-                                </>
-                              ) : (
-                                <>
-                                  <option value="contains">Contains</option>
-                                  <option value="eq">Equals</option>
-                                  <option value="neq">Not equals</option>
-                                </>
-                              )}
-                            </select>
-
-                            {options.length > 0 ? (
-                              <select value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
-                                className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none">
-                                <option value="">Select value...</option>
-                                {options.map((o: string) => <option key={o} value={o}>{o}</option>)}
+                            <div className="grid grid-cols-2 gap-2">
+                              <select
+                                value={row.operator}
+                                onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, operator: e.target.value as FieldFilterRow['operator'] } : r))}
+                                className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] outline-none font-bold text-slate-600"
+                              >
+                                {isNumber ? (
+                                  <>
+                                    <option value="gt">Greater (&gt;)</option>
+                                    <option value="gte">Gte (&gt;=)</option>
+                                    <option value="lt">Less (&lt;)</option>
+                                    <option value="lte">Lte (&lt;=)</option>
+                                    <option value="eq">Equals</option>
+                                  </>
+                                ) : (
+                                  <>
+                                    <option value="contains">Contains</option>
+                                    <option value="eq">Exactly</option>
+                                  </>
+                                )}
                               </select>
-                            ) : (
-                              <input type={isNumber ? 'number' : 'text'} value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
-                                className="w-full px-2 py-1.5 rounded-md border border-slate-100 bg-slate-50 text-[11px] outline-none" placeholder={isNumber ? 'Enter numeric value...' : 'Value to match...'} />
-                            )}
+
+                              {options.length > 0 ? (
+                                <select value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
+                                  className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] outline-none font-medium">
+                                  <option value="">Value...</option>
+                                  {options.map((o: string) => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                              ) : (
+                                <input type={isNumber ? 'number' : 'text'} value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
+                                  className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] outline-none font-medium" placeholder="Match..." />
+                              )}
+                            </div>
                           </div>
                         );
                       })}
-                      <button onClick={() => setFieldFilters(prev => [...prev, { field_id: '', operator: 'contains', field_value: '' }])} className="w-full py-1.5 border border-dashed border-slate-300 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-white hover:border-primary transition-all flex items-center justify-center gap-1">
-                        <Zap size={10} /> Add Field Condition
+                      <button onClick={() => setFieldFilters(prev => [...prev, { field_id: '', operator: 'contains', field_value: '' }])} className="w-full py-2.5 border-2 border-dashed border-slate-200 rounded-xl text-[11px] font-bold text-slate-400 hover:text-primary hover:border-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2">
+                        <Zap size={12} /> Add New Condition
                       </button>
                     </div>
                   </div>
+                </div>
 
                   <button onClick={applyFilters} disabled={isFiltering}
-                    className="w-full py-3 bg-navy text-white rounded-xl text-sm font-bold hover:bg-navy-light shadow-lg shadow-navy/10 flex items-center justify-center gap-2 transition-all active:scale-95">
-                    {isFiltering ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Filter size={16} />}
-                    Show Filtered Teachers
+                    className="w-full py-4 bg-primary text-white rounded-2xl text-sm font-bold hover:bg-primary-dark shadow-lg shadow-primary/20 flex items-center justify-center gap-2 transition-all active:scale-95">
+                    {isFiltering ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Filter size={18} />}
+                    Apply Filters
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Right Column: Pipeline & Table */}
+            {/* STEP 3: Pipeline & Action (Right Column) */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Filter Results Action Bar (NEW) */}
+              {/* Shortlist Action Bar */}
               {filteredResults && (
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                  className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-4 text-white shadow-lg shadow-emerald-200 flex flex-col md:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                      <UserCheck size={20} />
+                  className="bg-navy rounded-2xl p-6 text-white shadow-xl shadow-navy/20 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32" />
+                  <div className="flex items-center gap-4 relative z-10">
+                    <div className="w-12 h-12 rounded-2xl bg-white/10 text-white flex items-center justify-center shadow-inner">
+                      <UserCheck size={24} />
                     </div>
                     <div>
-                      <p className="text-sm font-bold">{filteredResults.length} Teachers Found</p>
-                      <p className="text-[10px] text-emerald-100">Ready to be assigned to a review level</p>
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-6 rounded-full bg-white text-navy flex items-center justify-center text-[10px] font-black">3</span>
+                        <h2 className="text-base font-bold">Assign to Review Level</h2>
+                      </div>
+                      <p className="text-xs text-blue-200 mt-0.5">{filteredResults.length} teachers match your filters</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 w-full md:w-auto">
-                    <button onClick={() => setFilteredResults(null)} className="flex-1 md:flex-none px-4 py-2 text-xs font-bold text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition-all">
-                      Clear
+                  <div className="flex items-center gap-3 w-full md:w-auto relative z-10">
+                    <button onClick={() => setFilteredResults(null)} className="flex-1 md:flex-none px-5 py-2.5 text-xs font-bold text-blue-100 hover:text-white hover:bg-white/10 rounded-xl transition-all">
+                      Cancel
                     </button>
                     <button onClick={() => { setLevelForm(p => ({ ...p, level_number: formLevels.length + 1, name: `Level ${formLevels.length + 1}` })); setShowShortlist(true); }}
-                      className="flex-1 md:flex-none px-6 py-2.5 bg-white text-emerald-600 rounded-xl text-sm font-bold hover:bg-emerald-50 shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95">
-                      <Layers size={16} /> Shortlist Now
+                      className="flex-1 md:flex-none px-8 py-3 bg-white text-navy rounded-xl text-sm font-bold hover:bg-blue-50 shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95">
+                      <Layers size={18} /> Shortlist Now
                     </button>
                   </div>
                 </motion.div>
               )}
 
-              {/* Level pipeline */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-                <h3 className="text-sm font-bold font-heading mb-4 flex items-center gap-2"><Layers size={15} className="text-primary" /> Review Pipeline</h3>
+              {/* Visual Pipeline */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wider">
+                      <TrendingUp size={16} className="text-primary" /> Selection Pipeline
+                    </h3>
+                    {formLevels.length > 0 && (
+                      <span className="bg-primary/10 text-primary text-[10px] font-black px-2 py-0.5 rounded-full border border-primary/20">
+                        {formLevels.length} Stages Active
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg uppercase">Visual Flow</p>
+                </div>
                 {formLevels.length === 0 ? (
-                  <div className="text-center py-4 text-slate-400"><p className="text-xs italic">No levels created yet. Filter and shortlist to start.</p></div>
+                  <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                    <Layers size={32} className="mx-auto text-slate-300 mb-2 opacity-50" />
+                    <p className="text-xs text-slate-500 italic font-medium">No levels created yet. Start by filtering and shortlisting teachers.</p>
+                  </div>
                 ) : (
-                  <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                    <div className="flex-shrink-0 p-3 rounded-xl bg-blue-50 border border-blue-200 text-center min-w-[100px]">
-                      <p className="text-lg font-bold text-blue-700">{subs.length}</p>
-                      <p className="text-[9px] text-blue-600 font-bold uppercase">Submissions</p>
+                  <div className="flex items-center gap-3 overflow-x-auto pb-6 pt-2 custom-scrollbar snap-x snap-mandatory">
+                    <div className="flex-shrink-0 p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 text-center min-w-[120px] shadow-sm snap-start">
+                      <p className="text-2xl font-black text-slate-400">{subs.length}</p>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Total Pool</p>
                     </div>
-                    {formLevels.map((l: any) => {
+                    {formLevels.map((l: any, idx: number) => {
                       const atLevel = subs.filter((s: any) => s.highest_level >= l.level_number).length;
                       return (<React.Fragment key={l.id}>
-                        <ArrowRight size={14} className="text-slate-300 flex-shrink-0" />
-                        <div className="flex-shrink-0 p-3 rounded-xl bg-slate-50 border border-slate-200 text-center min-w-[120px]">
-                          <p className="text-[9px] font-bold text-primary uppercase">L{l.level_number}</p>
-                          <p className="text-[11px] font-bold truncate max-w-[100px]">{l.name}</p>
-                          <p className="text-lg font-bold">{atLevel}</p>
+                        <div className="flex flex-col items-center gap-1 opacity-40 flex-shrink-0">
+                          <ChevronRight size={20} className="text-slate-400" />
+                        </div>
+                        <div className="flex-shrink-0 p-4 rounded-2xl bg-white border-2 border-primary/20 text-center min-w-[150px] shadow-md relative group transition-all hover:border-primary snap-center">
+                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-white text-[8px] font-black px-2 py-1 rounded-full uppercase shadow-lg z-10 whitespace-nowrap">Stage {idx + 1}</div>
+                          <p className="text-[10px] font-black text-primary uppercase mb-1 tracking-tighter truncate px-2">{l.name}</p>
+                          <p className="text-2xl font-black text-slate-800">{atLevel}</p>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Shortlisted</p>
                         </div>
                       </React.Fragment>);
                     })}
+                    {/* Next Stage Placeholder */}
+                    <div className="flex flex-col items-center gap-1 opacity-20 flex-shrink-0">
+                      <ChevronRight size={20} className="text-slate-400" />
+                    </div>
+                    <div className="flex-shrink-0 p-4 rounded-2xl border-2 border-dashed border-slate-200 text-center min-w-[140px] opacity-40 snap-end">
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Stage {formLevels.length + 1}</p>
+                      <p className="text-xl font-bold text-slate-300">Pending</p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -640,18 +815,42 @@ export default function ReviewSystem({ user }: { user: User }) {
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Level Name</label>
                       <input value={levelForm.name} onChange={e => setLevelForm(p => ({ ...p, name: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none focus:border-primary" placeholder='e.g. "Initial Screening"' />
                     </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wider">Specific Form Section (Optional)</label>
+                      <select 
+                        value={levelForm.section_id || ''} 
+                        onChange={e => setLevelForm(p => ({ ...p, section_id: e.target.value }))} 
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold outline-none focus:border-primary"
+                      >
+                        <option value="">Full Form (All Sections)</option>
+                        {selectedFormObj?.form_schema?.sections?.map((s: any) => (
+                          <option key={s.id} value={s.id}>{s.title}</option>
+                        ))}
+                      </select>
+                      <p className="text-[9px] text-slate-400 mt-1 italic">If selected, reviewers will only see and grade this specific section.</p>
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Scoring Type</label>
-                        <select value={levelForm.scoring_type} onChange={e => setLevelForm(p => ({ ...p, scoring_type: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs outline-none">
-                          <option value="form_level">Overall</option>
-                          <option value="question_level">By Question</option>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wider">Scoring Mode</label>
+                        <select value={levelForm.scoring_type} onChange={e => setLevelForm(p => ({ ...p, scoring_type: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold outline-none focus:border-primary">
+                          <option value="form_level">Overall Scoring</option>
+                          <option value="question_level">Question-wise Scoring</option>
                         </select>
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Grades</label>
-                        <input value={levelForm.grade_scale} onChange={e => setLevelForm(p => ({ ...p, grade_scale: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs outline-none" placeholder="A,B,C" />
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wider">Reviewer Workload</label>
+                        <select value={levelForm.assignment_type} onChange={e => setLevelForm(p => ({ ...p, assignment_type: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold outline-none focus:border-primary">
+                          <option value="all">Assign Full Form to All</option>
+                          <option value="divide_sections">Divide Forms Among Reviewers</option>
+                        </select>
                       </div>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <p className="text-[10px] text-slate-500 leading-relaxed italic">
+                        {levelForm.assignment_type === 'all' 
+                          ? "Every reviewer will see every teacher's full form." 
+                          : "Teachers will be split equally among the assigned reviewers."}
+                      </p>
                     </div>
                     <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/50 cursor-pointer group">
                       <input type="checkbox" checked={levelForm.blind_review} onChange={e => setLevelForm(p => ({ ...p, blind_review: e.target.checked }))} className="w-4 h-4 rounded accent-primary" />
@@ -719,8 +918,21 @@ export default function ReviewSystem({ user }: { user: User }) {
           {profileLoading ? <div className="flex justify-center py-12"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div> :
           profileData && (() => {
             const sub = profileData.submission;
-            let responses: Record<string, any> = {};
-            try { responses = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : (sub.responses || {}); } catch {}
+            const formSchema = sub.formId?.form_schema || selectedFormObj?.form_schema;
+            let responseList: { label: string, value: any }[] = [];
+            
+            try { 
+              const raw = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : (sub.responses || []);
+              if (Array.isArray(raw)) {
+                responseList = raw.map((r: any) => {
+                  const field = (formSchema?.sections || []).flatMap((s: any) => s.fields || []).find((f: any) => f.id === r.fieldId);
+                  return { label: field?.label || r.fieldId, value: r.value };
+                });
+              } else {
+                responseList = Object.entries(raw).map(([k, v]) => ({ label: k, value: v }));
+              }
+            } catch {}
+
             return (
               <div className="space-y-5">
                 {/* Header */}
@@ -753,12 +965,6 @@ export default function ReviewSystem({ user }: { user: User }) {
                               <span className="text-sm font-bold">{lvl.level_name}</span>
                               <span className="text-[9px] text-slate-500">{lvl.scoring_type?.replace('_', ' ')} · {lvl.blind_review ? 'Blind' : 'Open'}</span>
                             </div>
-                            {lvl.average_score != null && (
-                              <div className="text-right">
-                                <p className="text-2xl font-bold text-primary">{lvl.average_score}</p>
-                                <p className="text-[10px] text-slate-500">avg score</p>
-                              </div>
-                            )}
                           </div>
                           {lvl.total_reviewers > 0 ? (
                             <div className="space-y-2">
@@ -788,11 +994,11 @@ export default function ReviewSystem({ user }: { user: User }) {
                 <div>
                   <h3 className="text-sm font-bold font-heading mb-3">Form Responses</h3>
                   <div className="bg-slate-100 rounded-xl p-4 space-y-2">
-                    {Object.keys(responses).length === 0 ? <p className="text-sm text-slate-500">No responses</p> :
-                      Object.entries(responses).map(([k, v]) => (
-                        <div key={k} className="flex flex-col sm:flex-row gap-1 py-1.5 border-b border-slate-200 last:border-0">
-                          <span className="text-xs font-semibold text-slate-500 min-w-[150px]">{k}:</span>
-                          <span className="text-sm">{Array.isArray(v) ? v.join(', ') : String(v)}</span>
+                    {responseList.length === 0 ? <p className="text-sm text-slate-500">No responses</p> :
+                      responseList.map((res, idx) => (
+                        <div key={idx} className="flex flex-col sm:flex-row gap-1 py-1.5 border-b border-slate-200 last:border-0">
+                          <span className="text-xs font-semibold text-slate-500 min-w-[150px]">{res.label}:</span>
+                          <span className="text-sm">{Array.isArray(res.value) ? res.value.join(', ') : String(res.value)}</span>
                         </div>
                       ))}
                   </div>
@@ -831,7 +1037,15 @@ export default function ReviewSystem({ user }: { user: User }) {
   // ═══════════ REVIEWER VIEW ═══════════
   const myPending = reviews.filter(r => r.status === 'pending');
   const myCompleted = reviews.filter(r => r.status !== 'pending');
-  const displayed = reviewTab === 'pending' ? myPending : myCompleted;
+  
+  // NEW: Filter reviews by selected form if one is chosen
+  const filteredMyReviews = selectedFormId 
+    ? reviews.filter(r => r.form_id === selectedFormId || r.formId === selectedFormId)
+    : reviews;
+    
+  const myPendingFiltered = filteredMyReviews.filter(r => r.status === 'pending');
+  const myCompletedFiltered = filteredMyReviews.filter(r => r.status !== 'pending');
+  const displayed = reviewTab === 'pending' ? myPendingFiltered : myCompletedFiltered;
 
   return (
     <div className="space-y-6">
@@ -840,15 +1054,15 @@ export default function ReviewSystem({ user }: { user: User }) {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-amber-50 rounded-xl p-4 text-center border border-amber-100">
-          <Clock size={20} className="mx-auto text-amber-500 mb-1" /><p className="text-xl font-bold">{myPending.length}</p><p className="text-xs text-amber-600">Pending</p></div>
+          <Clock size={20} className="mx-auto text-amber-500 mb-1" /><p className="text-xl font-bold">{myPendingFiltered.length}</p><p className="text-xs text-amber-600">Pending</p></div>
         <div className="bg-emerald-50 rounded-xl p-4 text-center border border-emerald-100">
-          <CheckCircle size={20} className="mx-auto text-emerald-500 mb-1" /><p className="text-xl font-bold">{myCompleted.length}</p><p className="text-xs text-emerald-600">Completed</p></div>
+          <CheckCircle size={20} className="mx-auto text-emerald-500 mb-1" /><p className="text-xl font-bold">{myCompletedFiltered.length}</p><p className="text-xs text-emerald-600">Completed</p></div>
       </div>
 
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
         {(['pending', 'completed'] as const).map(t => (
           <button key={t} onClick={() => setReviewTab(t)} className={`px-4 py-1.5 rounded-lg text-xs font-semibold capitalize ${reviewTab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
-            {t} ({t === 'pending' ? myPending.length : myCompleted.length})
+            {t} ({t === 'pending' ? myPendingFiltered.length : myCompletedFiltered.length})
           </button>
         ))}
       </div>
@@ -894,6 +1108,30 @@ export default function ReviewSystem({ user }: { user: User }) {
       <Modal open={showReviewModal} onClose={() => setShowReviewModal(false)} title={`Review Submission #${selectedReview?.submission_id || ''}`} size="xl">
         {selectedReview && (
           <div className="space-y-6">
+            {/* Previous Reviews History for Reviewer */}
+            {reviewHistory.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-bold flex items-center gap-2 px-1 text-amber-600">
+                  <History size={16} /> Previous Level Reviews
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {reviewHistory.map((prev, pIdx) => (
+                    <div key={pIdx} className="bg-amber-50/50 border border-amber-100 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase">Level {prev.level}</span>
+                        <span className="text-[10px] text-slate-400 font-medium">{new Date(prev.updatedAt || prev.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-slate-700">{prev.reviewer_name}</p>
+                        <p className="text-sm font-black text-primary">{prev.overall_score}<span className="text-[10px] text-slate-400 ml-0.5">pts</span></p>
+                      </div>
+                      {prev.comments && <p className="text-xs text-slate-500 italic line-clamp-2">"{prev.comments}"</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {selectedSub && reviewQuestions.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -949,7 +1187,7 @@ export default function ReviewSystem({ user }: { user: User }) {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 p-5 bg-slate-50 rounded-2xl border border-slate-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-5 bg-slate-50 rounded-2xl border border-slate-200">
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">
                   Overall Score {selectedReview.scoring_type === 'question_level' ? '(Sum of questions)' : '(0-100)'}
@@ -958,8 +1196,13 @@ export default function ReviewSystem({ user }: { user: User }) {
                   <input 
                     type="number" 
                     min={0} 
+                    max={100}
                     value={overallScore} 
-                    onChange={e => !selectedReview.scoring_type?.includes('question') && setOverallScore(parseInt(e.target.value) || 0)} 
+                    onChange={e => {
+                      if (selectedReview.scoring_type?.includes('question')) return;
+                      const val = parseInt(e.target.value) || 0;
+                      setOverallScore(Math.min(100, Math.max(0, val)));
+                    }} 
                     readOnly={selectedReview.scoring_type === 'question_level'}
                     className={`w-full px-4 py-2.5 rounded-xl border font-bold text-lg outline-none transition-all ${selectedReview.scoring_type === 'question_level' ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-primary focus:border-primary focus:ring-2 focus:ring-primary/10'}`} 
                   />
@@ -969,20 +1212,9 @@ export default function ReviewSystem({ user }: { user: User }) {
                 </div>
               </div>
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">Grade Assigned</label>
-                <select value={grade} onChange={e => setGrade(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-bold outline-none focus:border-primary focus:ring-2 focus:ring-primary/10">
-                  <option value="">Select Grade</option>
-                  <option value="A">Grade A (Excellent)</option>
-                  <option value="B">Grade B (Very Good)</option>
-                  <option value="C">Grade C (Good)</option>
-                  <option value="D">Grade D (Average)</option>
-                </select>
-              </div>
-              <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">Final Recommendation</label>
                 <select value={recommendation} onChange={e => setRecommendation(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-bold outline-none focus:border-primary focus:ring-2 focus:ring-primary/10">
                   <option value="">Choose action...</option>
-                  <option value="approve">Approve Submission</option>
                   <option value="reject">Reject Submission</option>
                   <option value="next_level">Recommend for Next Level</option>
                 </select>
@@ -1003,14 +1235,9 @@ export default function ReviewSystem({ user }: { user: User }) {
               <button onClick={saveDraft} className="px-6 py-3 bg-white border-2 border-slate-200 rounded-2xl text-sm font-bold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2">
                 <Save size={18} /> Save as Draft
               </button>
-              <div className="flex-1 flex gap-3">
-                <button onClick={() => submitReview('rejected')} className="flex-1 py-3 bg-red-50 text-red-600 border-2 border-red-100 rounded-2xl font-bold text-sm hover:bg-red-100 transition-all flex items-center justify-center gap-2">
-                  <XCircle size={18} /> Reject
-                </button>
-                <button onClick={() => submitReview('approved')} className="flex-1 py-3 bg-emerald-600 text-white rounded-2xl font-bold text-sm hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2">
-                  <CheckCircle size={18} /> Submit Review
-                </button>
-              </div>
+              <button onClick={submitReview} className="flex-1 py-3 bg-emerald-600 text-white rounded-2xl font-bold text-sm hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2">
+                <CheckCircle size={18} /> Submit Final Review
+              </button>
             </div>
           </div>
         )}
@@ -1104,7 +1331,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                           )}
                         </div>
                         <div className="space-y-2">
-                          {lvl.scores.map((s: any, i: number) => (
+                          {(lvl.scores || []).map((s: any, i: number) => (
                             <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
                               <div className="flex items-center justify-between">
                                 <span className="text-xs font-bold text-slate-600">Score: {s.overall_score}</span>

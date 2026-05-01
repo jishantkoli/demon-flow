@@ -23,7 +23,19 @@ export const getLevels = async (req: AuthRequest, res: Response) => {
       }
     }
     const levels = await Level.find(query).sort({ levelNumber: 1 });
-    res.status(200).json(levels.map(l => ({ ...l.toObject(), id: l._id, level_number: l.levelNumber })));
+    res.status(200).json(levels.map(l => {
+      const obj = l.toObject();
+      return {
+          ...obj,
+          id: obj._id,
+          level_number: obj.levelNumber,
+          scoring_type: obj.scoringType,
+          assignment_type: obj.assignmentType,
+          section_id: obj.sectionId,
+          blind_review: obj.blindReview,
+          reviewer_ids: obj.assignedReviewers
+        };
+    }));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -31,12 +43,14 @@ export const getLevels = async (req: AuthRequest, res: Response) => {
 
 export const createLevel = async (req: AuthRequest, res: Response) => {
   try {
-    const { form_id, level_number, name, scoring_type, blind_review, reviewer_ids } = req.body;
+    const { form_id, level_number, name, scoring_type, assignment_type, section_id, blind_review, reviewer_ids } = req.body;
     const level = await Level.create({
       formId: form_id,
       levelNumber: level_number,
       name,
-      scoringType: scoring_type === 'form_level' ? 'form' : 'question',
+      scoringType: scoring_type,
+      assignmentType: assignment_type,
+      sectionId: section_id,
       blindReview: blind_review,
       assignedReviewers: reviewer_ids
     });
@@ -120,16 +134,16 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
 
       const subData = submissions.map(s => {
         const subReviews = reviews.filter(r => r.submission_id.toString() === s._id.toString());
-        const levelAverages: any = {};
-        subReviews.forEach(r => {
-          if (!levelAverages[`level_${r.level}`]) levelAverages[`level_${r.level}`] = [];
-          levelAverages[`level_${r.level}`].push(r.overall_score || 0);
-        });
-
-        Object.keys(levelAverages).forEach(k => {
-          const vals = levelAverages[k];
-          levelAverages[k] = vals.length > 0 ? Math.round((vals.reduce((a:any, b:any) => a + b, 0) / vals.length) * 10) / 10 : 0;
-        });
+        
+        // Return actual review details for each level
+        const levelReviews = subReviews.map(r => ({
+          level: r.level,
+          status: r.status,
+          overall_score: r.overall_score,
+          recommendation: r.recommendation,
+          reviewer_id: r.reviewer_id,
+          id: r._id
+        }));
 
         return {
           ...s.toObject(),
@@ -138,7 +152,7 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
           user_email: s.userEmail,
           score: s.score?.percentage,
           highest_level: subReviews.length > 0 ? Math.max(...subReviews.map(r => r.level)) : 0,
-          level_averages: levelAverages
+          level_reviews: levelReviews
         };
       });
 
@@ -176,8 +190,16 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
     if (Array.isArray(submission_ids) && submission_ids.length > 0) {
       query._id = { $in: submission_ids };
     } else {
-      // Fallback to existing filter logic
-      if (filter_type === 'form_score_gte') {
+      // Filter by recommendations for Next Level
+      if (filter_type === 'next_level_only') {
+        const { source_level_id } = req.body;
+        const levelQuery: any = { recommendation: 'next_level', status: 'completed' };
+        if (source_level_id) levelQuery.level_id = source_level_id;
+        
+        const nextLevelReviews = await Review.find(levelQuery);
+        const subIds = [...new Set(nextLevelReviews.map(r => r.submission_id))];
+        query._id = { $in: subIds };
+      } else if (filter_type === 'form_score_gte') {
         query['score.percentage'] = { $gte: parseFloat(filter_value) };
       }
     }
@@ -211,6 +233,7 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
 
     let shortlistedCount = 0;
     let reviewsCreated = 0;
+    let reviewerIndex = 0;
 
     for (const sub of submissions) {
       if (!matchesFieldFilters(sub)) continue;
@@ -220,8 +243,10 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
       if (existing) continue;
 
       shortlistedCount++;
-      // Assign to all selected reviewers
-      for (const rid of reviewer_ids) {
+      
+      if (level.assignmentType === 'divide_sections') {
+        // Round-robin assignment of candidates to reviewers
+        const rid = reviewer_ids[reviewerIndex % reviewer_ids.length];
         await Review.create({
           submission_id: sub._id,
           reviewer_id: rid,
@@ -230,6 +255,19 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
           status: 'pending'
         });
         reviewsCreated++;
+        reviewerIndex++;
+      } else {
+        // Assign to all selected reviewers
+        for (const rid of reviewer_ids) {
+          await Review.create({
+            submission_id: sub._id,
+            reviewer_id: rid,
+            level: level.levelNumber,
+            level_id: level._id,
+            status: 'pending'
+          });
+          reviewsCreated++;
+        }
       }
     }
 

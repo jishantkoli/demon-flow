@@ -7,7 +7,9 @@ const levelSchema = new mongoose.Schema({
   assignedReviewers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   submissions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Submission' }],
   blindReview: { type: Boolean, default: false },
-  scoringType: { type: String, enum: ['form', 'question'], default: 'form' },
+  scoringType: { type: String, enum: ['form_level', 'question_level'], default: 'form_level' },
+  assignmentType: { type: String, enum: ['all', 'divide_sections'], default: 'all' },
+  sectionId: { type: String, default: null }, // NEW: Specific section filter
 }, { timestamps: true });
 
 levelSchema.index({ formId: 1, levelNumber: 1 }, { unique: true });

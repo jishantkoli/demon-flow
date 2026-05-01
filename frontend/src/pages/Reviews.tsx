@@ -49,16 +49,21 @@ export default function Reviews({ user }: { user: User }) {
     setOverallScore(0); setGrade(''); setRecommendation('');
   };
 
-  const handleAction = async (action: 'approved' | 'rejected') => {
+  const handleAction = async () => {
     if (!selected) return;
-    await api.put('/reviews', { id: selected.id, status: action, comments: reviewComment });
-    await api.put('/submissions', { id: selected.submission_id, status: action });
+    if (!recommendation) return alert('Please select a recommendation');
+
+    const submissionStatus = recommendation === 'reject' ? 'rejected' : 'under_review';
+    const reviewStatus = 'completed';
+
+    await api.put('/reviews', { id: selected.id, status: reviewStatus, comments: reviewComment });
+    await api.put('/submissions', { id: selected.submission_id, status: submissionStatus });
     await api.post('/review-scores', {
       review_id: selected.id, submission_id: selected.submission_id, reviewer_id: user.id,
       level_id: selected.level, overall_score: overallScore, grade, comments: reviewComment,
       recommendation, is_draft: false
     });
-    await api.post('/audit-logs', { user_id: user.id, action: 'review', details: JSON.stringify({ submission_id: selected.submission_id, decision: action, score: overallScore, grade }) });
+    await api.post('/audit-logs', { user_id: user.id, action: 'review', details: JSON.stringify({ submission_id: selected.submission_id, decision: recommendation, score: overallScore, grade }) });
     setSelected(null); fetchData();
   };
 
@@ -179,14 +184,13 @@ export default function Reviews({ user }: { user: User }) {
                       <option value="">Select Grade</option><option value="A">A - Excellent</option><option value="B">B - Good</option><option value="C">C - Average</option><option value="D">D - Below Average</option></select></div>
                   <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Recommendation</label>
                     <select value={recommendation} onChange={e => setRecommendation(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
-                      <option value="">Select</option><option value="approve">Approve</option><option value="reject">Reject</option><option value="next_level">Promote to Next Level</option><option value="revise">Request Revision</option></select></div>
+                      <option value="">Select</option><option value="reject">Reject</option><option value="next_level">Promote to Next Level</option><option value="revise">Request Revision</option></select></div>
                 </div>
                 <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Review Comments</label>
                   <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none h-24 resize-none" placeholder="Add detailed review comments..." /></div>
                 <div className="flex gap-3">
                   <button onClick={saveDraft} className="px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold hover:bg-white flex items-center gap-2 min-h-[44px]"><Save size={14} /> Save Draft</button>
-                  <button onClick={() => handleAction('approved')} className="flex-1 py-2.5 bg-emerald-500 text-white rounded-xl font-semibold text-sm hover:bg-emerald-600 flex items-center justify-center gap-2 min-h-[44px]"><CheckCircle size={16} /> Approve</button>
-                  <button onClick={() => handleAction('rejected')} className="flex-1 py-2.5 bg-red-500 text-white rounded-xl font-semibold text-sm hover:bg-red-600 flex items-center justify-center gap-2 min-h-[44px]"><XCircle size={16} /> Reject</button>
+                  <button onClick={handleAction} className="flex-1 py-2.5 bg-emerald-500 text-white rounded-xl font-semibold text-sm hover:bg-emerald-600 flex items-center justify-center gap-2 min-h-[44px]"><CheckCircle size={16} /> Submit Review</button>
                 </div>
               </>
             )}
