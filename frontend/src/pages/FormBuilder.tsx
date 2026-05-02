@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useBlocker } from 'react-router-dom';
-import { Reorder, useDragControls } from 'framer-motion';
+import { motion, Reorder, useDragControls } from 'framer-motion';
 import {
   Save, Plus, Trash2, GripVertical, ArrowLeft, Eye, Settings2,
   Type, AlignLeft, Hash, Mail, Phone, CalendarDays, ListChecks, CheckSquare, Radio, Upload, HelpCircle,
@@ -164,12 +164,30 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
                     <input type="number" step="0.25" className="input !py-1.5 mt-1" value={f.negative || 0} onChange={e => updateField(activeSection, f.id, { negative: +e.target.value })} /></label>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/30 mt-2">
-                <label className="text-xs"><span className="text-muted font-bold text-primary">Reviewer Max Marks</span>
-                  <input type="number" className="input !py-1.5 mt-1 border-primary/30 focus:border-primary"
-                    placeholder="Max score reviewer can give"
-                    value={f.reviewer_max_marks || ''}
-                    onChange={e => updateField(activeSection, f.id, { reviewer_max_marks: +e.target.value || 0 })} /></label>
+              <div className="pt-2 border-t border-border/30 mt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-primary">Enable Reviewer Grading</span>
+                  <Toggle 
+                    checked={!!f.reviewer_max_marks} 
+                    onChange={v => updateField(activeSection, f.id, { reviewer_max_marks: v ? 10 : 0 })} 
+                  />
+                </div>
+                {!!f.reviewer_max_marks && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-2"
+                  >
+                    <label className="text-xs block mb-1 font-medium text-muted">Reviewer Max Marks</label>
+                    <input 
+                      type="number" 
+                      className="input !py-1.5 border-primary/30 focus:border-primary w-full"
+                      placeholder="e.g. 10"
+                      value={f.reviewer_max_marks || ''}
+                      onChange={e => updateField(activeSection, f.id, { reviewer_max_marks: +e.target.value || 0 })} 
+                    />
+                  </motion.div>
+                )}
               </div>
               {f.type === 'file' && (
                 <div className="grid grid-cols-2 gap-2">

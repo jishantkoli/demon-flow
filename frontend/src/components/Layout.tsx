@@ -114,12 +114,17 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
   const breadcrumbs = location.pathname.split('/').filter(Boolean);
   const match = user.email ? user.email.match(/^head\.([a-z0-9]+)@/i) : null;
   const schoolCode = user.school_code || (match ? match[1]?.toUpperCase() : undefined);
+  const handleMainClick = () => {
+    setShowNotif(false);
+    setShowProfile(false);
+    if (sidebarOpen) setSidebarOpen(false);
+  };
 
   // Keep hooks stable: bypass UI only after all hooks are declared.
   if (user.id === 'anon' || isPublicFill) {
     return (
       <div className="min-h-screen bg-canvas">
-        <main className="flex-1 overflow-x-hidden">{children}</main>
+        <main className="flex-1 overflow-x-hidden cursor-pointer" onClick={handleMainClick}>{children}</main>
       </div>
     );
   }
@@ -249,7 +254,7 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
             )}
           </div>
         </header>
-        <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">{children}</main>
+        <main className="flex-1 p-4 lg:p-6 overflow-x-hidden cursor-pointer" onClick={handleMainClick}>{children}</main>
       </div>
       {(showNotif || showProfile) && <div className="fixed inset-0 z-20" onClick={() => { setShowNotif(false); setShowProfile(false); }} />}
     </div>
