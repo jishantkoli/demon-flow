@@ -33,6 +33,7 @@ export const getLevels = async (req: AuthRequest, res: Response) => {
           assignment_type: obj.assignmentType,
           section_id: obj.sectionId,
           blind_review: obj.blindReview,
+          show_previous_reviews: obj.showPreviousReviews,
           reviewer_ids: obj.assignedReviewers
         };
     }));
@@ -43,7 +44,7 @@ export const getLevels = async (req: AuthRequest, res: Response) => {
 
 export const createLevel = async (req: AuthRequest, res: Response) => {
   try {
-    const { form_id, level_number, name, scoring_type, assignment_type, section_id, blind_review, reviewer_ids } = req.body;
+    const { form_id, level_number, name, scoring_type, assignment_type, section_id, blind_review, show_previous_reviews, reviewer_ids } = req.body;
     const level = await Level.create({
       formId: form_id,
       levelNumber: level_number,
@@ -52,6 +53,7 @@ export const createLevel = async (req: AuthRequest, res: Response) => {
       assignmentType: assignment_type,
       sectionId: section_id,
       blindReview: blind_review,
+      showPreviousReviews: show_previous_reviews,
       assignedReviewers: reviewer_ids
     });
     res.status(201).json({ ...level.toObject(), id: level._id });
@@ -130,7 +132,7 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
 
       const submissions = await Submission.find({ formId: actualFormId, isDraft: false });
       const levels = await Level.find({ formId: actualFormId }).sort({ levelNumber: 1 });
-      const reviews = await Review.find({ submission_id: { $in: submissions.map(s => s._id) } });
+      const reviews = await Review.find({ submission_id: { $in: submissions.map(s => s._id) } }).populate('reviewer_id', 'name');
 
       const subData = submissions.map(s => {
         const subReviews = reviews.filter(r => r.submission_id.toString() === s._id.toString());
@@ -142,6 +144,8 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
           overall_score: r.overall_score,
           recommendation: r.recommendation,
           reviewer_id: r.reviewer_id,
+          reviewer_name: (r.reviewer_id as any)?.name || 'Reviewer',
+          question_scores: r.question_scores,
           id: r._id
         }));
 
@@ -170,11 +174,27 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
 
 export const createShortlist = async (req: AuthRequest, res: Response) => {
   try {
-    const { action, form_id, level_id, filter_type, filter_value, reviewer_ids, field_id, field_value, field_filters, submission_ids } = req.body;
+    const { action, form_id, level_id, filter_type, filter_value, reviewer_ids, field_id, field_value, field_filters, submission_ids, show_previous_reviews } = req.body;
     
     if (action !== 'create-shortlist') return res.status(400).json({ error: 'Invalid action' });
 
-    const level = await Level.findById(level_id);
+    let level = await Level.findById(level_id);
+    if (!level && !level_id) {
+        // Fallback: if level doesn't exist, we might be creating it here
+        const { level_number, name, scoring_type, assignment_type, section_id, blind_review } = req.body;
+        level = await Level.create({
+            formId: form_id,
+            levelNumber: level_number,
+            name: name || `Level ${level_number}`,
+            scoringType: scoring_type,
+            assignmentType: assignment_type,
+            sectionId: section_id,
+            blindReview: blind_review,
+            showPreviousReviews: show_previous_reviews,
+            assignedReviewers: reviewer_ids
+        });
+    }
+
     if (!level) return res.status(404).json({ error: 'Level not found' });
 
     let actualFormId = form_id;
@@ -193,7 +213,7 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
       // Filter by recommendations for Next Level
       if (filter_type === 'next_level_only') {
         const { source_level_id } = req.body;
-        const levelQuery: any = { recommendation: 'next_level', status: 'completed' };
+        const levelQuery: any = { recommendation: 'next_level', status: { $in: ['approved', 'completed'] } };
         if (source_level_id) levelQuery.level_id = source_level_id;
         
         const nextLevelReviews = await Review.find(levelQuery);
@@ -294,14 +314,22 @@ export const getReviews = async (req: AuthRequest, res: Response) => {
       query.reviewer_id = req.user._id;
     }
 
-    const reviews = await Review.find(query).populate('level_id', 'scoringType').sort({ createdAt: -1 });
-    res.status(200).json(reviews.map(r => ({
-      ...r.toObject(),
-      id: r._id,
-      submission_id: r.submission_id,
-      reviewer_name: req.user.name, // Simple fallback
-      scoring_type: (r.level_id as any)?.scoringType === 'question' ? 'question_level' : 'form_level'
-    })));
+    const reviews = await Review.find(query)
+      .populate('level_id', 'scoringType showPreviousReviews')
+      .populate('reviewer_id', 'name')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json(reviews.map(r => {
+      const obj = r.toObject();
+      return {
+        ...obj,
+        id: obj._id,
+        submission_id: obj.submission_id,
+        reviewer_name: (obj.reviewer_id as any)?.name || 'Reviewer',
+        scoring_type: (obj.level_id as any)?.scoringType || 'form_level',
+        show_previous_reviews: (obj.level_id as any)?.showPreviousReviews || false
+      };
+    }));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

@@ -39,6 +39,7 @@ export default function ReviewSystem({ user }: { user: User }) {
     assignment_type: 'all', // 'all' or 'divide_sections'
     section_id: null as string | null, // NEW: Specific section filter
     blind_review: false, 
+    show_previous_reviews: false,
     reviewer_ids: [] as string[] 
   });
   const [shortlistFilter, setShortlistFilter] = useState({ filter_type: 'all', filter_value: '0', source_level_id: '', field_id: '', field_value: '' });
@@ -47,6 +48,7 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [isFiltering, setIsFiltering] = useState(false);
   const [filteredResults, setFilteredResults] = useState<any[] | null>(null);
   const [activeFilterLevel, setActiveFilterLevel] = useState(1); // Track which level we are currently filtering for
+  const [showFilters, setShowFilters] = useState(false);
 
   // Reviewer modal
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -56,6 +58,7 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [reviewComment, setReviewComment] = useState('');
   const [overallScore, setOverallScore] = useState(0);
   const [questionScores, setQuestionScores] = useState<Record<string, number>>({});
+
   const [grade, setGrade] = useState('');
   const [recommendation, setRecommendation] = useState('');
   const [selectedFormObj, setSelectedFormObj] = useState<any>(null);
@@ -176,6 +179,9 @@ export default function ReviewSystem({ user }: { user: User }) {
     finally { setProfileLoading(false); }
   };
 
+  const isFinalizedReview = (status: any) =>
+    ['approved', 'rejected', 'completed'].includes(String(status));
+
   const applyFilters = () => {
     if (!shortlistData?.submissions) return;
     setIsFiltering(true);
@@ -195,12 +201,17 @@ export default function ReviewSystem({ user }: { user: User }) {
       results = results.filter(s => {
         const reviews = s.level_reviews || [];
         if (shortlistFilter.source_level_id) {
-          return reviews.some((r: any) => 
-            (r.level_id === shortlistFilter.source_level_id || r.level === levels.find(l => l.id === shortlistFilter.source_level_id)?.level_number) 
-            && r.recommendation === 'next_level'
+          const sourceLevelNumber = levels.find(l => l.id === shortlistFilter.source_level_id)?.level_number;
+          const sourceLevelReviews = reviews.filter((r: any) =>
+            (r.level_id === shortlistFilter.source_level_id || r.level === sourceLevelNumber)
           );
+          if (sourceLevelReviews.length === 0) return false;
+          const allReviewed = sourceLevelReviews.every((r: any) => isFinalizedReview(r.status));
+          const hasNextLevelRecommendation = sourceLevelReviews.some((r: any) => r.recommendation === 'next_level');
+          return allReviewed && hasNextLevelRecommendation;
         }
-        return reviews.some((r: any) => r.recommendation === 'next_level');
+        const allReviewed = reviews.every((r: any) => isFinalizedReview(r.status));
+        return allReviewed && reviews.some((r: any) => r.recommendation === 'next_level');
       });
     }
 
@@ -284,6 +295,7 @@ export default function ReviewSystem({ user }: { user: User }) {
         assignment_type: levelForm.assignment_type,
         section_id: levelForm.section_id, // Pass section filter
         blind_review: levelForm.blind_review,
+        show_previous_reviews: levelForm.show_previous_reviews,
         reviewer_ids: levelForm.reviewer_ids
       });
       levelId = newLevel.id;
@@ -307,11 +319,13 @@ export default function ReviewSystem({ user }: { user: User }) {
       field_value: shortlistFilter.field_value,
       field_filters: cleanedFieldFilters,
       source_level_id: shortlistFilter.source_level_id, 
-      reviewer_ids: levelForm.reviewer_ids
+      reviewer_ids: levelForm.reviewer_ids,
+      show_previous_reviews: levelForm.show_previous_reviews
     });
     setShortlistResult(result);
     loadFormData(selectedFormId);
     setFilteredResults(null); // Clear after success
+    setShowFilters(false); // Hide filters after assignment
   };
 
   // Reviewer: open review
@@ -326,8 +340,12 @@ export default function ReviewSystem({ user }: { user: User }) {
       // Fetch review history for this submission to show previous reviewers' marks
       const historyRes = await api.get(`/reviews?submission_id=${review.submission_id}`);
       if (Array.isArray(historyRes)) {
-        // Only show completed reviews from previous levels
-        setReviewHistory(historyRes.filter(r => r.status === 'completed' && r.level < review.level));
+        const isFinalized = (r: any) => ['approved', 'rejected', 'completed'].includes(String(r?.status));
+        const immediatePreviousLevel = Number(review.level) - 1;
+        // Show only immediate previous level reviews (all reviewers from that level)
+        setReviewHistory(
+          historyRes.filter(r => isFinalized(r) && r.id !== review.id && Number(r.level) === immediatePreviousLevel)
+        );
       }
     } catch (err) {
       console.error("Failed to fetch review data:", err);
@@ -433,6 +451,19 @@ export default function ReviewSystem({ user }: { user: User }) {
     });
   })();
 
+  // Auto-sync overall score with question scores when in question mode
+  useEffect(() => {
+    if (selectedReview?.scoring_type === 'question_level' && reviewQuestions.length > 0) {
+      const total = reviewQuestions.reduce((sum, item) => {
+        const score = Number(questionScores[item.fieldId] ?? questionScores[item.label] ?? 0) || 0;
+        return sum + score;
+      }, 0);
+      if (total !== overallScore) {
+        setOverallScore(total);
+      }
+    }
+  }, [questionScores, reviewQuestions, selectedReview?.scoring_type, overallScore]);
+
   const buildQuestionScoresPayload = () => {
     if (selectedReview?.scoring_type === 'question_level') {
       return reviewQuestions.map(q => {
@@ -458,6 +489,11 @@ export default function ReviewSystem({ user }: { user: User }) {
   if (user.role === 'admin') {
     const subs = shortlistData?.submissions || [];
     const formLevels = shortlistData?.levels || [];
+    const isCurrentStageAssigned = formLevels.some((l: any) => {
+      if (l.level_number !== activeFilterLevel) return false;
+      const atLevel = subs.filter((s: any) => s.highest_level >= l.level_number).length;
+      return atLevel > 0;
+    });
 
     const subColumns = [
       { key: 'user_name', label: 'Name', sortable: true, render: (v: string, r: any) => (
@@ -470,17 +506,32 @@ export default function ReviewSystem({ user }: { user: User }) {
           const reviews = (r.level_reviews || []).filter((rv: any) => rv.level === l.level_number);
           if (reviews.length === 0) return <span className="text-slate-400 text-[10px]">—</span>;
           
+          const completedReviews = reviews.filter((rv: any) => ['approved', 'rejected', 'completed'].includes(String(rv.status)));
+          const scores = completedReviews.map((rv: any) => rv.overall_score || 0);
+          const avg = scores.length > 0 ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
+
           return (
-            <div className="flex flex-wrap gap-1">
-              {reviews.map((rv: any, idx: number) => (
-                <div key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${
-                  rv.recommendation === 'reject' ? 'bg-red-50 border-red-200 text-red-600' :
-                  rv.recommendation === 'next_level' ? 'bg-amber-50 border-amber-200 text-amber-600' :
-                  'bg-slate-50 border-slate-200 text-slate-600'
-                }`} title={rv.recommendation}>
-                  {rv.overall_score}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex flex-wrap gap-1">
+                {reviews.map((rv: any, idx: number) => (
+                  <div key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all ${
+                    rv.status === 'pending' ? 'bg-slate-50 border-slate-200 text-slate-400 border-dashed' :
+                    rv.recommendation === 'reject' ? 'bg-red-50 border-red-200 text-red-600' :
+                    rv.recommendation === 'next_level' ? 'bg-amber-50 border-amber-200 text-amber-600' :
+                    'bg-slate-50 border-slate-200 text-slate-600'
+                  }`} title={`${rv.reviewer_name || 'Reviewer'}: ${rv.status === 'pending' ? 'Pending' : rv.recommendation}`}>
+                    {rv.status === 'pending' ? '...' : rv.overall_score}
+                  </div>
+                ))}
+              </div>
+              {completedReviews.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <div className="h-px flex-1 bg-primary/10" />
+                  <div className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20 shadow-sm">
+                    AVG: {avg.toFixed(1)}
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           );
         }
@@ -521,174 +572,158 @@ export default function ReviewSystem({ user }: { user: User }) {
 
         {selectedFormId && shortlistData && !loadingSubs && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* STEP 2: Filters (Left Column) */}
+            {/* STEP 2: Filters (Left Column) - Only for Level 1 */}
             <div className="lg:col-span-1 space-y-6">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm sticky top-6">
-                <div className="flex items-center gap-2 mb-6">
-                  <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">2</span>
-                  <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Filter Teachers</h2>
-                </div>
-                
-                <div className="space-y-6">
-                  {/* Section 1: Selection Levels */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Selection Stages</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button 
-                        onClick={() => {
-                          setActiveFilterLevel(1);
-                          setShortlistFilter(p => ({ ...p, filter_type: 'all', source_level_id: '' }));
-                        }}
-                        className={`px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-tight border transition-all ${activeFilterLevel === 1 ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-primary/50'}`}
-                      >
-                        Level 1
-                      </button>
-                      {(levels || []).map((l: any, idx: number) => (
-                        <button 
-                          key={l.id}
-                          onClick={() => {
-                            setActiveFilterLevel(idx + 2);
-                            setShortlistFilter(p => ({ ...p, filter_type: 'next_level_only', source_level_id: l.id }));
-                          }}
-                          className={`px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-tight border transition-all ${activeFilterLevel === idx + 2 ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-primary/50'}`}
-                        >
-                          Level {idx + 2}
-                        </button>
-                      ))}
-                      <button 
-                        onClick={() => {
-                          setLevelForm(p => ({ 
-                            ...p, 
-                            level_number: (levels?.length || 0) + 2, 
-                            name: `Level ${(levels?.length || 0) + 2}`,
-                            reviewer_ids: []
-                          }));
-                          setShowShortlist(true);
-                        }}
-                        className="px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-tight border border-dashed border-slate-300 text-slate-400 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-1"
-                      >
-                        <Plus size={10} /> Add Level
-                      </button>
+              {activeFilterLevel === 1 && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm sticky top-6 overflow-hidden">
+                  {isCurrentStageAssigned && (
+                    <div className="absolute inset-0 bg-slate-50/40 backdrop-blur-[1px] z-20 flex flex-col items-center justify-center p-6 text-center">
+                      <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-amber-500 mb-3 border border-amber-100">
+                        <Settings className="animate-spin" size={24} style={{ animationDuration: '3s' }} />
+                      </div>
+                      <p className="text-sm font-bold text-slate-800">Stage 1 Assigned</p>
+                      <p className="text-[10px] text-slate-500 mt-1 font-medium">Candidates have already been assigned to Stage 1 review.</p>
                     </div>
+                  )}
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">2</span>
+                      <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Filter Teachers</h2>
+                    </div>
+                    <button 
+                      onClick={() => setShowFilters(!showFilters)}
+                      disabled={isCurrentStageAssigned}
+                      className={`p-2 rounded-xl transition-all ${showFilters ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'} ${isCurrentStageAssigned ? 'opacity-0' : ''}`}
+                    >
+                      <Filter size={16} />
+                    </button>
                   </div>
-
-                  {/* Section 2: Filter Logic */}
-                  <div className="space-y-6 pt-6 border-t border-slate-100">
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Filter Logic</label>
-                      {activeFilterLevel === 1 ? (
-                        <select value={shortlistFilter.filter_type} onChange={e => setShortlistFilter(p => ({ ...p, filter_type: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium outline-none focus:border-primary">
-                          <option value="all">View All Submissions</option>
-                          <option value="form_score_gte">Score Based Filter</option>
-                          <option value="next_level_only">Next Level Recommendations</option>
-                        </select>
-                      ) : (
-                        <div className="p-4 bg-primary/5 border border-primary/10 rounded-2xl">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Zap size={14} className="text-primary" />
-                            <p className="text-[11px] font-black text-primary uppercase tracking-tighter">Automatic Pipeline Filter</p>
-                          </div>
-                          <p className="text-[10px] text-slate-600 leading-relaxed font-medium">
-                            Currently showing candidates recommended for the next level in 
-                            <span className="text-primary font-bold ml-1">Stage {activeFilterLevel - 1}</span>.
-                          </p>
-                        </div>
-                      )}
-
-                      {(shortlistFilter.filter_type === 'form_score_gte' || (shortlistFilter.filter_type === 'next_level_only' && activeFilterLevel === 1)) && (
-                        <div className="grid grid-cols-1 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                          {shortlistFilter.filter_type === 'form_score_gte' && (
-                            <div>
-                              <p className="text-[9px] font-bold text-slate-400 mb-1">Minimum Score %</p>
-                              <input type="number" value={shortlistFilter.filter_value} onChange={e => setShortlistFilter(p => ({ ...p, filter_value: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none" placeholder="e.g. 80" />
-                            </div>
-                          )}
-                          <div>
-                            <p className="text-[9px] font-bold text-slate-400 mb-1">{shortlistFilter.filter_type === 'next_level_only' ? 'Filter From Level' : 'Specific Level (Optional)'}</p>
-                            <select value={shortlistFilter.source_level_id} onChange={e => setShortlistFilter(p => ({ ...p, source_level_id: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs outline-none">
-                              <option value="">Any Level</option>
-                              {(shortlistData?.levels || []).map((l: any) => <option key={l.id} value={l.id}>L{l.level_number}: {l.name}</option>)}
-                            </select>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Advanced Filters */}
-                  <div className="space-y-3 pt-4 border-t border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Advanced Field Filters</label>
-                    <div className="space-y-3">
-                      {fieldFilters.map((row, idx) => {
-                        const fields = getFormFilterFields();
-                        const selectedField = fields.find(f => f.id === row.field_id);
-                        const options = getFieldOptionValues(selectedField);
-                        const isNumber = selectedField?.type === 'number';
-                        
-                        return (
-                          <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-3 relative">
-                            <button onClick={() => setFieldFilters(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-all shadow-md">
-                              <XCircle size={14} />
-                            </button>
-                            <select value={row.field_id} onChange={e => setFieldFilters(prev => prev.map((r, i) => {
-                              if (i !== idx) return r;
-                              const nextField = fields.find((fld: any) => String(fld.id) === e.target.value);
-                              return { ...r, field_id: e.target.value, operator: getDefaultOperator(nextField), field_value: '' };
-                            }))}
-                              className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs outline-none font-medium">
-                              <option value="">Select specific field...</option>
-                              {fields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+                  
+                  <div className="space-y-6">
+                    {showFilters ? (
+                      <>
+                        {/* Section 2: Filter Logic */}
+                        <div className="space-y-6">
+                          <div className="space-y-3">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Filter Logic</label>
+                            <select value={shortlistFilter.filter_type} onChange={e => setShortlistFilter(p => ({ ...p, filter_type: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium outline-none focus:border-primary">
+                              <option value="all">View All Submissions</option>
+                              <option value="form_score_gte">Score Based Filter</option>
+                              <option value="next_level_only">Next Level Recommendations</option>
                             </select>
 
-                            <div className="grid grid-cols-2 gap-2">
-                              <select
-                                value={row.operator}
-                                onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, operator: e.target.value as FieldFilterRow['operator'] } : r))}
-                                className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] outline-none font-bold text-slate-600"
-                              >
-                                {isNumber ? (
-                                  <>
-                                    <option value="gt">Greater (&gt;)</option>
-                                    <option value="gte">Gte (&gt;=)</option>
-                                    <option value="lt">Less (&lt;)</option>
-                                    <option value="lte">Lte (&lt;=)</option>
-                                    <option value="eq">Equals</option>
-                                  </>
-                                ) : (
-                                  <>
-                                    <option value="contains">Contains</option>
-                                    <option value="eq">Exactly</option>
-                                  </>
+                            {(shortlistFilter.filter_type === 'form_score_gte' || shortlistFilter.filter_type === 'next_level_only') && (
+                              <div className="grid grid-cols-1 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                {shortlistFilter.filter_type === 'form_score_gte' && (
+                                  <div>
+                                    <p className="text-[9px] font-bold text-slate-400 mb-1">Minimum Score %</p>
+                                    <input type="number" value={shortlistFilter.filter_value} onChange={e => setShortlistFilter(p => ({ ...p, filter_value: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none" placeholder="e.g. 80" />
+                                  </div>
                                 )}
-                              </select>
+                                <div>
+                                  <p className="text-[9px] font-bold text-slate-400 mb-1">{shortlistFilter.filter_type === 'next_level_only' ? 'Filter From Level' : 'Specific Level (Optional)'}</p>
+                                  <select value={shortlistFilter.source_level_id} onChange={e => setShortlistFilter(p => ({ ...p, source_level_id: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs outline-none">
+                                    <option value="">Any Level</option>
+                                    {(shortlistData?.levels || []).map((l: any) => <option key={l.id} value={l.id}>L{l.level_number}: {l.name}</option>)}
+                                  </select>
+                                </div>
+                              </div>
+                            )}
+                          </div>
 
-                              {options.length > 0 ? (
-                                <select value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
-                                  className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] outline-none font-medium">
-                                  <option value="">Value...</option>
-                                  {options.map((o: string) => <option key={o} value={o}>{o}</option>)}
-                                </select>
-                              ) : (
-                                <input type={isNumber ? 'number' : 'text'} value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
-                                  className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] outline-none font-medium" placeholder="Match..." />
-                              )}
+                          {/* Advanced Filters */}
+                          <div className="space-y-3 pt-4 border-t border-slate-100">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Advanced Field Filters</label>
+                            <div className="space-y-3">
+                              {fieldFilters.map((row, idx) => {
+                                const fields = getFormFilterFields();
+                                const selectedField = fields.find(f => f.id === row.field_id);
+                                const options = getFieldOptionValues(selectedField);
+                                const isNumber = selectedField?.type === 'number';
+                                
+                                return (
+                                  <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-3 relative">
+                                    <button onClick={() => setFieldFilters(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-all shadow-md">
+                                      <XCircle size={14} />
+                                    </button>
+                                    <select value={row.field_id} onChange={e => setFieldFilters(prev => prev.map((r, i) => {
+                                      if (i !== idx) return r;
+                                      const nextField = fields.find((fld: any) => String(fld.id) === e.target.value);
+                                      return { ...r, field_id: e.target.value, operator: getDefaultOperator(nextField), field_value: '' };
+                                    }))}
+                                      className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs outline-none font-medium">
+                                      <option value="">Select specific field...</option>
+                                      {fields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+                                    </select>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <select
+                                        value={row.operator}
+                                        onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, operator: e.target.value as FieldFilterRow['operator'] } : r))}
+                                        className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] outline-none font-bold text-slate-600"
+                                      >
+                                        {isNumber ? (
+                                          <>
+                                            <option value="gt">Greater (&gt;)</option>
+                                            <option value="gte">Gte (&gt;=)</option>
+                                            <option value="lt">Less (&lt;)</option>
+                                            <option value="lte">Lte (&lt;=)</option>
+                                            <option value="eq">Equals</option>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <option value="contains">Contains</option>
+                                            <option value="eq">Exactly</option>
+                                          </>
+                                        )}
+                                      </select>
+
+                                      {options.length > 0 ? (
+                                        <select value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
+                                          className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] outline-none font-medium">
+                                          <option value="">Value...</option>
+                                          {options.map((o: string) => <option key={o} value={o}>{o}</option>)}
+                                        </select>
+                                      ) : (
+                                        <input type={isNumber ? 'number' : 'text'} value={row.field_value} onChange={e => setFieldFilters(prev => prev.map((r, i) => i === idx ? { ...r, field_value: e.target.value } : r))}
+                                          className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] outline-none font-medium" placeholder="Match..." />
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              <button onClick={() => setFieldFilters(prev => [...prev, { field_id: '', operator: 'contains', field_value: '' }])} className="w-full py-2.5 border-2 border-dashed border-slate-200 rounded-xl text-[11px] font-bold text-slate-400 hover:text-primary hover:border-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2">
+                                <Zap size={12} /> Add New Condition
+                              </button>
                             </div>
                           </div>
-                        );
-                      })}
-                      <button onClick={() => setFieldFilters(prev => [...prev, { field_id: '', operator: 'contains', field_value: '' }])} className="w-full py-2.5 border-2 border-dashed border-slate-200 rounded-xl text-[11px] font-bold text-slate-400 hover:text-primary hover:border-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2">
-                        <Zap size={12} /> Add New Condition
-                      </button>
-                    </div>
+
+                          <button onClick={applyFilters} disabled={isFiltering}
+                            className="w-full py-4 bg-primary text-white rounded-2xl text-sm font-bold hover:bg-primary-dark shadow-lg shadow-primary/20 flex items-center justify-center gap-2 transition-all active:scale-95">
+                            {isFiltering ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Filter size={18} />}
+                            Apply Filters
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                          <Filter size={20} />
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium mb-4 px-4">
+                          Click filter to shortlist candidates for the next stage.
+                        </p>
+                        <button 
+                          onClick={() => setShowFilters(true)}
+                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold uppercase rounded-xl transition-all"
+                        >
+                          Open Filters
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                  <button onClick={applyFilters} disabled={isFiltering}
-                    className="w-full py-4 bg-primary text-white rounded-2xl text-sm font-bold hover:bg-primary-dark shadow-lg shadow-primary/20 flex items-center justify-center gap-2 transition-all active:scale-95">
-                    {isFiltering ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Filter size={18} />}
-                    Apply Filters
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* STEP 3: Pipeline & Action (Right Column) */}
@@ -696,28 +731,46 @@ export default function ReviewSystem({ user }: { user: User }) {
               {/* Shortlist Action Bar */}
               {filteredResults && (
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                  className="bg-navy rounded-2xl p-6 text-white shadow-xl shadow-navy/20 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                  className={`rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden transition-all ${isCurrentStageAssigned ? 'bg-slate-800 shadow-slate-900/20' : 'bg-navy shadow-navy/20'}`}>
                   <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32" />
                   <div className="flex items-center gap-4 relative z-10">
-                    <div className="w-12 h-12 rounded-2xl bg-white/10 text-white flex items-center justify-center shadow-inner">
-                      <UserCheck size={24} />
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${isCurrentStageAssigned ? 'bg-white/5 text-slate-400' : 'bg-white/10 text-white'}`}>
+                      {isCurrentStageAssigned ? <History size={24} /> : <UserCheck size={24} />}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="w-5 h-6 rounded-full bg-white text-navy flex items-center justify-center text-[10px] font-black">3</span>
-                        <h2 className="text-base font-bold">Assign to Review Level</h2>
+                        <span className={`w-5 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${isCurrentStageAssigned ? 'bg-slate-700 text-slate-400' : 'bg-white text-navy'}`}>{activeFilterLevel === 1 ? '3' : '2'}</span>
+                        <h2 className="text-base font-bold">
+                          {isCurrentStageAssigned 
+                            ? `Stage ${activeFilterLevel === 1 ? '1' : activeFilterLevel - 1} Assignment Locked` 
+                            : activeFilterLevel === 1 
+                              ? "Assign to Review Level" 
+                              : `Move to Stage ${activeFilterLevel - 1}`}
+                        </h2>
                       </div>
-                      <p className="text-xs text-blue-200 mt-0.5">{filteredResults.length} teachers match your filters</p>
+                      <p className={`text-xs mt-0.5 ${isCurrentStageAssigned ? 'text-slate-500' : 'text-blue-200'}`}>
+                        {isCurrentStageAssigned 
+                          ? "This stage has already been finalized and assigned."
+                          : activeFilterLevel === 1 
+                            ? `${filteredResults.length} teachers match your filters` 
+                            : `${filteredResults.length} recommended candidates ready for next stage`}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 w-full md:w-auto relative z-10">
-                    <button onClick={() => setFilteredResults(null)} className="flex-1 md:flex-none px-5 py-2.5 text-xs font-bold text-blue-100 hover:text-white hover:bg-white/10 rounded-xl transition-all">
-                      Cancel
+                    <button onClick={() => setFilteredResults(null)} className={`flex-1 md:flex-none px-5 py-2.5 text-xs font-bold rounded-xl transition-all ${isCurrentStageAssigned ? 'text-slate-500 hover:bg-white/5' : 'text-blue-100 hover:text-white hover:bg-white/10'}`}>
+                      {isCurrentStageAssigned ? 'Close' : 'Cancel'}
                     </button>
-                    <button onClick={() => { setLevelForm(p => ({ ...p, level_number: formLevels.length + 1, name: `Level ${formLevels.length + 1}` })); setShowShortlist(true); }}
-                      className="flex-1 md:flex-none px-8 py-3 bg-white text-navy rounded-xl text-sm font-bold hover:bg-blue-50 shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95">
-                      <Layers size={18} /> Shortlist Now
-                    </button>
+                    {!isCurrentStageAssigned && (
+                      <button onClick={() => { 
+                          const nextLvlNum = activeFilterLevel === 1 ? formLevels.length + 1 : activeFilterLevel;
+                          setLevelForm(p => ({ ...p, level_number: nextLvlNum, name: `Level ${nextLvlNum}` })); 
+                          setShowShortlist(true); 
+                        }}
+                        className="flex-1 md:flex-none px-8 py-3 bg-white text-navy rounded-xl text-sm font-bold hover:bg-blue-50 shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95">
+                        <Layers size={18} /> {activeFilterLevel === 1 ? "Shortlist Now" : "Confirm Assignment"}
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -744,32 +797,72 @@ export default function ReviewSystem({ user }: { user: User }) {
                   </div>
                 ) : (
                   <div className="flex items-center gap-3 overflow-x-auto pb-6 pt-2 custom-scrollbar snap-x snap-mandatory">
-                    <div className="flex-shrink-0 p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 text-center min-w-[120px] shadow-sm snap-start">
-                      <p className="text-2xl font-black text-slate-400">{subs.length}</p>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Total Pool</p>
-                    </div>
+                    <button 
+                      onClick={() => {
+                        setActiveFilterLevel(1);
+                        setFilteredResults(null);
+                        setShortlistFilter(p => ({ ...p, filter_type: 'all', source_level_id: '' }));
+                      }}
+                      className={`flex-shrink-0 p-4 rounded-2xl border-2 text-center min-w-[120px] shadow-sm snap-start transition-all ${activeFilterLevel === 1 ? 'bg-primary/10 border-primary' : 'bg-slate-50 border-slate-100 opacity-60 hover:opacity-100'}`}
+                    >
+                      <p className={`text-2xl font-black ${activeFilterLevel === 1 ? 'text-primary' : 'text-slate-400'}`}>{subs.length}</p>
+                      <p className={`text-[10px] font-bold uppercase mt-1 ${activeFilterLevel === 1 ? 'text-primary' : 'text-slate-500'}`}>Total Pool</p>
+                    </button>
                     {formLevels.map((l: any, idx: number) => {
                       const atLevel = subs.filter((s: any) => s.highest_level >= l.level_number).length;
+                      const isActive = activeFilterLevel === idx + 2;
+                      const sourceLevelReviews = subs.flatMap((s: any) =>
+                        (s.level_reviews || []).filter((r: any) => r.level === l.level_number)
+                      );
+                      const pendingCount = sourceLevelReviews.filter((r: any) => !isFinalizedReview(r.status)).length;
+                      const isStageLocked = pendingCount > 0;
                       return (<React.Fragment key={l.id}>
                         <div className="flex flex-col items-center gap-1 opacity-40 flex-shrink-0">
                           <ChevronRight size={20} className="text-slate-400" />
                         </div>
-                        <div className="flex-shrink-0 p-4 rounded-2xl bg-white border-2 border-primary/20 text-center min-w-[150px] shadow-md relative group transition-all hover:border-primary snap-center">
-                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-white text-[8px] font-black px-2 py-1 rounded-full uppercase shadow-lg z-10 whitespace-nowrap">Stage {idx + 1}</div>
-                          <p className="text-[10px] font-black text-primary uppercase mb-1 tracking-tighter truncate px-2">{l.name}</p>
-                          <p className="text-2xl font-black text-slate-800">{atLevel}</p>
-                          <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Shortlisted</p>
-                        </div>
+                        <button 
+                          onClick={() => {
+                            if (isStageLocked) {
+                              alert(`Stage ${idx + 1} locked hai. ${pendingCount} reviews abhi pending hain. Jab sab reviewers review complete kar denge tab next round open hoga.`);
+                              return;
+                            }
+                            setActiveFilterLevel(idx + 2);
+                            setFilteredResults(null);
+                            setShortlistFilter(p => ({ ...p, filter_type: 'next_level_only', source_level_id: l.id }));
+                          }}
+                          className={`flex-shrink-0 p-4 rounded-2xl border-2 text-center min-w-[150px] shadow-md relative group transition-all snap-center ${isStageLocked ? 'bg-slate-50 border-slate-200 opacity-70 cursor-not-allowed' : isActive ? 'bg-white border-primary ring-2 ring-primary/10' : 'bg-white border-primary/20 hover:border-primary/50'}`}
+                        >
+                          <div className={`absolute -top-3 left-1/2 -translate-x-1/2 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase shadow-lg z-10 whitespace-nowrap transition-colors ${isStageLocked ? 'bg-slate-500' : isActive ? 'bg-primary' : 'bg-slate-400 group-hover:bg-primary/70'}`}>Stage {idx + 1}</div>
+                          <p className={`text-[10px] font-black uppercase mb-1 tracking-tighter truncate px-2 ${isStageLocked ? 'text-slate-500' : isActive ? 'text-primary' : 'text-slate-400 group-hover:text-primary/70'}`}>{l.name}</p>
+                          <p className={`text-2xl font-black ${isActive ? 'text-slate-900' : 'text-slate-800'}`}>{atLevel}</p>
+                          <p className={`text-[9px] font-bold uppercase mt-1 ${isStageLocked ? 'text-amber-600' : isActive ? 'text-primary/60' : 'text-slate-400'}`}>
+                            {isStageLocked ? `${pendingCount} Pending` : 'Shortlisted'}
+                          </p>
+                        </button>
                       </React.Fragment>);
                     })}
-                    {/* Next Stage Placeholder */}
+                    {/* Next Stage Placeholder / Add Level */}
                     <div className="flex flex-col items-center gap-1 opacity-20 flex-shrink-0">
                       <ChevronRight size={20} className="text-slate-400" />
                     </div>
-                    <div className="flex-shrink-0 p-4 rounded-2xl border-2 border-dashed border-slate-200 text-center min-w-[140px] opacity-40 snap-end">
-                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Stage {formLevels.length + 1}</p>
-                      <p className="text-xl font-bold text-slate-300">Pending</p>
-                    </div>
+                    <button 
+                      onClick={() => {
+                        setLevelForm(p => ({ 
+                          ...p, 
+                          level_number: formLevels.length + 1, 
+                          name: `Level ${formLevels.length + 1}`,
+                          reviewer_ids: []
+                        }));
+                        setShowShortlist(true);
+                      }}
+                      className="flex-shrink-0 p-4 rounded-2xl border-2 border-dashed border-slate-200 text-center min-w-[140px] transition-all hover:border-primary hover:bg-primary/5 hover:opacity-100 opacity-40 group snap-end"
+                    >
+                      <p className="text-[10px] font-black text-slate-400 group-hover:text-primary uppercase mb-1">Stage {formLevels.length + 1}</p>
+                      <div className="flex items-center justify-center gap-1 text-slate-400 group-hover:text-primary">
+                        <Plus size={14} />
+                        <p className="text-sm font-bold">Add Level</p>
+                      </div>
+                    </button>
                   </div>
                 )}
               </div>
@@ -852,13 +945,22 @@ export default function ReviewSystem({ user }: { user: User }) {
                           : "Teachers will be split equally among the assigned reviewers."}
                       </p>
                     </div>
-                    <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/50 cursor-pointer group">
-                      <input type="checkbox" checked={levelForm.blind_review} onChange={e => setLevelForm(p => ({ ...p, blind_review: e.target.checked }))} className="w-4 h-4 rounded accent-primary" />
-                      <div>
-                        <p className="text-xs font-bold text-slate-700">Blind Review</p>
-                        <p className="text-[10px] text-slate-500">Hide teacher names from reviewers</p>
-                      </div>
-                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/50 cursor-pointer group">
+                        <input type="checkbox" checked={levelForm.blind_review} onChange={e => setLevelForm(p => ({ ...p, blind_review: e.target.checked }))} className="w-4 h-4 rounded accent-primary" />
+                        <div>
+                          <p className="text-xs font-bold text-slate-700">Blind Review</p>
+                          <p className="text-[10px] text-slate-500">Hide teacher names</p>
+                        </div>
+                      </label>
+                      <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/50 cursor-pointer group">
+                        <input type="checkbox" checked={levelForm.show_previous_reviews} onChange={e => setLevelForm(p => ({ ...p, show_previous_reviews: e.target.checked }))} className="w-4 h-4 rounded accent-primary" />
+                        <div>
+                          <p className="text-xs font-bold text-slate-700">Show Previous Reviews</p>
+                          <p className="text-[10px] text-slate-500">Reviewers can see marks</p>
+                        </div>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1112,7 +1214,7 @@ export default function ReviewSystem({ user }: { user: User }) {
             {reviewHistory.length > 0 && (
               <div className="space-y-3">
                 <h4 className="text-sm font-bold flex items-center gap-2 px-1 text-amber-600">
-                  <History size={16} /> Previous Level Reviews
+                  <History size={16} /> {selectedReview.show_previous_reviews ? 'Review History (Multiple Reviewers)' : 'Previous Level Reviews'}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {reviewHistory.map((prev, pIdx) => (
@@ -1122,7 +1224,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                         <span className="text-[10px] text-slate-400 font-medium">{new Date(prev.updatedAt || prev.createdAt).toLocaleDateString()}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-slate-700">{prev.reviewer_name}</p>
+                        <p className="text-xs font-bold text-slate-700">{prev.reviewer_name || 'Reviewer'}</p>
                         <p className="text-sm font-black text-primary">{prev.overall_score}<span className="text-[10px] text-slate-400 ml-0.5">pts</span></p>
                       </div>
                       {prev.comments && <p className="text-xs text-slate-500 italic line-clamp-2">"{prev.comments}"</p>}
@@ -1143,43 +1245,93 @@ export default function ReviewSystem({ user }: { user: User }) {
                 <div className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden">
                   <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                     {reviewQuestions.map((q, idx) => (
-                      <div key={q.fieldId} className={`p-4 flex flex-col md:flex-row md:items-center gap-4 ${idx !== reviewQuestions.length - 1 ? 'border-b border-slate-100' : ''}`}>
-                        <div className="flex-1">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Question {idx + 1}</span>
-                          <p className="text-xs font-semibold text-slate-700 mb-1">{q.label}</p>
-                          <p className="text-sm text-slate-900 bg-white p-2 rounded-lg border border-slate-100 inline-block min-w-[100px]">
-                            {Array.isArray(q.value) ? (q.value as any[]).join(', ') : String(q.value)}
-                          </p>
-                        </div>
-                        {selectedReview.scoring_type === 'question_level' && (
-                          <div className="flex-shrink-0 w-full md:w-32">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Score</label>
-                            <input 
-                              type="number" 
-                              min={0}
-                              max={q.reviewerMaxMarks > 0 ? q.reviewerMaxMarks : undefined}
-                              value={questionScores[q.fieldId] ?? questionScores[q.label] ?? 0}
-                              onChange={e => {
-                                const rawVal = parseFloat(e.target.value);
-                                const normalizedVal = Number.isFinite(rawVal) ? Math.max(0, rawVal) : 0;
-                                const cappedVal = q.reviewerMaxMarks > 0 ? Math.min(normalizedVal, q.reviewerMaxMarks) : normalizedVal;
-                                const newScores = { ...questionScores, [q.fieldId]: cappedVal };
-                                setQuestionScores(newScores);
-                                // Auto-calculate overall score
-                                const total = reviewQuestions.reduce((sum, item) => {
-                                  const score = Number(newScores[item.fieldId] ?? newScores[item.label] ?? 0) || 0;
-                                  return sum + score;
-                                }, 0);
-                                setOverallScore(total);
-                              }}
-                              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-primary outline-none focus:border-primary shadow-sm"
-                              placeholder="0"
-                            />
-                            {q.reviewerMaxMarks > 0 && (
-                              <p className="text-[10px] mt-1 font-semibold text-amber-700">Max: {q.reviewerMaxMarks}</p>
-                            )}
+                      <div key={q.fieldId} className={`p-6 flex flex-col gap-4 ${idx !== reviewQuestions.length - 1 ? 'border-b border-slate-100' : ''}`}>
+                        {/* Question & Answer Header */}
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full uppercase tracking-tighter">Q{idx + 1}</span>
+                            <p className="text-xs font-bold text-slate-800">{q.label}</p>
                           </div>
-                        )}
+                          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                            <p className="text-sm text-slate-900 leading-relaxed">
+                              {Array.isArray(q.value) ? (q.value as any[]).join(', ') : String(q.value)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Marking Partition */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                          {/* Left: Previous Reviews History */}
+                          <div className="space-y-2">
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block px-1">Previous Level Scores</label>
+                            <div className="bg-amber-50/50 rounded-xl border border-amber-100 p-2.5 min-h-[68px]">
+                              {reviewHistory.length > 0 ? (
+                                (() => {
+                                  const scoresToShow = reviewHistory.map((prev, pIdx) => {
+                                    const qScore = (prev.question_scores || []).find((qs: any) => 
+                                      String(qs.field_id) === String(q.fieldId) || String(qs.field_id) === String(q.label)
+                                    );
+                                    if (qScore == null) return null;
+                                    return (
+                                      <div key={pIdx} className="grid grid-cols-[1.5fr_70px_70px] items-center bg-white border border-amber-200 px-2.5 py-2 rounded-lg text-[10px]">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[8px] font-black flex items-center justify-center flex-shrink-0">
+                                            {(prev.reviewer_name || `R${pIdx + 1}`).charAt(0).toUpperCase()}
+                                          </div>
+                                          <p className="font-bold text-slate-700 truncate">{prev.reviewer_name || `Reviewer ${pIdx + 1}`}</p>
+                                        </div>
+                                        <div className="text-center">
+                                          <span className="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-black text-[9px] uppercase">L{prev.level}</span>
+                                        </div>
+                                        <div className="text-right font-black text-primary">{qScore.score}<span className="text-[9px] text-slate-400 ml-0.5">pts</span></div>
+                                      </div>
+                                    );
+                                  }).filter(Boolean);
+
+                                  return scoresToShow.length > 0 ? scoresToShow : (
+                                    <div className="w-full h-full flex items-center justify-center py-2">
+                                      <p className="text-[10px] text-slate-400 italic font-medium">Previous level marks not available</p>
+                                    </div>
+                                  );
+                                })()
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center py-2">
+                                  <p className="text-[10px] text-slate-400 italic font-medium">No previous level history</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Right: Current Reviewer Input */}
+                          <div className="space-y-2">
+                            <label className="text-[9px] font-black text-primary uppercase tracking-widest block px-1">Your Score</label>
+                            <div className="bg-primary/5 rounded-xl border border-primary/10 p-3 flex items-center gap-4">
+                              <div className="flex-1">
+                                <input 
+                                  type="number" 
+                                  min={0}
+                                  max={q.reviewerMaxMarks > 0 ? q.reviewerMaxMarks : undefined}
+                                  value={questionScores[q.fieldId] ?? questionScores[q.label] ?? 0}
+                                  onChange={e => {
+                                    const rawVal = parseFloat(e.target.value);
+                                    const normalizedVal = Number.isFinite(rawVal) ? Math.max(0, rawVal) : 0;
+                                    const cappedVal = q.reviewerMaxMarks > 0 ? Math.min(normalizedVal, q.reviewerMaxMarks) : normalizedVal;
+                                    const newScores = { ...questionScores, [q.fieldId]: cappedVal };
+                                    setQuestionScores(newScores);
+                                  }}
+                                  className="w-full bg-white px-4 py-2.5 rounded-lg border border-primary/20 text-lg font-black text-primary outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
+                                  placeholder="0"
+                                />
+                              </div>
+                              {q.reviewerMaxMarks > 0 && (
+                                <div className="text-right flex flex-col justify-center">
+                                  <span className="text-[8px] font-bold text-slate-400 uppercase leading-none mb-1">Max Limit</span>
+                                  <span className="text-xs font-black text-slate-600 leading-none">{q.reviewerMaxMarks}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1190,26 +1342,29 @@ export default function ReviewSystem({ user }: { user: User }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-5 bg-slate-50 rounded-2xl border border-slate-200">
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">
-                  Overall Score {selectedReview.scoring_type === 'question_level' ? '(Sum of questions)' : '(0-100)'}
+                  {selectedReview.scoring_type === 'question_level' ? 'Total Calculated Score' : 'Overall Score (0-100)'}
                 </label>
                 <div className="relative">
                   <input 
                     type="number" 
                     min={0} 
-                    max={100}
+                    max={1000}
                     value={overallScore} 
                     onChange={e => {
-                      if (selectedReview.scoring_type?.includes('question')) return;
+                      if (selectedReview.scoring_type === 'question_level') return;
                       const val = parseInt(e.target.value) || 0;
-                      setOverallScore(Math.min(100, Math.max(0, val)));
+                      setOverallScore(Math.min(1000, Math.max(0, val)));
                     }} 
                     readOnly={selectedReview.scoring_type === 'question_level'}
-                    className={`w-full px-4 py-2.5 rounded-xl border font-bold text-lg outline-none transition-all ${selectedReview.scoring_type === 'question_level' ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-primary focus:border-primary focus:ring-2 focus:ring-primary/10'}`} 
+                    className={`w-full px-4 py-2.5 rounded-xl border font-bold text-lg outline-none transition-all ${selectedReview.scoring_type === 'question_level' ? 'bg-primary/5 border-primary/20 text-primary cursor-default' : 'bg-white border-slate-300 text-primary focus:border-primary focus:ring-2 focus:ring-primary/10'}`} 
                   />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
-                    <Star size={18} />
+                  <div className={`absolute right-3 top-1/2 -translate-y-1/2 ${selectedReview.scoring_type === 'question_level' ? 'text-primary' : 'text-slate-400'}`}>
+                    {selectedReview.scoring_type === 'question_level' ? <Zap size={18} /> : <Star size={18} />}
                   </div>
                 </div>
+                {selectedReview.scoring_type === 'question_level' && (
+                  <p className="text-[9px] text-primary font-bold mt-1 uppercase">Auto-calculated from questions above</p>
+                )}
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">Final Recommendation</label>

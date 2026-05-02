@@ -10,6 +10,7 @@ const levelSchema = new mongoose.Schema({
   scoringType: { type: String, enum: ['form_level', 'question_level'], default: 'form_level' },
   assignmentType: { type: String, enum: ['all', 'divide_sections'], default: 'all' },
   sectionId: { type: String, default: null }, // NEW: Specific section filter
+  showPreviousReviews: { type: Boolean, default: false },
 }, { timestamps: true });
 
 levelSchema.index({ formId: 1, levelNumber: 1 }, { unique: true });
