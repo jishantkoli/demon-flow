@@ -45,15 +45,16 @@ export const getLevels = async (req: AuthRequest, res: Response) => {
 export const createLevel = async (req: AuthRequest, res: Response) => {
   try {
     const { form_id, level_number, name, scoring_type, assignment_type, section_id, blind_review, show_previous_reviews, reviewer_ids } = req.body;
+    const normalizedLevelNumber = Number(level_number) || 1;
     const level = await Level.create({
       formId: form_id,
-      levelNumber: level_number,
+      levelNumber: normalizedLevelNumber,
       name,
       scoringType: scoring_type,
       assignmentType: assignment_type,
       sectionId: section_id,
       blindReview: blind_review,
-      showPreviousReviews: show_previous_reviews,
+      showPreviousReviews: normalizedLevelNumber === 1 ? false : !!show_previous_reviews,
       assignedReviewers: reviewer_ids
     });
     res.status(201).json({ ...level.toObject(), id: level._id });
@@ -182,15 +183,16 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
     if (!level && !level_id) {
         // Fallback: if level doesn't exist, we might be creating it here
         const { level_number, name, scoring_type, assignment_type, section_id, blind_review } = req.body;
+        const normalizedLevelNumber = Number(level_number) || 1;
         level = await Level.create({
             formId: form_id,
-            levelNumber: level_number,
-            name: name || `Level ${level_number}`,
+            levelNumber: normalizedLevelNumber,
+            name: name || `Level ${normalizedLevelNumber}`,
             scoringType: scoring_type,
             assignmentType: assignment_type,
             sectionId: section_id,
             blindReview: blind_review,
-            showPreviousReviews: show_previous_reviews,
+            showPreviousReviews: normalizedLevelNumber === 1 ? false : !!show_previous_reviews,
             assignedReviewers: reviewer_ids
         });
     }
@@ -213,12 +215,36 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
       // Filter by recommendations for Next Level
       if (filter_type === 'next_level_only') {
         const { source_level_id } = req.body;
-        const levelQuery: any = { recommendation: 'next_level', status: { $in: ['approved', 'completed'] } };
-        if (source_level_id) levelQuery.level_id = source_level_id;
-        
-        const nextLevelReviews = await Review.find(levelQuery);
-        const subIds = [...new Set(nextLevelReviews.map(r => r.submission_id))];
-        query._id = { $in: subIds };
+        if (source_level_id) {
+          const sourceLevel = await Level.findById(source_level_id);
+          if (!sourceLevel) {
+            return res.status(400).json({ error: 'Invalid source_level_id' });
+          }
+
+          const levelReviews = await Review.find({ level_id: source_level_id });
+          const groupedBySubmission = new Map<string, any[]>();
+          for (const review of levelReviews) {
+            const key = String(review.submission_id);
+            const list = groupedBySubmission.get(key) || [];
+            list.push(review);
+            groupedBySubmission.set(key, list);
+          }
+
+          const eligibleSubmissionIds: string[] = [];
+          for (const [submissionId, reviewsAtLevel] of groupedBySubmission.entries()) {
+            const allReviewed = reviewsAtLevel.every(r => ['approved', 'rejected', 'completed'].includes(String(r.status)));
+            const hasNextLevelRecommendation = reviewsAtLevel.some(r => r.recommendation === 'next_level');
+            if (allReviewed && hasNextLevelRecommendation) {
+              eligibleSubmissionIds.push(submissionId);
+            }
+          }
+
+          query._id = { $in: eligibleSubmissionIds };
+        } else {
+          const nextLevelReviews = await Review.find({ recommendation: 'next_level', status: { $in: ['approved', 'completed'] } });
+          const subIds = [...new Set(nextLevelReviews.map(r => r.submission_id))];
+          query._id = { $in: subIds };
+        }
       } else if (filter_type === 'form_score_gte') {
         query['score.percentage'] = { $gte: parseFloat(filter_value) };
       }
@@ -226,6 +252,15 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
     
     const submissions = await Submission.find(query);
     const normalize = (value: any) => String(value ?? '').trim().toLowerCase();
+    const isFinalizedReview = (status: any) => ['approved', 'rejected', 'completed'].includes(String(status));
+    const previousLevelNumber = Number(level.levelNumber) - 1;
+    let previousLevel: any = null;
+    if (previousLevelNumber >= 1) {
+      previousLevel = await Level.findOne({ formId: level.formId, levelNumber: previousLevelNumber });
+      if (!previousLevel) {
+        return res.status(400).json({ error: `Previous level (L${previousLevelNumber}) not found` });
+      }
+    }
     
     // If we used submission_ids, we don't need to re-apply field filters (they were already applied on frontend)
     const skipFieldFilters = Array.isArray(submission_ids) && submission_ids.length > 0;
@@ -258,8 +293,22 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
     for (const sub of submissions) {
       if (!matchesFieldFilters(sub)) continue;
 
+      // Hard rule: for L2+ this submission can move only when previous level is fully reviewed.
+      if (previousLevel) {
+        const prevLevelReviews = await Review.find({
+          submission_id: sub._id,
+          level: previousLevel.levelNumber
+        });
+
+        if (prevLevelReviews.length === 0) continue;
+
+        const allPrevReviewed = prevLevelReviews.every(r => isFinalizedReview(r.status));
+        const hasNextLevelRecommendation = prevLevelReviews.some(r => r.recommendation === 'next_level');
+        if (!allPrevReviewed || !hasNextLevelRecommendation) continue;
+      }
+
       // Check if already shortlisted for this level
-      const existing = await Review.findOne({ submission_id: sub._id, level_id });
+      const existing = await Review.findOne({ submission_id: sub._id, level_id: level._id });
       if (existing) continue;
 
       shortlistedCount++;

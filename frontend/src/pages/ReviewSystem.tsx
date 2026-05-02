@@ -331,21 +331,24 @@ export default function ReviewSystem({ user }: { user: User }) {
   // Reviewer: open review
   const openReview = async (review: any) => {
     setSelectedReview(review);
+    setReviewHistory([]);
     try {
       const res = await api.get(`/submissions/${review.submission_id}`);
       if (res.success && res.data) {
         setSelectedSub(res.data);
       }
       
-      // Fetch review history for this submission to show previous reviewers' marks
-      const historyRes = await api.get(`/reviews?submission_id=${review.submission_id}`);
-      if (Array.isArray(historyRes)) {
-        const isFinalized = (r: any) => ['approved', 'rejected', 'completed'].includes(String(r?.status));
-        const immediatePreviousLevel = Number(review.level) - 1;
-        // Show only immediate previous level reviews (all reviewers from that level)
-        setReviewHistory(
-          historyRes.filter(r => isFinalized(r) && r.id !== review.id && Number(r.level) === immediatePreviousLevel)
-        );
+      // Respect level setting: only show previous reviewer marks when explicitly enabled.
+      if (review.show_previous_reviews && Number(review.level) > 1) {
+        const historyRes = await api.get(`/reviews?submission_id=${review.submission_id}`);
+        if (Array.isArray(historyRes)) {
+          const isFinalized = (r: any) => ['approved', 'rejected', 'completed'].includes(String(r?.status));
+          const immediatePreviousLevel = Number(review.level) - 1;
+          // Show only immediate previous level reviews (all reviewers from that level)
+          setReviewHistory(
+            historyRes.filter(r => isFinalized(r) && r.id !== review.id && Number(r.level) === immediatePreviousLevel)
+          );
+        }
       }
     } catch (err) {
       console.error("Failed to fetch review data:", err);
@@ -489,6 +492,13 @@ export default function ReviewSystem({ user }: { user: User }) {
   if (user.role === 'admin') {
     const subs = shortlistData?.submissions || [];
     const formLevels = shortlistData?.levels || [];
+    const getLevelReviews = (levelNumber: number) =>
+      subs.flatMap((s: any) => (s.level_reviews || []).filter((r: any) => r.level === levelNumber));
+    const isLevelFullyReviewed = (levelNumber: number) => {
+      const reviewsAtLevel = getLevelReviews(levelNumber);
+      if (reviewsAtLevel.length === 0) return false;
+      return reviewsAtLevel.every((r: any) => isFinalizedReview(r.status));
+    };
     const isCurrentStageAssigned = formLevels.some((l: any) => {
       if (l.level_number !== activeFilterLevel) return false;
       const atLevel = subs.filter((s: any) => s.highest_level >= l.level_number).length;
@@ -763,7 +773,8 @@ export default function ReviewSystem({ user }: { user: User }) {
                     </button>
                     {!isCurrentStageAssigned && (
                       <button onClick={() => { 
-                          const nextLvlNum = activeFilterLevel === 1 ? formLevels.length + 1 : activeFilterLevel;
+                          // Total Pool (activeFilterLevel=1) should always feed Level 1.
+                          const nextLvlNum = activeFilterLevel === 1 ? 1 : activeFilterLevel;
                           setLevelForm(p => ({ ...p, level_number: nextLvlNum, name: `Level ${nextLvlNum}` })); 
                           setShowShortlist(true); 
                         }}
@@ -811,11 +822,15 @@ export default function ReviewSystem({ user }: { user: User }) {
                     {formLevels.map((l: any, idx: number) => {
                       const atLevel = subs.filter((s: any) => s.highest_level >= l.level_number).length;
                       const isActive = activeFilterLevel === idx + 2;
-                      const sourceLevelReviews = subs.flatMap((s: any) =>
-                        (s.level_reviews || []).filter((r: any) => r.level === l.level_number)
-                      );
-                      const pendingCount = sourceLevelReviews.filter((r: any) => !isFinalizedReview(r.status)).length;
-                      const isStageLocked = pendingCount > 0;
+                      const sourceLevelReviews = getLevelReviews(l.level_number);
+                      // Pending should be counted per submission, not per reviewer row.
+                      const pendingSubmissionCount = subs.filter((s: any) => {
+                        const reviewsForSubmissionAtLevel = (s.level_reviews || []).filter((r: any) => r.level === l.level_number);
+                        if (reviewsForSubmissionAtLevel.length === 0) return false;
+                        return reviewsForSubmissionAtLevel.some((r: any) => !isFinalizedReview(r.status));
+                      }).length;
+                      const hasAnyReviews = sourceLevelReviews.length > 0;
+                      const isStageLocked = !hasAnyReviews || pendingSubmissionCount > 0;
                       return (<React.Fragment key={l.id}>
                         <div className="flex flex-col items-center gap-1 opacity-40 flex-shrink-0">
                           <ChevronRight size={20} className="text-slate-400" />
@@ -823,7 +838,8 @@ export default function ReviewSystem({ user }: { user: User }) {
                         <button 
                           onClick={() => {
                             if (isStageLocked) {
-                              alert(`Stage ${idx + 1} locked hai. ${pendingCount} reviews abhi pending hain. Jab sab reviewers review complete kar denge tab next round open hoga.`);
+                              const pendingLabel = hasAnyReviews ? `${pendingSubmissionCount} forms abhi pending hain.` : 'Abhi kisi form ka review start nahi hua hai.';
+                              alert(`Stage ${idx + 1} locked hai. ${pendingLabel} Jab sab reviewers review complete kar denge tab next round open hoga.`);
                               return;
                             }
                             setActiveFilterLevel(idx + 2);
@@ -836,17 +852,27 @@ export default function ReviewSystem({ user }: { user: User }) {
                           <p className={`text-[10px] font-black uppercase mb-1 tracking-tighter truncate px-2 ${isStageLocked ? 'text-slate-500' : isActive ? 'text-primary' : 'text-slate-400 group-hover:text-primary/70'}`}>{l.name}</p>
                           <p className={`text-2xl font-black ${isActive ? 'text-slate-900' : 'text-slate-800'}`}>{atLevel}</p>
                           <p className={`text-[9px] font-bold uppercase mt-1 ${isStageLocked ? 'text-amber-600' : isActive ? 'text-primary/60' : 'text-slate-400'}`}>
-                            {isStageLocked ? `${pendingCount} Pending` : 'Shortlisted'}
+                            {isStageLocked ? (hasAnyReviews ? `${pendingSubmissionCount} Pending` : 'No Reviews Yet') : 'Shortlisted'}
                           </p>
                         </button>
                       </React.Fragment>);
                     })}
                     {/* Next Stage Placeholder / Add Level */}
+                    {(() => {
+                      const latestLevel = formLevels[formLevels.length - 1];
+                      const latestLevelNumber = latestLevel?.level_number || 1;
+                      const canAddNextLevel = latestLevel ? isLevelFullyReviewed(latestLevelNumber) : true;
+                      return (
+                        <>
                     <div className="flex flex-col items-center gap-1 opacity-20 flex-shrink-0">
                       <ChevronRight size={20} className="text-slate-400" />
                     </div>
                     <button 
                       onClick={() => {
+                        if (!canAddNextLevel) {
+                          alert(`Pehle Stage ${latestLevelNumber} ke sab reviewers ka review complete karo, phir next stage add hoga.`);
+                          return;
+                        }
                         setLevelForm(p => ({ 
                           ...p, 
                           level_number: formLevels.length + 1, 
@@ -855,7 +881,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                         }));
                         setShowShortlist(true);
                       }}
-                      className="flex-shrink-0 p-4 rounded-2xl border-2 border-dashed border-slate-200 text-center min-w-[140px] transition-all hover:border-primary hover:bg-primary/5 hover:opacity-100 opacity-40 group snap-end"
+                      className={`flex-shrink-0 p-4 rounded-2xl border-2 border-dashed text-center min-w-[140px] transition-all group snap-end ${canAddNextLevel ? 'border-slate-200 hover:border-primary hover:bg-primary/5 hover:opacity-100 opacity-40' : 'border-slate-200 bg-slate-50 opacity-70 cursor-not-allowed'}`}
                     >
                       <p className="text-[10px] font-black text-slate-400 group-hover:text-primary uppercase mb-1">Stage {formLevels.length + 1}</p>
                       <div className="flex items-center justify-center gap-1 text-slate-400 group-hover:text-primary">
@@ -863,6 +889,9 @@ export default function ReviewSystem({ user }: { user: User }) {
                         <p className="text-sm font-bold">Add Level</p>
                       </div>
                     </button>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -953,11 +982,19 @@ export default function ReviewSystem({ user }: { user: User }) {
                           <p className="text-[10px] text-slate-500">Hide teacher names</p>
                         </div>
                       </label>
-                      <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/50 cursor-pointer group">
-                        <input type="checkbox" checked={levelForm.show_previous_reviews} onChange={e => setLevelForm(p => ({ ...p, show_previous_reviews: e.target.checked }))} className="w-4 h-4 rounded accent-primary" />
+                      <label className={`flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/50 group ${levelForm.level_number === 1 ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
+                        <input
+                          type="checkbox"
+                          checked={levelForm.level_number === 1 ? false : levelForm.show_previous_reviews}
+                          disabled={levelForm.level_number === 1}
+                          onChange={e => setLevelForm(p => ({ ...p, show_previous_reviews: e.target.checked }))}
+                          className="w-4 h-4 rounded accent-primary disabled:opacity-60"
+                        />
                         <div>
                           <p className="text-xs font-bold text-slate-700">Show Previous Reviews</p>
-                          <p className="text-[10px] text-slate-500">Reviewers can see marks</p>
+                          <p className="text-[10px] text-slate-500">
+                            {levelForm.level_number === 1 ? 'Level 1 me hamesha OFF rahega' : 'Reviewers can see marks'}
+                          </p>
                         </div>
                       </label>
                     </div>
