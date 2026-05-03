@@ -206,6 +206,18 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
       actualFormId = form._id;
     }
 
+    const isFinalizedReviewStatus = (status: any) => ['approved', 'rejected', 'completed'].includes(String(status));
+    const groupReviewsByReviewer = (reviews: any[]) => {
+      const grouped = new Map<string, any[]>();
+      for (const review of reviews) {
+        const reviewerKey = String((review as any).reviewer_id || '');
+        const list = grouped.get(reviewerKey) || [];
+        list.push(review);
+        grouped.set(reviewerKey, list);
+      }
+      return grouped;
+    };
+
     let query: any = { formId: actualFormId, isDraft: false };
     
     // NEW: If explicit submission_ids are provided, use them
@@ -232,8 +244,13 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
 
           const eligibleSubmissionIds: string[] = [];
           for (const [submissionId, reviewsAtLevel] of groupedBySubmission.entries()) {
-            const allReviewed = reviewsAtLevel.every(r => ['approved', 'rejected', 'completed'].includes(String(r.status)));
-            const hasNextLevelRecommendation = reviewsAtLevel.some(r => r.recommendation === 'next_level');
+            const reviewerGroups = groupReviewsByReviewer(reviewsAtLevel);
+            const allReviewed = Array.from(reviewerGroups.values()).every((reviewerRows) =>
+              reviewerRows.some((r: any) => isFinalizedReviewStatus(r.status))
+            );
+            const hasNextLevelRecommendation = Array.from(reviewerGroups.values()).some((reviewerRows) =>
+              reviewerRows.some((r: any) => isFinalizedReviewStatus(r.status) && r.recommendation === 'next_level')
+            );
             if (allReviewed && hasNextLevelRecommendation) {
               eligibleSubmissionIds.push(submissionId);
             }
@@ -302,8 +319,13 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
 
         if (prevLevelReviews.length === 0) continue;
 
-        const allPrevReviewed = prevLevelReviews.every(r => isFinalizedReview(r.status));
-        const hasNextLevelRecommendation = prevLevelReviews.some(r => r.recommendation === 'next_level');
+        const reviewerGroups = groupReviewsByReviewer(prevLevelReviews);
+        const allPrevReviewed = Array.from(reviewerGroups.values()).every((reviewerRows) =>
+          reviewerRows.some((r: any) => isFinalizedReviewStatus(r.status))
+        );
+        const hasNextLevelRecommendation = Array.from(reviewerGroups.values()).some((reviewerRows) =>
+          reviewerRows.some((r: any) => isFinalizedReviewStatus(r.status) && r.recommendation === 'next_level')
+        );
         if (!allPrevReviewed || !hasNextLevelRecommendation) continue;
       }
 
@@ -400,6 +422,10 @@ export const saveReviewScore = async (req: AuthRequest, res: Response) => {
     const { review_id, overall_score, grade, comments, recommendation, is_draft, question_scores } = req.body;
     const existingReview = await Review.findById(review_id);
     if (!existingReview) return res.status(404).json({ error: 'Review not found' });
+    const normalizedOverallScore = Number(overall_score) || 0;
+    if (normalizedOverallScore < 0 || normalizedOverallScore > 100) {
+      return res.status(400).json({ error: 'Overall score must be between 0 and 100' });
+    }
 
     let normalizedQuestionScores = Array.isArray(question_scores) ? question_scores : [];
     if (normalizedQuestionScores.length > 0) {
@@ -436,7 +462,7 @@ export const saveReviewScore = async (req: AuthRequest, res: Response) => {
     }
 
     const review = await Review.findByIdAndUpdate(review_id, {
-      overall_score,
+      overall_score: normalizedOverallScore,
       grade,
       comments,
       recommendation,

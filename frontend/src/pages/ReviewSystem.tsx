@@ -8,7 +8,7 @@ import Modal from '../components/Modal';
 import { motion } from 'framer-motion';
 import {
   CheckCircle, XCircle, Clock, Filter, Layers, Save, Star, BarChart3,
-  Users, ChevronRight, Eye, ArrowRight, Award, TrendingUp, UserCheck,
+  Users, ChevronRight, Eye, Printer, ArrowRight, Award, TrendingUp, UserCheck,
   Zap, FileText, Settings, History, Plus
 } from 'lucide-react';
 
@@ -49,6 +49,17 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [filteredResults, setFilteredResults] = useState<any[] | null>(null);
   const [activeFilterLevel, setActiveFilterLevel] = useState(1); // Track which level we are currently filtering for
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedLevelColumn, setSelectedLevelColumn] = useState<string>('all');
+
+  useEffect(() => {
+    // Default to current stage level whenever stage changes.
+    if (activeFilterLevel > 1) {
+      setSelectedLevelColumn(String(activeFilterLevel - 1));
+      return;
+    }
+    // Total pool: keep all levels visible by default.
+    setSelectedLevelColumn('all');
+  }, [activeFilterLevel]);
 
   // Reviewer modal
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -260,12 +271,6 @@ export default function ReviewSystem({ user }: { user: User }) {
     setFilteredResults(results);
     setIsFiltering(false);
   };
-
-  useEffect(() => {
-    if (selectedFormId && shortlistData) {
-      applyFilters();
-    }
-  }, [activeFilterLevel]);
 
   const createLevel = async () => {
     if (!selectedFormId || !levelForm.name) return alert('Fill all fields');
@@ -488,29 +493,271 @@ export default function ReviewSystem({ user }: { user: User }) {
     return '';
   };
 
+  const parseResponseRecord = (raw: any): Record<string, any> => {
+    if (!raw) return {};
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(parsed)) {
+        const out: Record<string, any> = {};
+        parsed.forEach((r: any) => {
+          if (r?.fieldId) out[String(r.fieldId)] = r.value;
+        });
+        return out;
+      }
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const getSubmissionDisplayName = (submission: any, fallbackName?: string) => {
+    if (fallbackName && String(fallbackName).trim() && String(fallbackName).trim().toLowerCase() !== 'anonymous') {
+      return String(fallbackName).trim();
+    }
+
+    const responseMap = parseResponseRecord(submission?.responses);
+    const schema =
+      submission?.formId?.form_schema ||
+      selectedFormObj?.form_schema ||
+      forms.find((f: any) => String(f.id) === String(selectedFormId))?.form_schema;
+
+    const fields = (schema?.sections || []).flatMap((s: any) => s?.fields || []);
+    const nameField = fields.find((f: any) => /name/i.test(String(f?.label || '')));
+
+    const candidateName =
+      (nameField?.id ? responseMap[String(nameField.id)] : undefined) ||
+      responseMap.name ||
+      responseMap.full_name ||
+      responseMap.teacher_name;
+
+    if (candidateName == null) return 'Anonymous';
+    const normalized = String(candidateName).trim();
+    return normalized || 'Anonymous';
+  };
+
+  const escapeHtml = (value: any) =>
+    String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const formatResponseValue = (value: any) => {
+    if (Array.isArray(value)) return value.join(', ');
+    if (value == null) return '';
+    return String(value);
+  };
+
+  const printSubmissionProfile = ({
+    profile,
+    submission,
+    responseRows
+  }: {
+    profile: any;
+    submission: any;
+    responseRows: Array<{ label: string; value: any }>;
+  }) => {
+    const printWindow = window.open('', '_blank', 'width=1100,height=850');
+    if (!printWindow) {
+      alert('Popup blocked. Please allow popups to print the profile.');
+      return;
+    }
+
+    const name = getSubmissionDisplayName(submission, submission?.user_name);
+    const formScore =
+      submission?.score != null
+        ? `${Number(typeof submission.score === 'object' ? submission.score?.percentage : submission.score).toFixed(2)}%`
+        : 'N/A';
+
+    const levels = Array.isArray(profile?.levels) ? profile.levels : [];
+    const comments = Array.isArray(profile?.comments) ? profile.comments : [];
+    const statusText = String(submission?.status || 'N/A').replace(/_/g, ' ');
+
+    const responsesHtml = responseRows.length
+      ? responseRows.map((row, idx) => `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${escapeHtml(row.label)}</td>
+            <td>${escapeHtml(formatResponseValue(row.value))}</td>
+          </tr>
+        `).join('')
+      : '<tr><td colspan="3">No responses available.</td></tr>';
+
+    const levelsHtml = levels.length
+      ? levels.map((lvl: any) => {
+          const scoreRows = Array.isArray(lvl?.scores) ? lvl.scores : [];
+          const scoreHtml = scoreRows.length
+            ? scoreRows.map((s: any, i: number) => `
+                <tr>
+                  <td>R${i + 1}</td>
+                  <td>${escapeHtml(s?.overall_score ?? 'N/A')}</td>
+                  <td>${escapeHtml(String(s?.recommendation || '').replace(/_/g, ' ') || 'N/A')}</td>
+                  <td>${escapeHtml(s?.comments || '-')}</td>
+                </tr>
+              `).join('')
+            : '<tr><td colspan="4">No reviews recorded at this level.</td></tr>';
+
+          return `
+            <section class="card">
+              <h3>Level ${escapeHtml(lvl?.level_number || '-')} - ${escapeHtml(lvl?.level_name || 'Unnamed')}</h3>
+              <p class="muted">Scoring: ${escapeHtml(String(lvl?.scoring_type || '').replace(/_/g, ' '))} | Review Mode: ${lvl?.blind_review ? 'Blind' : 'Open'}</p>
+              <table>
+                <thead><tr><th>Reviewer</th><th>Score</th><th>Recommendation</th><th>Comments</th></tr></thead>
+                <tbody>${scoreHtml}</tbody>
+              </table>
+            </section>
+          `;
+        }).join('')
+      : '<section class="card"><p>No level-wise review data available.</p></section>';
+
+    const commentsHtml = comments.length
+      ? `
+        <section class="card">
+          <h3>Comments Timeline</h3>
+          ${comments.map((c: any) => `
+            <div class="comment">
+              <div><strong>${escapeHtml(c?.user_name || 'User')}</strong> (${escapeHtml(c?.user_role || '-')})</div>
+              <div class="muted">${escapeHtml(c?.created_at ? new Date(c.created_at).toLocaleString() : '-')}</div>
+              <div>${escapeHtml(c?.content || '')}</div>
+            </div>
+          `).join('')}
+        </section>
+      `
+      : '';
+
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Submission Profile - ${escapeHtml(name)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #0f172a; margin: 24px; line-height: 1.45; }
+          .header { border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+          .title { font-size: 22px; font-weight: 700; margin: 0; }
+          .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; font-size: 13px; }
+          .muted { color: #475569; font-size: 12px; }
+          .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin: 12px 0; page-break-inside: avoid; }
+          h2 { margin: 0 0 10px 0; font-size: 18px; }
+          h3 { margin: 0 0 6px 0; font-size: 15px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+          th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; vertical-align: top; font-size: 12px; }
+          th { background: #f8fafc; font-weight: 700; }
+          .comment { border-top: 1px dashed #cbd5e1; padding-top: 8px; margin-top: 8px; white-space: pre-wrap; }
+          @media print {
+            body { margin: 12mm; }
+          }
+        </style>
+      </head>
+      <body>
+        <section class="header">
+          <h1 class="title">${escapeHtml(name)}</h1>
+          <div class="muted">${escapeHtml(submission?.user_email || '')}</div>
+          <div class="meta">
+            <div><strong>Form:</strong> ${escapeHtml(submission?.form_title || '-')}</div>
+            <div><strong>Status:</strong> ${escapeHtml(statusText)}</div>
+            <div><strong>Form Score:</strong> ${escapeHtml(formScore)}</div>
+            <div><strong>Level Progress:</strong> ${escapeHtml(`${profile?.highest_level || 0}/${profile?.total_levels || 0}`)}</div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Form Responses</h2>
+          <table>
+            <thead><tr><th>#</th><th>Field</th><th>Response</th></tr></thead>
+            <tbody>${responsesHtml}</tbody>
+          </table>
+        </section>
+
+        <section>
+          <h2>Level-wise Review Scores</h2>
+          ${levelsHtml}
+        </section>
+
+        ${commentsHtml}
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    // Give the new document a moment to render before triggering browser print.
+    setTimeout(() => {
+      try {
+        printWindow.focus();
+        printWindow.print();
+      } catch {
+        alert('Unable to start printing automatically. Please use Ctrl+P in the print window.');
+      }
+    }, 250);
+  };
+
   // ═══════════ ADMIN VIEW ═══════════
   if (user.role === 'admin') {
     const subs = shortlistData?.submissions || [];
     const formLevels = shortlistData?.levels || [];
+    const currentStageNumber = activeFilterLevel > 1 ? activeFilterLevel - 1 : null;
+    const stageDefaultSubmissions = currentStageNumber
+      ? subs.filter((s: any) => (s.level_reviews || []).some((r: any) => r.level === currentStageNumber))
+      : subs;
+    const actionCandidates = filteredResults !== null
+      ? filteredResults
+      : (activeFilterLevel > 1 ? stageDefaultSubmissions : null);
     const getLevelReviews = (levelNumber: number) =>
       subs.flatMap((s: any) => (s.level_reviews || []).filter((r: any) => r.level === levelNumber));
+    const getReviewerKey = (review: any) => {
+      const reviewer = review?.reviewer_id;
+      if (reviewer && typeof reviewer === 'object') return String(reviewer._id || reviewer.id || '');
+      return String(reviewer || '');
+    };
+    const isSubmissionPendingAtLevel = (submission: any, levelNumber: number) => {
+      const reviewsAtLevel = (submission?.level_reviews || []).filter((r: any) => r.level === levelNumber);
+      if (reviewsAtLevel.length === 0) return false;
+
+      // Reviewer-wise completion: if a reviewer has any finalized row, that reviewer is considered done.
+      const reviewerState = new Map<string, { done: boolean }>();
+      for (const review of reviewsAtLevel) {
+        const key = getReviewerKey(review) || `review-${review?.id || Math.random()}`;
+        const prev = reviewerState.get(key) || { done: false };
+        reviewerState.set(key, { done: prev.done || isFinalizedReview(review?.status) });
+      }
+
+      return Array.from(reviewerState.values()).some((state) => !state.done);
+    };
     const isLevelFullyReviewed = (levelNumber: number) => {
       const reviewsAtLevel = getLevelReviews(levelNumber);
       if (reviewsAtLevel.length === 0) return false;
-      return reviewsAtLevel.every((r: any) => isFinalizedReview(r.status));
+      return !subs.some((s: any) => isSubmissionPendingAtLevel(s, levelNumber));
     };
     const isCurrentStageAssigned = formLevels.some((l: any) => {
       if (l.level_number !== activeFilterLevel) return false;
       const atLevel = subs.filter((s: any) => s.highest_level >= l.level_number).length;
       return atLevel > 0;
     });
+    const sourceLevelNumberForNext = activeFilterLevel > 1 ? activeFilterLevel - 1 : null;
+    const sourceLevelReviewsForNext = sourceLevelNumberForNext ? getLevelReviews(sourceLevelNumberForNext) : [];
+    const sourceLevelHasAnyReviewsForNext = sourceLevelReviewsForNext.length > 0;
+    const sourceLevelPendingFormsForNext = sourceLevelNumberForNext
+      ? subs.filter((s: any) => isSubmissionPendingAtLevel(s, sourceLevelNumberForNext)).length
+      : 0;
+    const isNextShortlistBlocked = activeFilterLevel > 1 && (!sourceLevelHasAnyReviewsForNext || sourceLevelPendingFormsForNext > 0);
+    const selectableLevels = !currentStageNumber
+      ? formLevels
+      : formLevels.filter((l: any) => l.level_number <= currentStageNumber);
+    const selectedLevelNumber = selectedLevelColumn === 'all' ? null : Number(selectedLevelColumn);
+    const hasSelectedLevel = selectedLevelNumber != null && selectableLevels.some((l: any) => l.level_number === selectedLevelNumber);
+    const visibleLevelColumns = selectedLevelColumn === 'all'
+      ? selectableLevels
+      : (hasSelectedLevel ? selectableLevels.filter((l: any) => l.level_number === selectedLevelNumber) : selectableLevels);
 
     const subColumns = [
       { key: 'user_name', label: 'Name', sortable: true, render: (v: string, r: any) => (
         <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">{(v||'?')[0]}</div>
-          <div><p className="text-sm font-medium">{v || 'Anonymous'}</p><p className="text-[10px] text-slate-500">{r.user_email}</p></div></div>) },
+          <div><p className="text-sm font-medium">{getSubmissionDisplayName(r, v)}</p><p className="text-[10px] text-slate-500">{r.user_email}</p></div></div>) },
       { key: 'score', label: 'Form Score', sortable: true, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{Number(typeof v === 'object' ? v?.percentage : v).toFixed(2)}%</span> : <span className="text-slate-500">—</span> },
-      ...formLevels.map((l: any) => ({
+      ...visibleLevelColumns.map((l: any) => ({
         key: `level_${l.level_number}`, label: `L${l.level_number}`, sortable: true,
         render: (_: any, r: any) => {
           const reviews = (r.level_reviews || []).filter((rv: any) => rv.level === l.level_number);
@@ -547,7 +794,20 @@ export default function ReviewSystem({ user }: { user: User }) {
         }
       })),
       { key: 'highest_level', label: 'Reached', sortable: true, render: (v: number) => v > 0 ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">L{v}</span> : <span className="text-slate-500 text-xs">—</span> },
-      { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
+      {
+        key: 'status',
+        label: 'Status',
+        render: (v: string, r: any) => {
+          if (currentStageNumber) {
+            const stageReviews = (r.level_reviews || []).filter((rv: any) => rv.level === currentStageNumber);
+            const hasFinalizedStageReview = stageReviews.some((rv: any) => isFinalizedReview(rv.status));
+            if (!hasFinalizedStageReview) {
+              return <span className="text-slate-400 text-xs">—</span>;
+            }
+          }
+          return <StatusBadge status={v} />;
+        }
+      },
     ];
 
     return (
@@ -739,7 +999,7 @@ export default function ReviewSystem({ user }: { user: User }) {
             {/* STEP 3: Pipeline & Action (Right Column) */}
             <div className="lg:col-span-2 space-y-6">
               {/* Shortlist Action Bar */}
-              {filteredResults && (
+              {actionCandidates !== null && (
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
                   className={`rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden transition-all ${isCurrentStageAssigned ? 'bg-slate-800 shadow-slate-900/20' : 'bg-navy shadow-navy/20'}`}>
                   <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32" />
@@ -762,8 +1022,8 @@ export default function ReviewSystem({ user }: { user: User }) {
                         {isCurrentStageAssigned 
                           ? "This stage has already been finalized and assigned."
                           : activeFilterLevel === 1 
-                            ? `${filteredResults.length} teachers match your filters` 
-                            : `${filteredResults.length} recommended candidates ready for next stage`}
+                            ? `${actionCandidates.length} teachers match your filters` 
+                            : `${actionCandidates.length} recommended candidates ready for next stage`}
                       </p>
                     </div>
                   </div>
@@ -773,12 +1033,20 @@ export default function ReviewSystem({ user }: { user: User }) {
                     </button>
                     {!isCurrentStageAssigned && (
                       <button onClick={() => { 
+                          if (isNextShortlistBlocked) {
+                            const lockReason = sourceLevelHasAnyReviewsForNext
+                              ? `${sourceLevelPendingFormsForNext} forms are still pending in Stage ${sourceLevelNumberForNext}.`
+                              : `No reviews have started in Stage ${sourceLevelNumberForNext} yet.`;
+                            alert(`Next level shortlisting is disabled. ${lockReason} Please wait until all reviewers complete their reviews.`);
+                            return;
+                          }
                           // Total Pool (activeFilterLevel=1) should always feed Level 1.
                           const nextLvlNum = activeFilterLevel === 1 ? 1 : activeFilterLevel;
                           setLevelForm(p => ({ ...p, level_number: nextLvlNum, name: `Level ${nextLvlNum}` })); 
                           setShowShortlist(true); 
                         }}
-                        className="flex-1 md:flex-none px-8 py-3 bg-white text-navy rounded-xl text-sm font-bold hover:bg-blue-50 shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95">
+                        disabled={isNextShortlistBlocked}
+                        className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-sm font-bold shadow-lg flex items-center justify-center gap-2 transition-all ${isNextShortlistBlocked ? 'bg-slate-200 text-slate-500 cursor-not-allowed shadow-none' : 'bg-white text-navy hover:bg-blue-50 active:scale-95'}`}>
                         <Layers size={18} /> {activeFilterLevel === 1 ? "Shortlist Now" : "Confirm Assignment"}
                       </button>
                     )}
@@ -824,11 +1092,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                       const isActive = activeFilterLevel === idx + 2;
                       const sourceLevelReviews = getLevelReviews(l.level_number);
                       // Pending should be counted per submission, not per reviewer row.
-                      const pendingSubmissionCount = subs.filter((s: any) => {
-                        const reviewsForSubmissionAtLevel = (s.level_reviews || []).filter((r: any) => r.level === l.level_number);
-                        if (reviewsForSubmissionAtLevel.length === 0) return false;
-                        return reviewsForSubmissionAtLevel.some((r: any) => !isFinalizedReview(r.status));
-                      }).length;
+                      const pendingSubmissionCount = subs.filter((s: any) => isSubmissionPendingAtLevel(s, l.level_number)).length;
                       const hasAnyReviews = sourceLevelReviews.length > 0;
                       const isStageLocked = !hasAnyReviews || pendingSubmissionCount > 0;
                       return (<React.Fragment key={l.id}>
@@ -837,16 +1101,11 @@ export default function ReviewSystem({ user }: { user: User }) {
                         </div>
                         <button 
                           onClick={() => {
-                            if (isStageLocked) {
-                              const pendingLabel = hasAnyReviews ? `${pendingSubmissionCount} forms abhi pending hain.` : 'Abhi kisi form ka review start nahi hua hai.';
-                              alert(`Stage ${idx + 1} locked hai. ${pendingLabel} Jab sab reviewers review complete kar denge tab next round open hoga.`);
-                              return;
-                            }
                             setActiveFilterLevel(idx + 2);
                             setFilteredResults(null);
                             setShortlistFilter(p => ({ ...p, filter_type: 'next_level_only', source_level_id: l.id }));
                           }}
-                          className={`flex-shrink-0 p-4 rounded-2xl border-2 text-center min-w-[150px] shadow-md relative group transition-all snap-center ${isStageLocked ? 'bg-slate-50 border-slate-200 opacity-70 cursor-not-allowed' : isActive ? 'bg-white border-primary ring-2 ring-primary/10' : 'bg-white border-primary/20 hover:border-primary/50'}`}
+                          className={`flex-shrink-0 p-4 rounded-2xl border-2 text-center min-w-[150px] shadow-md relative group transition-all snap-center ${isStageLocked ? 'bg-slate-50 border-slate-200 opacity-70 cursor-pointer' : isActive ? 'bg-white border-primary ring-2 ring-primary/10' : 'bg-white border-primary/20 hover:border-primary/50'}`}
                         >
                           <div className={`absolute -top-3 left-1/2 -translate-x-1/2 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase shadow-lg z-10 whitespace-nowrap transition-colors ${isStageLocked ? 'bg-slate-500' : isActive ? 'bg-primary' : 'bg-slate-400 group-hover:bg-primary/70'}`}>Stage {idx + 1}</div>
                           <p className={`text-[10px] font-black uppercase mb-1 tracking-tighter truncate px-2 ${isStageLocked ? 'text-slate-500' : isActive ? 'text-primary' : 'text-slate-400 group-hover:text-primary/70'}`}>{l.name}</p>
@@ -870,7 +1129,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                     <button 
                       onClick={() => {
                         if (!canAddNextLevel) {
-                          alert(`Pehle Stage ${latestLevelNumber} ke sab reviewers ka review complete karo, phir next stage add hoga.`);
+                          alert(`Please complete all reviews for Stage ${latestLevelNumber} first. Then the next stage can be added.`);
                           return;
                         }
                         setLevelForm(p => ({ 
@@ -898,12 +1157,29 @@ export default function ReviewSystem({ user }: { user: User }) {
 
               {/* Submissions table */}
               <DataTable
-                title={filteredResults ? "Filtered Teachers" : "All Submissions"}
-                subtitle={filteredResults 
+                title={filteredResults !== null ? "Filtered Teachers" : (currentStageNumber ? `Stage ${currentStageNumber} Submissions` : "All Submissions")}
+                subtitle={filteredResults !== null 
                   ? `${filteredResults.length} teachers selected for shortlisting` 
-                  : "Use the filters on the left to shortlist teachers for review"}
+                  : (currentStageNumber ? `Showing teachers currently in Stage ${currentStageNumber}` : "Use the filters on the left to shortlist teachers for review")}
+                headerActions={selectableLevels.length > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Level</span>
+                    <select
+                      value={hasSelectedLevel || selectedLevelColumn === 'all' ? selectedLevelColumn : 'all'}
+                      onChange={(e) => setSelectedLevelColumn(e.target.value)}
+                      className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold outline-none focus:border-primary"
+                    >
+                      <option value="all">All Levels</option>
+                      {selectableLevels.map((l: any) => (
+                        <option key={l.id} value={String(l.level_number)}>
+                          L{l.level_number}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
                 columns={subColumns}
-                data={filteredResults || subs}
+                data={filteredResults !== null ? filteredResults : stageDefaultSubmissions}
                 searchPlaceholder="Search by name, email..."
                 onRowClick={(row: any) => openProfile(row.id)}
                 actions={(row: any) => (
@@ -1057,6 +1333,7 @@ export default function ReviewSystem({ user }: { user: User }) {
           {profileLoading ? <div className="flex justify-center py-12"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div> :
           profileData && (() => {
             const sub = profileData.submission;
+            const displayName = getSubmissionDisplayName(sub, sub.user_name);
             const formSchema = sub.formId?.form_schema || selectedFormObj?.form_schema;
             let responseList: { label: string, value: any }[] = [];
             
@@ -1077,9 +1354,9 @@ export default function ReviewSystem({ user }: { user: User }) {
                 {/* Header */}
                 <div className="bg-gradient-to-r from-navy to-navy-light rounded-xl p-5 text-white">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-xl font-bold">{(sub.user_name || '?')[0]}</div>
+                    <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-xl font-bold">{displayName[0]}</div>
                     <div>
-                      <h2 className="text-lg font-bold">{sub.user_name || 'Anonymous'}</h2>
+                      <h2 className="text-lg font-bold">{displayName}</h2>
                       <p className="text-sm text-blue-200">{sub.user_email}</p>
                       <div className="flex items-center gap-3 mt-1 text-[11px]">
                         <span className="bg-white/15 px-2 py-0.5 rounded-full">{sub.form_title}</span>
@@ -1162,9 +1439,17 @@ export default function ReviewSystem({ user }: { user: User }) {
                   </div>
                 )}
 
-                <button onClick={() => navigate(`/forms/view?submission=${sub.id}`)} className="w-full py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold hover:bg-white flex items-center justify-center gap-2">
-                  <Eye size={14} /> View Full Form Response (with form layout)
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={() => printSubmissionProfile({ profile: profileData, submission: sub, responseRows: responseList })}
+                    className="py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50 flex items-center justify-center gap-2"
+                  >
+                    <Printer size={14} /> Print Profile
+                  </button>
+                  <button onClick={() => navigate(`/forms/view?submission=${sub.id}`)} className="py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold hover:bg-white flex items-center justify-center gap-2">
+                    <Eye size={14} /> View Full Form Response
+                  </button>
+                </div>
               </div>
             );
           })()}
@@ -1248,7 +1533,7 @@ export default function ReviewSystem({ user }: { user: User }) {
         {selectedReview && (
           <div className="space-y-6">
             {/* Previous Reviews History for Reviewer */}
-            {reviewHistory.length > 0 && (
+            {selectedReview.show_previous_reviews && reviewHistory.length > 0 && (
               <div className="space-y-3">
                 <h4 className="text-sm font-bold flex items-center gap-2 px-1 text-amber-600">
                   <History size={16} /> {selectedReview.show_previous_reviews ? 'Review History (Multiple Reviewers)' : 'Previous Level Reviews'}
@@ -1296,79 +1581,83 @@ export default function ReviewSystem({ user }: { user: User }) {
                           </div>
                         </div>
 
-                        {/* Marking Partition */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                          {/* Left: Previous Reviews History */}
-                          <div className="space-y-2">
-                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block px-1">Previous Level Scores</label>
-                            <div className="bg-amber-50/50 rounded-xl border border-amber-100 p-2.5 min-h-[68px]">
-                              {reviewHistory.length > 0 ? (
-                                (() => {
-                                  const scoresToShow = reviewHistory.map((prev, pIdx) => {
-                                    const qScore = (prev.question_scores || []).find((qs: any) => 
-                                      String(qs.field_id) === String(q.fieldId) || String(qs.field_id) === String(q.label)
-                                    );
-                                    if (qScore == null) return null;
-                                    return (
-                                      <div key={pIdx} className="grid grid-cols-[1.5fr_70px_70px] items-center bg-white border border-amber-200 px-2.5 py-2 rounded-lg text-[10px]">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[8px] font-black flex items-center justify-center flex-shrink-0">
-                                            {(prev.reviewer_name || `R${pIdx + 1}`).charAt(0).toUpperCase()}
+                        {/* Question-wise scoring is only for question_level mode */}
+                        {selectedReview.scoring_type === 'question_level' && (
+                          <div className={`grid grid-cols-1 ${selectedReview.show_previous_reviews ? 'md:grid-cols-2' : ''} gap-4 mt-2`}>
+                            {/* Left: Previous Reviews History */}
+                            {selectedReview.show_previous_reviews && (
+                              <div className="space-y-2">
+                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block px-1">Previous Level Scores</label>
+                                <div className="bg-amber-50/50 rounded-xl border border-amber-100 p-2.5 min-h-[68px]">
+                                  {reviewHistory.length > 0 ? (
+                                    (() => {
+                                      const scoresToShow = reviewHistory.map((prev, pIdx) => {
+                                        const qScore = (prev.question_scores || []).find((qs: any) =>
+                                          String(qs.field_id) === String(q.fieldId) || String(qs.field_id) === String(q.label)
+                                        );
+                                        if (qScore == null) return null;
+                                        return (
+                                          <div key={pIdx} className="grid grid-cols-[1.5fr_70px_70px] items-center bg-white border border-amber-200 px-2.5 py-2 rounded-lg text-[10px]">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                              <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[8px] font-black flex items-center justify-center flex-shrink-0">
+                                                {(prev.reviewer_name || `R${pIdx + 1}`).charAt(0).toUpperCase()}
+                                              </div>
+                                              <p className="font-bold text-slate-700 truncate">{prev.reviewer_name || `Reviewer ${pIdx + 1}`}</p>
+                                            </div>
+                                            <div className="text-center">
+                                              <span className="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-black text-[9px] uppercase">L{prev.level}</span>
+                                            </div>
+                                            <div className="text-right font-black text-primary">{qScore.score}<span className="text-[9px] text-slate-400 ml-0.5">pts</span></div>
                                           </div>
-                                          <p className="font-bold text-slate-700 truncate">{prev.reviewer_name || `Reviewer ${pIdx + 1}`}</p>
-                                        </div>
-                                        <div className="text-center">
-                                          <span className="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-black text-[9px] uppercase">L{prev.level}</span>
-                                        </div>
-                                        <div className="text-right font-black text-primary">{qScore.score}<span className="text-[9px] text-slate-400 ml-0.5">pts</span></div>
-                                      </div>
-                                    );
-                                  }).filter(Boolean);
+                                        );
+                                      }).filter(Boolean);
 
-                                  return scoresToShow.length > 0 ? scoresToShow : (
+                                      return scoresToShow.length > 0 ? scoresToShow : (
+                                        <div className="w-full h-full flex items-center justify-center py-2">
+                                          <p className="text-[10px] text-slate-400 italic font-medium">Previous level marks not available</p>
+                                        </div>
+                                      );
+                                    })()
+                                  ) : (
                                     <div className="w-full h-full flex items-center justify-center py-2">
-                                      <p className="text-[10px] text-slate-400 italic font-medium">Previous level marks not available</p>
+                                      <p className="text-[10px] text-slate-400 italic font-medium">No previous level history</p>
                                     </div>
-                                  );
-                                })()
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center py-2">
-                                  <p className="text-[10px] text-slate-400 italic font-medium">No previous level history</p>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Right: Current Reviewer Input */}
-                          <div className="space-y-2">
-                            <label className="text-[9px] font-black text-primary uppercase tracking-widest block px-1">Your Score</label>
-                            <div className="bg-primary/5 rounded-xl border border-primary/10 p-3 flex items-center gap-4">
-                              <div className="flex-1">
-                                <input 
-                                  type="number" 
-                                  min={0}
-                                  max={q.reviewerMaxMarks > 0 ? q.reviewerMaxMarks : undefined}
-                                  value={questionScores[q.fieldId] ?? questionScores[q.label] ?? 0}
-                                  onChange={e => {
-                                    const rawVal = parseFloat(e.target.value);
-                                    const normalizedVal = Number.isFinite(rawVal) ? Math.max(0, rawVal) : 0;
-                                    const cappedVal = q.reviewerMaxMarks > 0 ? Math.min(normalizedVal, q.reviewerMaxMarks) : normalizedVal;
-                                    const newScores = { ...questionScores, [q.fieldId]: cappedVal };
-                                    setQuestionScores(newScores);
-                                  }}
-                                  className="w-full bg-white px-4 py-2.5 rounded-lg border border-primary/20 text-lg font-black text-primary outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
-                                  placeholder="0"
-                                />
                               </div>
-                              {q.reviewerMaxMarks > 0 && (
-                                <div className="text-right flex flex-col justify-center">
-                                  <span className="text-[8px] font-bold text-slate-400 uppercase leading-none mb-1">Max Limit</span>
-                                  <span className="text-xs font-black text-slate-600 leading-none">{q.reviewerMaxMarks}</span>
+                            )}
+
+                            {/* Right: Current Reviewer Input */}
+                            <div className="space-y-2">
+                              <label className="text-[9px] font-black text-primary uppercase tracking-widest block px-1">Your Score</label>
+                              <div className="bg-primary/5 rounded-xl border border-primary/10 p-3 flex items-center gap-4">
+                                <div className="flex-1">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={q.reviewerMaxMarks > 0 ? q.reviewerMaxMarks : undefined}
+                                    value={questionScores[q.fieldId] ?? questionScores[q.label] ?? 0}
+                                    onChange={e => {
+                                      const rawVal = parseFloat(e.target.value);
+                                      const normalizedVal = Number.isFinite(rawVal) ? Math.max(0, rawVal) : 0;
+                                      const cappedVal = q.reviewerMaxMarks > 0 ? Math.min(normalizedVal, q.reviewerMaxMarks) : normalizedVal;
+                                      const newScores = { ...questionScores, [q.fieldId]: cappedVal };
+                                      setQuestionScores(newScores);
+                                    }}
+                                    className="w-full bg-white px-4 py-2.5 rounded-lg border border-primary/20 text-lg font-black text-primary outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
+                                    placeholder="0"
+                                  />
                                 </div>
-                              )}
+                                {q.reviewerMaxMarks > 0 && (
+                                  <div className="text-right flex flex-col justify-center">
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase leading-none mb-1">Max Limit</span>
+                                    <span className="text-xs font-black text-slate-600 leading-none">{q.reviewerMaxMarks}</span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1385,12 +1674,12 @@ export default function ReviewSystem({ user }: { user: User }) {
                   <input 
                     type="number" 
                     min={0} 
-                    max={1000}
+                    max={100}
                     value={overallScore} 
                     onChange={e => {
                       if (selectedReview.scoring_type === 'question_level') return;
                       const val = parseInt(e.target.value) || 0;
-                      setOverallScore(Math.min(1000, Math.max(0, val)));
+                      setOverallScore(Math.min(100, Math.max(0, val)));
                     }} 
                     readOnly={selectedReview.scoring_type === 'question_level'}
                     className={`w-full px-4 py-2.5 rounded-xl border font-bold text-lg outline-none transition-all ${selectedReview.scoring_type === 'question_level' ? 'bg-primary/5 border-primary/20 text-primary cursor-default' : 'bg-white border-slate-300 text-primary focus:border-primary focus:ring-2 focus:ring-primary/10'}`} 
@@ -1440,6 +1729,7 @@ export default function ReviewSystem({ user }: { user: User }) {
         {profileLoading ? <div className="flex justify-center py-12"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div> :
         profileData && (() => {
           const sub = profileData.submission;
+          const displayName = getSubmissionDisplayName(sub, sub.user_name);
           
           // Calculate responses for this specific profile view
           let profileResponses: Record<string, any> = {};
@@ -1459,16 +1749,17 @@ export default function ReviewSystem({ user }: { user: User }) {
               profileResponses = raw;
             }
           }
+          const responseRows = Object.entries(profileResponses).map(([label, value]) => ({ label, value }));
 
           return (
             <div className="space-y-6">
               <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
                 <div className="flex items-center gap-4 mb-4">
                   <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xl">
-                    {(sub.user_name || 'U')[0]}
+                    {displayName[0]}
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg text-slate-900">{sub.user_name}</h3>
+                    <h3 className="font-bold text-lg text-slate-900">{displayName}</h3>
                     <p className="text-xs text-slate-500 font-medium">{sub.user_email} · {sub.form_title}</p>
                   </div>
                 </div>
@@ -1539,6 +1830,13 @@ export default function ReviewSystem({ user }: { user: User }) {
                   </div>
                 </div>
               )}
+
+              <button
+                onClick={() => printSubmissionProfile({ profile: profileData, submission: sub, responseRows })}
+                className="w-full py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50 flex items-center justify-center gap-2"
+              >
+                <Printer size={14} /> Print Profile
+              </button>
             </div>
           );
         })()}

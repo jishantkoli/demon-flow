@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { User } from '../lib/auth';
-import { Mail, Settings, Save, FileText, Server, AlertCircle, CheckCircle } from 'lucide-react';
+import { Mail, Settings, Save, FileText, Server, AlertCircle, CheckCircle, Megaphone, Send } from 'lucide-react';
 
 const VARIABLES = [
   '{{teacher_name}}', '{{head_name}}', '{{form_link}}', '{{school_code}}'
 ];
 
+const ANNOUNCEMENT_VARIABLES = [
+  '{{recipient_name}}', '{{recipient_email}}', '{{school_code}}', '{{role}}'
+];
+
 export default function EmailCenter({ user }: { user: User }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [announcementSending, setAnnouncementSending] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [settings, setSettings] = useState({
     apiKey: '',
@@ -23,15 +28,51 @@ export default function EmailCenter({ user }: { user: User }) {
       head_template: {
         subject: 'Nomination Successful',
         body: 'Hello {{head_name}},\n\nYou have successfully nominated {{teacher_name}}. They have been sent an email with the link.'
+      },
+      announcement_template: {
+        subject: 'Important Announcement',
+        body: 'Hello {{recipient_name}},\n\nThis is an important announcement from admin.\n\nRegards,\nAdmin Team'
       }
     }
   });
+  const [announcement, setAnnouncement] = useState({
+    audience: 'teachers',
+    school_code: '',
+    subject: 'Important Announcement',
+    body: 'Hello {{recipient_name}},\n\nThis is an important announcement from admin.\n\nRegards,\nAdmin Team'
+  });
+
+  const ensureTemplates = (raw: any) => {
+    const existing = raw?.templates || {};
+    return {
+      teacher_template: {
+        subject: existing?.teacher_template?.subject || settings.templates.teacher_template.subject,
+        body: existing?.teacher_template?.body || settings.templates.teacher_template.body
+      },
+      head_template: {
+        subject: existing?.head_template?.subject || settings.templates.head_template.subject,
+        body: existing?.head_template?.body || settings.templates.head_template.body
+      },
+      announcement_template: {
+        subject: existing?.announcement_template?.subject || settings.templates.announcement_template.subject,
+        body: existing?.announcement_template?.body || settings.templates.announcement_template.body
+      }
+    };
+  };
 
   useEffect(() => {
     const fetchSettings = async () => {
       try {
         const data = await api.get('/settings/email_settings');
-        if (data) setSettings(prev => ({ ...prev, ...data }));
+        if (data) {
+          const templates = ensureTemplates(data);
+          setSettings(prev => ({ ...prev, ...data, templates }));
+          setAnnouncement(prev => ({
+            ...prev,
+            subject: templates.announcement_template.subject,
+            body: templates.announcement_template.body
+          }));
+        }
       } catch (err) {
         console.error('Failed to fetch email settings:', err);
       } finally {
@@ -51,6 +92,28 @@ export default function EmailCenter({ user }: { user: User }) {
       setMessage({ type: 'error', text: err.message || 'Failed to save settings' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSendAnnouncement = async () => {
+    setAnnouncementSending(true);
+    setMessage(null);
+    try {
+      const payload = {
+        subject: announcement.subject,
+        body: announcement.body,
+        audience: announcement.audience,
+        school_code: announcement.school_code?.trim() || undefined
+      };
+      const res = await api.post('/notifications/announcement', payload);
+      setMessage({
+        type: 'success',
+        text: `Announcement sent. Total: ${res.total || 0}, Sent: ${res.sent_count || 0}, Failed: ${res.failed_count || 0}`
+      });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Failed to send announcement' });
+    } finally {
+      setAnnouncementSending(false);
     }
   };
 
@@ -138,12 +201,97 @@ export default function EmailCenter({ user }: { user: User }) {
         </div>
       </div>
 
+      {/* Manual Announcement */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <h2 className="text-lg font-bold flex items-center gap-2">
+          <Megaphone size={20} className="text-primary" /> Manual Announcement Mail
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-500 uppercase">Audience</label>
+            <select
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
+              value={announcement.audience}
+              onChange={e => setAnnouncement(prev => ({ ...prev, audience: e.target.value }))}
+            >
+              <option value="teachers">All Teachers</option>
+              <option value="functionaries">All School Heads / Functionaries</option>
+              <option value="by_school">By School Code (Teachers + Heads)</option>
+              <option value="all_users">All Users</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-500 uppercase">School Code (Optional)</label>
+            <input
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
+              value={announcement.school_code}
+              onChange={e => setAnnouncement(prev => ({ ...prev, school_code: e.target.value }))}
+              placeholder="e.g. SCH-101"
+              disabled={announcement.audience !== 'by_school'}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold text-slate-500 uppercase">Announcement Subject</label>
+          <input
+            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none font-semibold"
+            value={announcement.subject}
+            onChange={e => {
+              const subject = e.target.value;
+              setAnnouncement(prev => ({ ...prev, subject }));
+              setSettings(prev => ({
+                ...prev,
+                templates: {
+                  ...prev.templates,
+                  announcement_template: { ...prev.templates.announcement_template, subject }
+                }
+              }));
+            }}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold text-slate-500 uppercase">Announcement Body</label>
+          <textarea
+            rows={6}
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 outline-none resize-none font-sans"
+            value={announcement.body}
+            onChange={e => {
+              const body = e.target.value;
+              setAnnouncement(prev => ({ ...prev, body }));
+              setSettings(prev => ({
+                ...prev,
+                templates: {
+                  ...prev.templates,
+                  announcement_template: { ...prev.templates.announcement_template, body }
+                }
+              }));
+            }}
+          />
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            onClick={handleSendAnnouncement}
+            disabled={announcementSending}
+            className="px-6 py-2.5 bg-navy text-white rounded-xl text-sm font-bold hover:bg-navy-light disabled:opacity-50 flex items-center gap-2"
+          >
+            <Send size={16} /> {announcementSending ? 'Sending...' : 'Send Announcement'}
+          </button>
+        </div>
+      </div>
+
       {/* Variables Help */}
       <div className="p-4 bg-slate-100 rounded-2xl border border-slate-200">
         <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Available Variables</h4>
         <div className="flex flex-wrap gap-2">
           {VARIABLES.map(v => (
             <span key={v} className="px-2 py-1 bg-white rounded-lg text-[10px] font-mono font-bold text-primary border border-slate-200">{v}</span>
+          ))}
+          {ANNOUNCEMENT_VARIABLES.map(v => (
+            <span key={v} className="px-2 py-1 bg-white rounded-lg text-[10px] font-mono font-bold text-emerald-700 border border-emerald-200">{v}</span>
           ))}
         </div>
       </div>

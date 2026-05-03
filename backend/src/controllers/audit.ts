@@ -5,8 +5,23 @@ import { AuthRequest } from '../middleware/auth.js';
 export const getAuditLogs = async (req: AuthRequest, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 50;
-    const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(limit);
-    const mapped = logs.map(l => ({ ...l.toObject(), id: l._id, created_at: l.createdAt }));
+    const logs = await AuditLog.find()
+      .populate('userId', 'email role profile.fullName')
+      .sort({ createdAt: -1 })
+      .limit(limit);
+    const mapped = logs.map((l: any) => {
+      const obj = l.toObject();
+      const user = obj.userId && typeof obj.userId === 'object' ? obj.userId : null;
+      return {
+        ...obj,
+        id: obj._id,
+        created_at: obj.createdAt,
+        user_id: user?._id || obj.userId || null,
+        user_name: user?.profile?.fullName || null,
+        user_email: user?.email || null,
+        user_role: user?.role || null
+      };
+    });
     res.status(200).json(mapped);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
