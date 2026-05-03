@@ -4,9 +4,11 @@ import { api } from '../lib/api';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { Users, FileText, Inbox, CheckSquare, BarChart3, Clock, TrendingUp, AlertTriangle, Activity, Award, UserPlus, Layers } from 'lucide-react';
 
 export default function Dashboard({ user }: { user: User }) {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<any>(null);
   const [recentSubs, setRecentSubs] = useState<any[]>([]);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
@@ -45,36 +47,72 @@ export default function Dashboard({ user }: { user: User }) {
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div>;
   const s = stats || {};
   const anim = (i: number) => ({ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.05, duration: 0.4 } });
+  const subId = (sub: any) => sub?.id || sub?._id;
+  const canOpenSubmission = (sub: any) => Boolean(subId(sub));
+  const parseResponses = (raw: any): Record<string, any> => {
+    if (!raw) return {};
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(parsed)) {
+        const out: Record<string, any> = {};
+        parsed.forEach((r: any) => { if (r?.fieldId) out[String(r.fieldId)] = r.value; });
+        return out;
+      }
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+  const displaySubmissionName = (sub: any) => {
+    if (sub?.user_name && String(sub.user_name).trim() && String(sub.user_name).trim().toLowerCase() !== 'anonymous') {
+      return String(sub.user_name).trim();
+    }
+    const responses = parseResponses(sub?.responses);
+    const possible = responses.full_name || responses.name || responses.teacher_name;
+    const text = String(possible || '').trim();
+    if (text) return text;
+    return sub?.user_email || 'Anonymous';
+  };
+  const displaySubmissionMeta = (sub: any) => {
+    const email = String(sub?.user_email || '').trim();
+    if (email) return email;
+    const responses = parseResponses(sub?.responses);
+    const schoolCode = responses.school_code || responses.schoolCode;
+    if (schoolCode) return `School: ${schoolCode}`;
+    return 'No contact info';
+  };
 
   return (
     <div className="space-y-6">
       <div><h1 className="text-2xl font-bold font-heading">Welcome back, {user.name?.split(' ')[0]}</h1>
-        <p className="text-sm text-slate-500 mt-1">{user.role === 'admin' ? 'System overview and real-time analytics' : user.role === 'functionary' ? `Managing nominations for school ${user.school_code || ''}` : 'Your portal overview'}</p></div>
+        <p className="text-sm text-slate-500 mt-1">{user.role === 'admin' ? 'System overview and real-time analytics' : user.role === 'functionary' ? `Managing nominations for school ${user.school_code || ''}` : 'Your portal overview'}</p>
+        <p className="text-[11px] text-slate-400 mt-1">Tip: cards aur rows click karke direct detail pages kholo.</p>
+      </div>
 
       <motion.div {...anim(0)} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {user.role === 'admin' && <>
-          <StatCard label="Total Users" value={s.totalUsers || 0} icon={Users} color="blue" trend="+12% this month" trendUp />
-          <StatCard label="Active Forms" value={s.activeForms || 0} icon={FileText} color="green" subtitle={`${s.draftForms || 0} drafts, ${s.expiredForms || 0} expired`} />
-          <StatCard label="Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" trend="+8% this week" trendUp />
-          <StatCard label="Pending Reviews" value={s.pendingReviews || 0} icon={CheckSquare} color="amber" subtitle={`${s.completedReviews || 0} completed`} />
+          <StatCard label="Total Users" value={s.totalUsers || 0} icon={Users} color="blue" trend="+12% this month" trendUp onClick={() => navigate('/users')} ctaText="Open user management" />
+          <StatCard label="Active Forms" value={s.activeForms || 0} icon={FileText} color="green" subtitle={`${s.draftForms || 0} drafts, ${s.expiredForms || 0} expired`} onClick={() => navigate('/forms')} ctaText="Open forms list" />
+          <StatCard label="Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" trend="+8% this week" trendUp onClick={() => navigate('/submissions')} ctaText="Open submissions" />
+          <StatCard label="Pending Reviews" value={s.pendingReviews || 0} icon={CheckSquare} color="amber" subtitle={`${s.completedReviews || 0} completed`} onClick={() => navigate('/reviews')} ctaText="Open review queue" />
         </>}
         {user.role === 'reviewer' && <>
-          <StatCard label="Pending Reviews" value={s.pendingReviews || 0} icon={CheckSquare} color="amber" />
-          <StatCard label="Completed" value={s.completedReviews || 0} icon={TrendingUp} color="green" />
-          <StatCard label="Avg Score Given" value={s.avgScore || 0} icon={BarChart3} color="blue" subtitle="Across all reviews" />
-          <StatCard label="Total Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" />
+          <StatCard label="Pending Reviews" value={s.pendingReviews || 0} icon={CheckSquare} color="amber" onClick={() => navigate('/reviews')} ctaText="Open my pending reviews" />
+          <StatCard label="Completed" value={s.completedReviews || 0} icon={TrendingUp} color="green" onClick={() => navigate('/reviews')} ctaText="Open completed reviews" />
+          <StatCard label="Avg Score Given" value={s.avgScore || 0} icon={BarChart3} color="blue" subtitle="Across all reviews" onClick={() => navigate('/reviews')} ctaText="Open review insights" />
+          <StatCard label="Total Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" onClick={() => navigate('/submissions')} ctaText="Open submissions" />
         </>}
         {user.role === 'functionary' && <>
-          <StatCard label="Active Forms" value={s.activeForms || 0} icon={FileText} color="blue" />
-          <StatCard label="Nominations" value={s.totalNominations || 0} icon={UserPlus} color="green" subtitle={`${s.nominationsByStatus?.completed || 0} completed`} />
-          <StatCard label="Completion Rate" value={`${s.completionRate || 0}%`} icon={TrendingUp} color="purple" />
-          <StatCard label="Pending" value={s.nominationsByStatus?.invited || 0} icon={Clock} color="amber" />
+          <StatCard label="Active Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} ctaText="Open forms" />
+          <StatCard label="Nominations" value={s.totalNominations || 0} icon={UserPlus} color="green" subtitle={`${s.nominationsByStatus?.completed || 0} completed`} onClick={() => navigate('/nominations')} ctaText="Open nominations" />
+          <StatCard label="Completion Rate" value={`${s.completionRate || 0}%`} icon={TrendingUp} color="purple" onClick={() => navigate('/nominations')} ctaText="View nomination progress" />
+          <StatCard label="Pending" value={s.nominationsByStatus?.invited || 0} icon={Clock} color="amber" onClick={() => navigate('/nominations')} ctaText="Open pending nominations" />
         </>}
         {user.role === 'teacher' && <>
-          <StatCard label="Available Forms" value={s.activeForms || 0} icon={FileText} color="blue" />
-          <StatCard label="My Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="green" />
-          <StatCard label="Approved" value={s.submissionsByStatus?.approved || 0} icon={CheckSquare} color="purple" />
-          <StatCard label="Under Review" value={s.submissionsByStatus?.under_review || 0} icon={Clock} color="amber" />
+          <StatCard label="Available Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} ctaText="Open forms" />
+          <StatCard label="My Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="green" onClick={() => navigate('/submissions')} ctaText="Open my submissions" />
+          <StatCard label="Approved" value={s.submissionsByStatus?.approved || 0} icon={CheckSquare} color="purple" onClick={() => navigate('/submissions')} ctaText="Open approved entries" />
+          <StatCard label="Under Review" value={s.submissionsByStatus?.under_review || 0} icon={Clock} color="amber" onClick={() => navigate('/submissions')} ctaText="Open under review entries" />
         </>}
       </motion.div>
 
@@ -82,23 +120,50 @@ export default function Dashboard({ user }: { user: User }) {
         <motion.div {...anim(1)} className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm">
           <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
             <h3 className="font-semibold font-heading text-sm">Recent Submissions</h3>
-            <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{recentSubs.length} latest</span>
+            <button
+              className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full hover:bg-primary/20"
+              onClick={() => navigate('/submissions')}
+            >
+              View all
+            </button>
           </div>
           <div className="divide-y divide-border/50">
-            {recentSubs.length === 0 ? <div className="p-10 text-center text-sm text-slate-500">No submissions yet</div> : recentSubs.map(sub => (
-              <div key={sub.id} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors">
-                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{(sub.user_name || 'U').charAt(0)}</div>
-                <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{sub.form_title || `Form #${sub.form_id}`}</p><p className="text-[11px] text-slate-500">{sub.user_name || sub.user_email || 'Anonymous'}</p></div>
+            {recentSubs.length === 0 ? <div className="p-10 text-center text-sm text-slate-500">No submissions yet</div> : recentSubs.map((sub, idx) => (
+              <button
+                key={subId(sub) || `sub-${idx}`}
+                className={`w-full text-left px-5 py-3 flex items-center gap-3 transition-colors ${canOpenSubmission(sub) ? 'hover:bg-slate-50 cursor-pointer' : ''}`}
+                onClick={() => {
+                  if (!canOpenSubmission(sub)) return;
+                  navigate(`/forms/view?submission=${subId(sub)}`);
+                }}
+                disabled={!canOpenSubmission(sub)}
+              >
+                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{displaySubmissionName(sub).charAt(0).toUpperCase()}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{sub.form_title || `Form #${sub.form_id}`}</p>
+                  <p className="text-[11px] text-slate-600 font-medium truncate">{displaySubmissionName(sub)}</p>
+                  <p className="text-[10px] text-slate-500 truncate">{displaySubmissionMeta(sub)}</p>
+                </div>
                 <StatusBadge status={sub.status} />
                 {sub.score != null && <span className="text-xs font-bold text-primary">{Number(typeof sub.score === 'object' ? sub.score?.percentage : sub.score).toFixed(2)}%</span>}
                 <span className="text-[10px] text-slate-500 hidden sm:block">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : ''}</span>
-              </div>
+              </button>
             ))}
           </div>
         </motion.div>
 
         <motion.div {...anim(2)} className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-200"><h3 className="font-semibold font-heading text-sm flex items-center gap-2"><Activity size={14} className="text-accent-green" /> Activity Timeline</h3></div>
+          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+            <h3 className="font-semibold font-heading text-sm flex items-center gap-2"><Activity size={14} className="text-accent-green" /> Activity Timeline</h3>
+            {user.role === 'admin' && (
+              <button
+                className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full hover:bg-primary/20"
+                onClick={() => navigate('/audit-logs')}
+              >
+                Open logs
+              </button>
+            )}
+          </div>
           <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
             {recentLogs.length === 0 ? <p className="text-center text-sm text-slate-500 py-6">No activity yet</p> : recentLogs.map(log => (
               <div key={log.id} className="flex gap-3">

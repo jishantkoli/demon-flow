@@ -25,7 +25,8 @@ export default function UserManagement() {
         phone: u.profile?.phone || '',
         school_name: u.profile?.schoolName || '',
         district: u.profile?.district || '',
-        status: u.isActive ? 'active' : 'inactive'
+        status: u.isActive ? 'active' : 'inactive',
+        created_at: u.created_at || u.createdAt || null
       }));
       setUsers(flattened); 
     }
