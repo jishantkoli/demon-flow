@@ -411,13 +411,25 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
           Object.entries(addData).forEach(([k, v]) => {
             nomRows.push([k.replace(/_/g, ' '), String(v)]);
 
-            // Handle files in nomination data
-            const isFile = typeof v === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(v);
-            if (isFile) {
-              const fileName = v as string;
-              const filePath = path.join(process.cwd(), 'uploads', fileName);
-              if (fs.existsSync(filePath)) {
-                archive.file(filePath, { name: `${teacherPath}/nomination_uploads/${fileName}` });
+            // Handle files in nomination data (Cloudinary URLs or local files)
+            const fileVal = v as string;
+            const isCloudinaryUrl = typeof fileVal === 'string' && (fileVal.includes('res.cloudinary.com') || fileVal.includes('cloudinary'));
+            const isLocalFile = typeof fileVal === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(fileVal);
+            if (isCloudinaryUrl || isLocalFile) {
+              if (fileVal.startsWith('http')) {
+                try {
+                  const dlRes = await axios.get(fileVal, { responseType: 'arraybuffer' });
+                  const urlParts = fileVal.split('/');
+                  const nameFromUrl = decodeURIComponent(urlParts[urlParts.length - 1].split('?')[0]);
+                  archive.append(dlRes.data, { name: `${teacherPath}/nomination_uploads/${nameFromUrl}` });
+                } catch (dlErr) {
+                  console.error(`Failed to download nomination file: ${fileVal}`, dlErr);
+                }
+              } else {
+                const filePath = path.join(process.cwd(), 'uploads', fileVal);
+                if (fs.existsSync(filePath)) {
+                  archive.file(filePath, { name: `${teacherPath}/nomination_uploads/${fileVal}` });
+                }
               }
             }
           });
@@ -436,25 +448,30 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
         }
       }
 
-      // Handle files in responses (Teacher's uploads)
+      // Handle files in responses (Teacher's uploads — Cloudinary URLs or local files)
       for (const resp of sub.responses) {
         const val = resp.value;
-        const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+        const isCloudUrl = typeof val === 'string' && (val.includes('res.cloudinary.com') || val.includes('cloudinary'));
+        const isLocalFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
         
-        if (isFile) {
+        if (isCloudUrl || isLocalFile) {
           const fileName = val as string;
-          const filePath = path.join(process.cwd(), 'uploads', fileName);
           
-          if (fs.existsSync(filePath)) {
-            archive.file(filePath, { name: `${teacherPath}/uploads/${fileName}` });
-          } else if (fileName.startsWith('http')) {
+          if (fileName.startsWith('http')) {
+            // Download from Cloudinary or any remote URL
             try {
               const response = await axios.get(fileName, { responseType: 'arraybuffer' });
               const urlParts = fileName.split('/');
-              const nameFromUrl = urlParts[urlParts.length - 1];
+              const nameFromUrl = decodeURIComponent(urlParts[urlParts.length - 1].split('?')[0]);
               archive.append(response.data, { name: `${teacherPath}/uploads/${nameFromUrl}` });
             } catch (err) {
               console.error(`Failed to download file: ${fileName}`, err);
+            }
+          } else {
+            // Local file fallback
+            const filePath = path.join(process.cwd(), 'uploads', fileName);
+            if (fs.existsSync(filePath)) {
+              archive.file(filePath, { name: `${teacherPath}/uploads/${fileName}` });
             }
           }
         }

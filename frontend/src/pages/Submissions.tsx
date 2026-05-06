@@ -641,7 +641,7 @@ export default function Submissions({ user }: { user: User }) {
           const resps = parseResponses(row.responses);
           const val = resps[fieldId];
           if (val === undefined || val === null) return <span className="text-muted">—</span>;
-          const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+          const isFile = typeof val === 'string' && (/\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val) || val.includes('res.cloudinary.com'));
           if (isFile) {
             const fileUrl = val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`;
             return <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 text-xs"><ExternalLink size={10} /> View</a>;
@@ -771,7 +771,7 @@ export default function Submissions({ user }: { user: User }) {
                   <h4 className="text-sm font-bold flex items-center gap-2 text-slate-700 border-b border-slate-200 pb-2"><Send size={14} /> {selectedNomination ? '2. Teacher Form Responses' : 'Form Responses'}</h4>
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 max-h-[400px] overflow-y-auto">
                     {Object.keys(responses).length > 0 ? Object.entries(responses).map(([key, val]) => {
-                      const isFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+                      const isFile = typeof val === 'string' && (/\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val) || val.includes('res.cloudinary.com'));
                       const fileUrl = isFile ? (val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`) : '';
                       return (
                         <div key={key} className="space-y-1 pb-2 border-b border-slate-200 last:border-0">
