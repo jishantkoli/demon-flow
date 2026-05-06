@@ -322,7 +322,7 @@ export default function Nominations({ user }: { user: User }) {
               {selectedNom.additional_data && Object.entries(selectedNom.additional_data).map(([key, val]) => {
                 const customField = activeSettings.nomination_custom_fields?.find((cf: any) => cf.id === key);
                 const label = customField ? customField.label : (key.charAt(0).toUpperCase() + key.slice(1));
-                const isFile = customField?.type === 'file' || (typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val));
+                const isFile = customField?.type === 'file' || (typeof val === 'string' && /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(val));
                 // Cloudinary returns full https:// URLs; fallback for legacy local filenames
                 const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val as string : `${API_BASE.replace('/api/v1', '')}/uploads/${encodeURIComponent(val as string)}`) : '';
 

@@ -414,7 +414,7 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
             // Handle files in nomination data (Cloudinary URLs or local files)
             const fileVal = v as string;
             const isCloudinaryUrl = typeof fileVal === 'string' && (fileVal.includes('res.cloudinary.com') || fileVal.includes('cloudinary'));
-            const isLocalFile = typeof fileVal === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(fileVal);
+            const isLocalFile = typeof fileVal === 'string' && /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(fileVal);
             if (isCloudinaryUrl || isLocalFile) {
               if (fileVal.startsWith('http')) {
                 try {
@@ -452,7 +452,7 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
       for (const resp of sub.responses) {
         const val = resp.value;
         const isCloudUrl = typeof val === 'string' && (val.includes('res.cloudinary.com') || val.includes('cloudinary'));
-        const isLocalFile = typeof val === 'string' && /\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(val);
+        const isLocalFile = typeof val === 'string' && /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(val);
         
         if (isCloudUrl || isLocalFile) {
           const fileName = val as string;
