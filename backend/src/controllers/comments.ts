@@ -8,7 +8,7 @@ export const getComments = async (req: AuthRequest, res: Response) => {
     if (!submission_id) {
       return res.status(400).json({ error: 'submission_id is required' });
     }
-    const comments = await Comment.find({ submission_id }).sort({ createdAt: 1 });
+    const comments = await Comment.find({ submission_id: String(submission_id) }).sort({ createdAt: 1 });
     res.status(200).json(comments);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

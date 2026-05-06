@@ -372,7 +372,7 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
       }
 
       // Add Review Data if requested
-      if (include_reviews === 'true' || include_reviews === true) {
+      if (include_reviews === 'true') {
         const reviews = await Review.find({ submission_id: sub._id }).populate('reviewer_id', 'name');
         reviews.forEach(r => {
           csvRows.push(['---', '---']);
@@ -398,7 +398,7 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
       archive.append(csvContent, { name: `${teacherPath}/submission.csv` });
 
       // Handle separate nomination.csv and files if exists and requested
-      if ((include_nomination === 'true' || include_nomination === true) && nomination && nomination.additional_data) {
+      if (include_nomination === 'true' && nomination && nomination.additional_data) {
         let addData = nomination.additional_data;
         if (typeof addData === 'string') { try { addData = JSON.parse(addData); } catch {} }
         
@@ -408,9 +408,9 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
           nomRows.push(['Nominated Email', nomination.teacher_email || 'N/A']);
           nomRows.push(['School Code', nomination.school_code || 'N/A']);
 
-          Object.entries(addData).forEach(([k, v]) => {
+          for (const [k, v] of Object.entries(addData)) {
             nomRows.push([k.replace(/_/g, ' '), String(v)]);
-
+  
             // Handle files in nomination data (Cloudinary URLs or local files)
             const fileVal = v as string;
             const isCloudinaryUrl = typeof fileVal === 'string' && (fileVal.includes('res.cloudinary.com') || fileVal.includes('cloudinary'));
@@ -432,7 +432,7 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
                 }
               }
             }
-          });
+          }
 
           const nomCsvContent = '\ufeff' + nomRows.map(row => 
             row.map(cell => {
