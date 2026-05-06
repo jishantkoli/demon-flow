@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { Submission } from '../models/Submission.js';
 import { Form } from '../models/Form.js';
+import { Review } from '../models/Review.js';
 import { Nomination } from '../models/Nomination.js';
 import { AuthRequest } from '../middleware/auth.js';
 
@@ -258,28 +259,91 @@ export const updateSubmission = async (req: AuthRequest, res: Response) => {
 
 export const getSubmissions = async (req: AuthRequest, res: Response) => {
   try {
-    const { formId, form_id, user_id, user_email } = req.query;
+    const { formId, form_id, user_id, user_email, status, school_code, search, level, shortlisted_only, ...rest } = req.query;
     const actualFormId = formId || form_id;
     const query: any = {};
+
     if (actualFormId) {
       if (actualFormId.toString().match(/^[0-9a-fA-F]{24}$/)) {
         query.formId = actualFormId;
       } else {
         const f = await Form.findOne({ shareableLink: actualFormId as string });
         if (f) query.formId = f._id;
-        else return res.status(200).json([]); // Form not found, so no submissions
+        else return res.status(200).json([]);
       }
     }
+
     if (user_id) query.userId = user_id;
     if (user_email) query.userEmail = { $regex: new RegExp(`^${user_email}$`, 'i') };
+    if (status) query.status = status;
+    if (school_code) query.schoolCode = { $regex: new RegExp(`^${school_code}$`, 'i') };
+    if (level !== undefined && level !== '') query.currentLevel = Number(level);
+
+    // Filter by Shortlisted candidates at a specific level
+    if (shortlisted_only === 'true' && level !== undefined && level !== '') {
+      const shortlistedReviews = await Review.find({
+        level: Number(level),
+        recommendation: 'next_level'
+      });
+      const shortlistedSubIds = shortlistedReviews.map(r => r.submission_id);
+      if (!query.$and) query.$and = [];
+      query.$and.push({ _id: { $in: shortlistedSubIds } });
+    }
+
+    // Search in multiple fields (Global Super Search)
+    if (search) {
+      const searchRegex = { $regex: new RegExp(String(search), 'i') };
+      const searchOr = [
+        { userName: searchRegex },
+        { userEmail: searchRegex },
+        { schoolCode: searchRegex },
+        { formTitle: searchRegex },
+        { 
+          responses: { 
+            $elemMatch: { 
+              value: { $regex: new RegExp(String(search), 'i') } 
+            } 
+          } 
+        }
+      ];
+      if (!query.$and) query.$and = [];
+      query.$and.push({ $or: searchOr });
+    }
+
+    // Advanced Field Filtering (Filter by answers inside responses)
+    // Supports query like ?field:dept=Primary&field:level=2
+    const fieldFilters: any[] = [];
+    Object.keys(req.query).forEach(key => {
+      if (key.startsWith('field:')) {
+        const fieldId = key.replace('field:', '');
+        const val = req.query[key];
+        if (val) {
+          fieldFilters.push({
+            responses: {
+              $elemMatch: {
+                fieldId,
+                value: { $regex: new RegExp(String(val), 'i') }
+              }
+            }
+          });
+        }
+      }
+    });
+
+    if (fieldFilters.length > 0) {
+      if (!query.$and) query.$and = [];
+      query.$and.push(...fieldFilters);
+    }
 
     if (req.user) {
       if (req.user.role === 'teacher') {
         // Teachers see submissions matching their ID OR their email
-        query.$or = [
+        const teacherOr = [
           { userId: req.user._id },
           { userEmail: { $regex: new RegExp(`^${req.user.email}$`, 'i') } }
         ];
+        if (!query.$and) query.$and = [];
+        query.$and.push({ $or: teacherOr });
       } else if (req.user.role === 'functionary') {
         // Functionaries see submissions for teachers they nominated
         const myNominations = await Nomination.find({ functionary_id: req.user._id });
@@ -296,9 +360,16 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
     const submissions = await Submission.find(query)
       .populate('nominationId')
       .sort({ createdAt: -1 });
+
+    // Fetch reviews for these submissions if requested or if admin/reviewer
+    const includeReviews = (req.user?.role === 'admin' || req.user?.role === 'reviewer');
+    const submissionIds = submissions.map(s => s._id);
+    const allReviews = includeReviews ? await Review.find({ submission_id: { $in: submissionIds } }) : [];
       
     const mapped = submissions.map(s => {
       const obj = s.toObject();
+      const subReviews = allReviews.filter(r => r.submission_id.toString() === obj._id.toString());
+      
       return {
         ...obj,
         id: obj._id,
@@ -311,7 +382,14 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
         unique_token: obj.nominationToken || (obj.nominationId as any)?.unique_token || null,
         form_title: obj.formTitle,
         submitted_at: obj.createdAt,
-        is_draft: obj.isDraft
+        is_draft: obj.isDraft,
+        level_reviews: subReviews.map(r => ({
+          level: r.level,
+          overall_score: r.overall_score,
+          grade: r.grade,
+          recommendation: r.recommendation,
+          comments: r.comments
+        }))
       };
     });
       

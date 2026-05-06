@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import { pathToFileURL } from 'url';
 import { User } from '../models/User.js';
 import { Form } from '../models/Form.js';
+import { Submission } from '../models/Submission.js';
+import { Nomination } from '../models/Nomination.js';
 import { connectDB } from '../config/db.js';
 
 export const seedData = async (shouldExit = true, clearFirst = true) => {
@@ -15,6 +17,8 @@ export const seedData = async (shouldExit = true, clearFirst = true) => {
     if (clearFirst) {
       await User.deleteMany({});
       await Form.deleteMany({});
+      await Submission.deleteMany({});
+      await Nomination.deleteMany({});
       console.log('\uD83D\uDDD1\uFE0F Existing data cleared');
     }
 
@@ -48,11 +52,12 @@ export const seedData = async (shouldExit = true, clearFirst = true) => {
       { email: 'teacher2@school.edu', role: 'teacher', profile: { fullName: 'Teacher Two' } },
       { email: 'anita.teacher@school.edu', role: 'teacher', profile: { fullName: 'Anita Teacher' } }
     ];
+    const teachers = [];
     for (const t of teachersData) {
-      await User.create(t);
+      teachers.push(await User.create(t));
     }
 
-    console.log('\u2705 Users seeded');
+    console.log('✅ Users seeded');
 
     const forms = await Form.insertMany([
       {
@@ -231,7 +236,53 @@ export const seedData = async (shouldExit = true, clearFirst = true) => {
       }
     ]);
 
-    console.log('\u2705 Forms seeded');
+    console.log('✅ Forms seeded');
+
+    // Seed some Nominations
+    const nomination = await Nomination.create({
+      form_id: forms[1]._id,
+      functionary_id: (await User.findOne({ role: 'functionary' }))?._id,
+      teacher_name: 'Teacher One',
+      teacher_email: 'teacher1@school.edu',
+      school_code: 'MH054',
+      status: 'completed',
+      unique_token: 'test-token-123'
+    });
+
+    // Seed some Submissions
+    await Submission.create({
+      formId: forms[0]._id,
+      userId: teachers[0]._id,
+      userName: teachers[0].profile.fullName,
+      userEmail: teachers[0].email,
+      formTitle: forms[0].title,
+      status: 'submitted',
+      responses: [
+        { fieldId: 'f1', value: 'Teacher One' },
+        { fieldId: 'f4', value: 'Mathematics' }
+      ],
+      createdAt: new Date()
+    });
+
+    await Submission.create({
+      formId: forms[1]._id,
+      nominationId: nomination._id,
+      nominationToken: 'test-token-123',
+      userId: teachers[0]._id,
+      userName: 'Teacher One',
+      userEmail: 'teacher1@school.edu',
+      schoolCode: 'MH054',
+      formTitle: forms[1].title,
+      status: 'under_review',
+      responses: [
+        { fieldId: 'n1', value: 'Teacher One' },
+        { fieldId: 'n2', value: 'teacher1@school.edu' }
+      ],
+      createdAt: new Date(Date.now() - 86400000) // 1 day ago
+    });
+
+    console.log('✅ Submissions seeded');
+
     if (shouldExit) process.exit(0);
   } catch (err: any) {
     console.error('\u274C Seed error:', err.message);

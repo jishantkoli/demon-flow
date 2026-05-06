@@ -84,7 +84,7 @@ export default function FormView({ user }: { user: User }) {
   // user: sees questions + own answers only. NO correct answers, NO marks, NO score.
   // reviewer: sees user answers + total score. Does NOT see correct answers.
   // admin: sees everything — correct answers, marks per question, total score.
-  const viewMode: 'user' | 'reviewer' | 'admin' = user.role === 'admin' ? 'admin' : user.role === 'reviewer' ? 'reviewer' : 'user';
+  const viewMode: 'user' | 'reviewer' | 'admin' = user.role === 'admin' ? 'admin' : (user.role === 'reviewer' || user.role === 'functionary') ? 'reviewer' : 'user';
 
   return (
     <div className="max-w-2xl mx-auto">

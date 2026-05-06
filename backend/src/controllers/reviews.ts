@@ -131,7 +131,7 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
         var actualFormId: any = form_id;
       }
 
-      const submissions = await Submission.find({ formId: actualFormId, isDraft: false });
+      const submissions = await Submission.find({ formId: actualFormId, isDraft: false }).populate('nominationId');
       const levels = await Level.find({ formId: actualFormId }).sort({ levelNumber: 1 });
       const reviews = await Review.find({ submission_id: { $in: submissions.map(s => s._id) } }).populate('reviewer_id', 'name');
 

@@ -64,5 +64,13 @@ export const api = {
     const formData = new FormData();
     formData.append('file', file);
     return request(url, { method: 'POST', body: formData });
+  },
+  download: async (url: string) => {
+    const token = localStorage.getItem('auth_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}${url}`, { headers });
+    if (!res.ok) throw new Error('Download failed');
+    return res.blob();
   }
 };

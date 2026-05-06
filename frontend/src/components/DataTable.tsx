@@ -7,10 +7,23 @@ interface DataTableProps {
   onRowClick?: (row: any) => void; actions?: (row: any) => React.ReactNode; emptyMessage?: string;
   emptyIcon?: React.ReactNode; loading?: boolean; filters?: React.ReactNode; title?: string; subtitle?: string;
   headerActions?: React.ReactNode;
+  searchValue?: string; onSearch?: (val: string) => void;
 }
 
-export default function DataTable({ columns, data, searchable = true, searchPlaceholder = 'Search...', pageSize = 12, onRowClick, actions, emptyMessage = 'No data found', emptyIcon, loading, filters, title, subtitle, headerActions }: DataTableProps) {
-  const [search, setSearch] = useState('');
+export default function DataTable({ 
+  columns, data, searchable = true, searchPlaceholder = 'Search...', pageSize = 12, 
+  onRowClick, actions, emptyMessage = 'No data found', emptyIcon, loading, 
+  filters, title, subtitle, headerActions,
+  searchValue, onSearch 
+}: DataTableProps) {
+  const [internalSearch, setInternalSearch] = useState('');
+  const search = searchValue !== undefined ? searchValue : internalSearch;
+  const handleSearchChange = (val: string) => {
+    if (onSearch) onSearch(val);
+    else setInternalSearch(val);
+    setPage(0);
+  };
+
   const [sortKey, setSortKey] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(0);
@@ -18,7 +31,8 @@ export default function DataTable({ columns, data, searchable = true, searchPlac
 
   const filtered = useMemo(() => {
     let result = data;
-    if (search) {
+    // Only filter client-side if we are NOT using external search
+    if (search && !onSearch) {
       const q = search.toLowerCase();
       result = result.filter(row => visibleCols.some(col => String(row[col.key] || '').toLowerCase().includes(q)));
     }
@@ -36,15 +50,18 @@ export default function DataTable({ columns, data, searchable = true, searchPlac
   const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
   const toggleSort = (key: string) => { if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortKey(key); setSortDir('asc'); } };
 
-  if (loading) return (
-    <div className="bg-surface-card rounded-2xl border border-border overflow-hidden">
-      {title && <div className="px-5 py-4 border-b border-border"><div className="skeleton h-5 w-40 rounded" /></div>}
-      <div className="p-6 space-y-3">{[1,2,3,4].map(i => <div key={i} className="skeleton h-10 rounded-xl" />)}</div>
-    </div>
-  );
-
   return (
-    <div className="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm">
+    <div className="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm relative">
+      {/* Loading overlay for smoother search/filter experience */}
+      {loading && (
+        <div className="absolute inset-0 bg-surface/40 backdrop-blur-[1px] z-10 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-2 bg-white/80 p-4 rounded-2xl shadow-xl border border-border animate-in zoom-in-95 duration-200">
+            <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Loading...</p>
+          </div>
+        </div>
+      )}
+
       {(title || headerActions) && (
         <div className="px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
           <div>{title && <h3 className="font-semibold font-heading text-sm">{title}</h3>}{subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}</div>
@@ -56,7 +73,7 @@ export default function DataTable({ columns, data, searchable = true, searchPlac
           {searchable && (
             <div className="flex items-center gap-2 bg-surface rounded-xl px-3 py-2 flex-1 min-w-[200px] max-w-sm border border-border">
               <Search size={14} className="text-muted" />
-              <input type="text" value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} placeholder={searchPlaceholder}
+              <input type="text" value={search} onChange={e => handleSearchChange(e.target.value)} placeholder={searchPlaceholder}
                 className="bg-transparent text-sm outline-none w-full placeholder-muted" aria-label="Search" />
             </div>
           )}

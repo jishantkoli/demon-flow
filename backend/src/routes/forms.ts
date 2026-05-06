@@ -1,5 +1,5 @@
 import express from 'express';
-import { getForms, getFormByLink, createForm, updateForm, deleteForm } from '../controllers/forms.js';
+import { getForms, getFormByLink, createForm, updateForm, deleteForm, exportZip } from '../controllers/forms.js';
 import { authenticate, authorize, optionalAuthenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -10,5 +10,6 @@ router.post('/', authenticate, authorize('admin'), createForm);
 router.put('/', authenticate, authorize('admin'), updateForm);   // Frontend sends id in body
 router.patch('/:id', authenticate, authorize('admin'), updateForm);
 router.delete('/', authenticate, authorize('admin'), deleteForm);
+router.get('/:id/export/zip', authenticate, authorize('admin'), exportZip);
 
 export default router;

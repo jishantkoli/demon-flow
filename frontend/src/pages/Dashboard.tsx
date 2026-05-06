@@ -86,7 +86,7 @@ export default function Dashboard({ user }: { user: User }) {
     <div className="space-y-6">
       <div><h1 className="text-2xl font-bold font-heading">Welcome back, {user.name?.split(' ')[0]}</h1>
         <p className="text-sm text-slate-500 mt-1">{user.role === 'admin' ? 'System overview and real-time analytics' : user.role === 'functionary' ? `Managing nominations for school ${user.school_code || ''}` : 'Your portal overview'}</p>
-        <p className="text-[11px] text-slate-400 mt-1">Tip: cards aur rows click karke direct detail pages kholo.</p>
+        <p className="text-[11px] text-slate-400 mt-1">Tip: Click on dashboard cards or list items to navigate directly to detail pages.</p>
       </div>
 
       <motion.div {...anim(0)} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -104,9 +104,9 @@ export default function Dashboard({ user }: { user: User }) {
         </>}
         {user.role === 'functionary' && <>
           <StatCard label="Active Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} ctaText="Open forms" />
+          <StatCard label="Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" onClick={() => navigate('/submissions')} ctaText="Open submissions" />
           <StatCard label="Nominations" value={s.totalNominations || 0} icon={UserPlus} color="green" subtitle={`${s.nominationsByStatus?.completed || 0} completed`} onClick={() => navigate('/nominations')} ctaText="Open nominations" />
           <StatCard label="Completion Rate" value={`${s.completionRate || 0}%`} icon={TrendingUp} color="purple" onClick={() => navigate('/nominations')} ctaText="View nomination progress" />
-          <StatCard label="Pending" value={s.nominationsByStatus?.invited || 0} icon={Clock} color="amber" onClick={() => navigate('/nominations')} ctaText="Open pending nominations" />
         </>}
         {user.role === 'teacher' && <>
           <StatCard label="Available Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} ctaText="Open forms" />
