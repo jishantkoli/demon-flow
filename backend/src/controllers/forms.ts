@@ -8,6 +8,7 @@ import archiver from 'archiver';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
+import * as XLSX from 'xlsx';
 
 export const getForms = async (req: AuthRequest, res: Response) => {
   try {
@@ -390,18 +391,13 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
         });
       }
 
-      const csvContent = '\ufeff' + csvRows.map(row => 
-        row.map(cell => {
-          const s = String(cell);
-          if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-            return `"${s.replace(/"/g, '""')}"`;
-          }
-          return s;
-        }).join(',')
-      ).join('\n');
+      const submissionSheet = XLSX.utils.aoa_to_sheet(csvRows);
+      const submissionWb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(submissionWb, submissionSheet, 'Submission');
+      const submissionXlsx = XLSX.write(submissionWb, { bookType: 'xlsx', type: 'buffer' });
 
-      // Add submission.csv
-      archive.append(csvContent, { name: `${teacherPath}/submission.csv` });
+      // Add submission.xlsx
+      archive.append(submissionXlsx, { name: `${teacherPath}/submission.xlsx` });
 
       // Handle separate nomination.csv and files if exists and requested
       if (include_nomination === 'true' && nomination && nomination.additional_data) {
@@ -440,17 +436,12 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
             }
           }
 
-          const nomCsvContent = '\ufeff' + nomRows.map(row => 
-            row.map(cell => {
-              const s = String(cell);
-              if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-                return `"${s.replace(/"/g, '""')}"`;
-              }
-              return s;
-            }).join(',')
-          ).join('\n');
-          
-          archive.append(nomCsvContent, { name: `${teacherPath}/nomination.csv` });
+          const nominationSheet = XLSX.utils.aoa_to_sheet(nomRows);
+          const nominationWb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(nominationWb, nominationSheet, 'Nomination');
+          const nominationXlsx = XLSX.write(nominationWb, { bookType: 'xlsx', type: 'buffer' });
+
+          archive.append(nominationXlsx, { name: `${teacherPath}/nomination.xlsx` });
         }
       }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   GraduationCap, Send, Save, CheckCircle2, Clock, AlertCircle,
@@ -105,6 +105,7 @@ function Badge({ tone = 'blue', children }: { tone?: 'blue' | 'green' | 'amber' 
 export default function FormFill({ user }: { user: User }) {
   const { id } = useParams();
   const nav = useNavigate();
+  const dashboardPath = user?.id === 'anon' ? '/login?portal=teacher' : '/';
 
   const [form, setForm] = useState<FormData | null>(null);
   const [nomination, setNomination] = useState<any>(null);
@@ -119,6 +120,7 @@ export default function FormFill({ user }: { user: User }) {
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [receipt, setReceipt] = useState<{ id: string; score?: number | null; max?: number | null } | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [uploadingFields, setUploadingFields] = useState<Record<string, boolean>>({});
 
   // OTP states
   const [otpSent, setOtpSent] = useState(false);
@@ -127,7 +129,9 @@ export default function FormFill({ user }: { user: User }) {
   const [otp, setOtp] = useState('');
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
+  const [otpRequired, setOtpRequired] = useState(false);
   const [nominationToken, setNominationToken] = useState('');
+  const otpSessionRestoreTried = useRef<string>('');
   const urlToken = useMemo(() => {
     try { return new URLSearchParams(window.location.search).get('token') || ''; }
     catch { return ''; }
@@ -209,6 +213,18 @@ export default function FormFill({ user }: { user: User }) {
 
       setForm(res);
       if (nomination) setNomination(nomination);
+
+      // Resolve login mode with precedence:
+      // nomination.link_type (teacher-specific override) > form teacher_login > legacy keys.
+      const resolvedLoginMode = String(
+        nomination?.link_type ||
+        res.settings?.teacher_login ||
+        res.settings?.login_type ||
+        res.settings?.auth_mode ||
+        'otp'
+      ).toLowerCase();
+      const requiresOtp = resolvedLoginMode === 'otp';
+      setOtpRequired(requiresOtp);
 
       const isNominationForm = res.form_type === 'nomination';
       const hasToken = !!token;
@@ -324,12 +340,75 @@ export default function FormFill({ user }: { user: User }) {
     if (sectionIdx > lastIdx) setSectionIdx(lastIdx);
   }, [visibleSections.length, sectionIdx]);
 
+  const getOtpScopeKey = () => {
+    const formKey = String(id || '').trim();
+    const tokenKey = String(nominationToken || urlToken || '').trim();
+    const emailKey = String(nomination?.teacher_email || email || '').trim().toLowerCase();
+    if (!formKey || !emailKey) return '';
+    return `otp_verified_scope:${formKey}:${emailKey}:${tokenKey}`;
+  };
+
+  const handleFileUpload = async (field: Field, file: File) => {
+    setError('');
+    setUploadingFields(prev => ({ ...prev, [field.id]: true }));
+    try {
+      const data: any = await api.upload('/uploads', file);
+      const uploaded = data?.url || data?.filename || file.name;
+      setAnswers(a => ({ ...a, [field.id]: uploaded }));
+    } catch (err: any) {
+      setError(err?.message || `Failed to upload file for "${field.label}"`);
+    } finally {
+      setUploadingFields(prev => ({ ...prev, [field.id]: false }));
+    }
+  };
+
+  // If teacher already verified OTP earlier in this browser, reuse saved auth session.
+  useEffect(() => {
+    if (!otpRequired || otpVerified) return;
+    const otpScopeKey = getOtpScopeKey();
+    if (!otpScopeKey || localStorage.getItem(otpScopeKey) !== '1') return;
+
+    const savedToken = localStorage.getItem('auth_token');
+    const savedUserRaw = localStorage.getItem('auth_user');
+    if (!savedToken || !savedUserRaw) return;
+
+    let savedUser: any = null;
+    try { savedUser = JSON.parse(savedUserRaw); } catch { return; }
+
+    const savedEmail = String(savedUser?.email || '').trim().toLowerCase();
+    const expectedEmail = String(nomination?.teacher_email || email || '').trim().toLowerCase();
+    if (!savedEmail || !expectedEmail || savedEmail !== expectedEmail) return;
+
+    const restoreKey = `${savedEmail}:${nominationToken || urlToken || id || ''}`;
+    if (otpSessionRestoreTried.current === restoreKey) return;
+    otpSessionRestoreTried.current = restoreKey;
+
+    api.post('/auth', { action: 'verify-token', token: savedToken })
+      .then((res: any) => {
+        const verifiedEmail = String(res?.user?.email || '').trim().toLowerCase();
+        if (verifiedEmail && verifiedEmail === expectedEmail) {
+          if (res?.user) {
+            localStorage.setItem('auth_user', JSON.stringify(res.user));
+          }
+          setOtpVerified(true);
+          if (!email && verifiedEmail) setEmail(verifiedEmail);
+        }
+      })
+      .catch(() => {
+        // Ignore silently; OTP screen will remain visible.
+      });
+  }, [otpRequired, otpVerified, nomination?.teacher_email, nominationToken, urlToken, id, email]);
+
   const handleSendOtp = async () => {
     if (!email || !email.includes('@')) { setError('Please enter a valid email.'); return; }
+    if (otpRequired && nomination?.teacher_email && nomination.teacher_email.toLowerCase() !== email.toLowerCase()) {
+      setError('Please use the nominated teacher email for OTP verification.');
+      return;
+    }
     setOtpLoading(true);
     setError('');
     try {
-      const res: any = await api.post('/auth/otp/send', { email });
+      const res: any = await api.post('/auth', { action: 'request-otp', email });
       setOtpSent(true);
       if (res.school_code) setSchoolCode(res.school_code);
     } catch (err: any) {
@@ -341,13 +420,24 @@ export default function FormFill({ user }: { user: User }) {
 
   const handleVerifyOtp = async () => {
     if (!otp) { setError('Please enter OTP'); return; }
+    if (otpRequired && nomination?.teacher_email && nomination.teacher_email.toLowerCase() !== email.toLowerCase()) {
+      setError('Entered email does not match the nominated teacher email.');
+      return;
+    }
     setOtpLoading(true);
     setError('');
     try {
-      const res: any = await api.post('/auth/otp/verify', { email, otp });
-      if (res.accessToken) {
-        localStorage.setItem('auth_token', res.accessToken);
+      const res: any = await api.post('/auth', { action: 'verify-otp', email, otp });
+      const token = res?.accessToken || res?.token;
+      if (token) {
+        localStorage.setItem('auth_token', token);
+      }
+      if (res?.user) {
         localStorage.setItem('auth_user', JSON.stringify(res.user));
+      }
+      const otpScopeKey = getOtpScopeKey();
+      if (otpScopeKey) {
+        localStorage.setItem(otpScopeKey, '1');
       }
       setOtpVerified(true);
       
@@ -519,12 +609,15 @@ export default function FormFill({ user }: { user: User }) {
       <div className="card p-8 text-center max-w-md !border-rose-200 bg-rose-50">
         <div className="w-14 h-14 rounded-full bg-rose-100 text-rose-600 mx-auto mb-3 grid place-items-center"><AlertCircle size={28}/></div>
         <div className="text-lg font-semibold text-ink">{error}</div>
-        <button onClick={() => nav('/forms')} className="btn btn-ghost mt-5">Go back to Forms</button>
+        <button onClick={() => nav(dashboardPath)} className="btn btn-ghost mt-5">Go to Dashboard</button>
       </div>
     </div>
   );
 
   if (step === 'submitted' && receipt && form) {
+    const isNomination = form.form_type === 'nomination';
+    const submittedBackPath = isNomination ? dashboardPath : '/forms';
+    const submittedBackLabel = isNomination ? 'Back to Dashboard' : 'Back to Forms';
     return (
       <div className="min-h-screen bg-canvas grid place-items-center p-6">
         <div className="card max-w-lg w-full text-center">
@@ -538,7 +631,7 @@ export default function FormFill({ user }: { user: User }) {
             {receipt.max ? <div className="flex justify-between"><span className="text-muted">Score</span><span className="font-semibold">{receipt.score}/{receipt.max}</span></div> : null}
           </div>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6">
-            <button onClick={() => nav('/forms')} className="btn btn-ghost">Back to Forms</button>
+            <button onClick={() => nav(submittedBackPath)} className="btn btn-ghost">{submittedBackLabel}</button>
             {form.form_type !== 'nomination' && (
               <button 
                 onClick={() => {
@@ -561,6 +654,74 @@ export default function FormFill({ user }: { user: User }) {
   }
 
   if (!form || !currentSection) return null;
+  const isNominationForm = form.form_type === 'nomination';
+  const fillBackPath = isNominationForm ? dashboardPath : '/forms';
+  const fillBackLabel = isNominationForm ? 'Back to Dashboard' : 'Back to Forms';
+
+  // OTP gate for nomination forms configured with OTP login.
+  if (otpRequired && !otpVerified) {
+    return (
+      <div className="min-h-screen bg-canvas grid place-items-center p-6">
+        <div className="card max-w-md w-full space-y-4">
+          <div className="text-center">
+            <div className="w-14 h-14 rounded-full bg-blue-soft text-blue grid place-items-center mx-auto mb-3">
+              <Inbox size={22} />
+            </div>
+            <h2 className="font-display text-xl font-bold text-ink">OTP Verification Required</h2>
+            <p className="text-sm text-muted mt-1">
+              This nomination form uses OTP-based access. Please verify OTP to continue.
+            </p>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-muted mb-1.5 block">Teacher Email</label>
+            <input
+              type="email"
+              className="input"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="teacher@school.edu"
+              disabled={!!nomination?.teacher_email}
+            />
+          </div>
+
+          {error && (
+            <div className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
+              <AlertCircle size={14} className="inline mr-1" /> {error}
+            </div>
+          )}
+
+          {!otpSent ? (
+            <button onClick={handleSendOtp} disabled={otpLoading || !email} className="btn btn-primary w-full">
+              {otpLoading ? 'Sending OTP...' : 'Send OTP'}
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted mb-1.5 block">Enter OTP</label>
+              <input
+                type="text"
+                value={otp}
+                onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                maxLength={6}
+                className="input text-center tracking-[0.35em] font-mono"
+                placeholder="123456"
+              />
+              <button onClick={handleVerifyOtp} disabled={otpLoading || otp.length < 6} className="btn btn-primary w-full">
+                {otpLoading ? 'Verifying...' : 'Verify OTP & Continue'}
+              </button>
+              <button
+                onClick={() => { setOtpSent(false); setOtp(''); setError(''); }}
+                className="btn btn-ghost w-full"
+                type="button"
+              >
+                Resend OTP
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -568,7 +729,7 @@ export default function FormFill({ user }: { user: User }) {
       <header className="bg-white border-b border-border sticky top-0 z-20">
         <div className="max-w-3xl mx-auto px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <button onClick={() => nav('/forms')} className="p-2 hover:bg-slate-100 rounded-lg text-muted hover:text-ink transition-colors" title="Back to Forms">
+            <button onClick={() => nav(fillBackPath)} className="p-2 hover:bg-slate-100 rounded-lg text-muted hover:text-ink transition-colors" title={fillBackLabel}>
               <ChevronLeft size={20}/>
             </button>
             <div className="w-10 h-10 flex items-center justify-center overflow-hidden">
@@ -619,6 +780,8 @@ export default function FormFill({ user }: { user: User }) {
                 f={f}
                 value={answers[f.id]}
                 onChange={v => setAnswers(a => ({ ...a, [f.id]: v }))}
+                onUpload={handleFileUpload}
+                uploading={!!uploadingFields[f.id]}
                 shuffle={!!form.settings.shuffle && (form.form_type === 'quiz' || form.form_type === 'multi') && f.type === 'mcq'}
               />
             </div>
@@ -636,7 +799,7 @@ export default function FormFill({ user }: { user: User }) {
             onClick={() => {
               if (sectionIdx === 0) {
                 if (confirm('Are you sure you want to exit? Any unsaved changes might be lost.')) {
-                  nav('/forms');
+                  nav(fillBackPath);
                 }
               } else {
                 setSectionIdx(sectionIdx - 1);
@@ -644,7 +807,7 @@ export default function FormFill({ user }: { user: User }) {
             }} 
             className="btn btn-ghost"
           >
-            <ChevronLeft size={16}/> {sectionIdx === 0 ? 'Back to Forms' : 'Previous'}
+            <ChevronLeft size={16}/> {sectionIdx === 0 ? fillBackLabel : 'Previous'}
           </button>
           <div className="flex gap-2">
             <button onClick={saveDraft} className="btn btn-ghost"><Save size={16}/> Save draft</button>
@@ -663,7 +826,21 @@ export default function FormFill({ user }: { user: User }) {
 }
 
 // ─── Field Renderer ───────────────────────────────────────────────────────────
-function FieldRenderer({ f, value, onChange, shuffle }: { f: Field; value: unknown; onChange: (v: unknown) => void; shuffle?: boolean }) {
+function FieldRenderer({
+  f,
+  value,
+  onChange,
+  onUpload,
+  uploading,
+  shuffle
+}: {
+  f: Field;
+  value: unknown;
+  onChange: (v: unknown) => void;
+  onUpload?: (f: Field, file: File) => Promise<void>;
+  uploading?: boolean;
+  shuffle?: boolean;
+}) {
   const opts = useMemo(() => {
     if (!f.options) return [];
     if (shuffle) return [...f.options].sort(() => Math.random() - 0.5);
@@ -732,10 +909,17 @@ function FieldRenderer({ f, value, onChange, shuffle }: { f: Field; value: unkno
             return (
               <label className="mt-2 block rounded-xl border-2 border-dashed border-border p-6 text-center cursor-pointer hover:border-blue hover:bg-blue-soft transition-colors">
                 <Upload className="mx-auto text-muted" size={22}/>
-                <div className="text-sm font-medium mt-2">{value ? String(value) : 'Click or drop file'}</div>
+                <div className="text-sm font-medium mt-2">
+                  {uploading ? 'Uploading...' : (value ? String(value) : 'Click or drop file')}
+                </div>
                 <div className="text-xs text-muted mt-1">{f.fileTypes ? `Types: ${f.fileTypes}` : ''} {f.maxSizeMB ? `· Max ${f.maxSizeMB}MB` : ''}</div>
                 <input type="file" className="hidden" accept={f.fileTypes ? f.fileTypes.split(',').map(x => `.${x.trim()}`).join(',') : undefined}
-                  onChange={e => onChange(e.target.files?.[0]?.name || '')} />
+                  onChange={async e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (onUpload) await onUpload(f, file);
+                    else onChange(file.name);
+                  }} />
               </label>
             );
           default:

@@ -200,7 +200,8 @@ export default function ReviewSystem({ user }: { user: User }) {
       (data?.submissions || []).forEach((s: any) => {
         const nom = s.nomination_id || s.nominationId;
         if (nom && typeof nom === 'object' && nom.form_id) {
-          nomFormIds.add(String(nom.form_id));
+          const fid = String(nom.form_id?._id || nom.form_id?.id || nom.form_id);
+          if (fid && fid !== 'undefined') nomFormIds.add(fid);
         }
       });
 
@@ -210,7 +211,8 @@ export default function ReviewSystem({ user }: { user: User }) {
         );
         
         const newFieldMap: Record<string, string> = { ...nominationFieldMap };
-        nomForms.forEach(nf => {
+        nomForms.forEach(rawNf => {
+          const nf = Array.isArray(rawNf) ? rawNf[0] : rawNf;
           if (!nf) return;
           const schema = nf.form_schema || nf.schema;
           if (schema) {
@@ -218,7 +220,11 @@ export default function ReviewSystem({ user }: { user: User }) {
             const walk = (list: any[]) => {
               if (!Array.isArray(list)) return;
               list.forEach(f => {
-                if (f.id && f.label) newFieldMap[f.id] = f.label;
+                if (f.id || f.name) {
+                  const label = f.label || f.title || f.name || f.id;
+                  if (f.id) newFieldMap[f.id] = label;
+                  if (f.name) newFieldMap[f.name] = label;
+                }
                 if (f.children) walk(f.children);
               });
             };
@@ -229,6 +235,18 @@ export default function ReviewSystem({ user }: { user: User }) {
             } else if (Array.isArray(parsed)) {
               walk(parsed);
             }
+          }
+
+          // Also check settings for nomination_custom_fields
+          const settings = typeof nf.settings === 'string' ? JSON.parse(nf.settings) : nf.settings;
+          if (settings?.nomination_custom_fields && Array.isArray(settings.nomination_custom_fields)) {
+            settings.nomination_custom_fields.forEach((cf: any) => {
+              if (cf.id && cf.label) {
+                newFieldMap[cf.id] = cf.label;
+                const cleanId = cf.id.replace(/^cf_/i, '');
+                if (cleanId !== cf.id) newFieldMap[cleanId] = cf.label;
+              }
+            });
           }
         });
         setNominationFieldMap(newFieldMap);
@@ -297,11 +315,20 @@ export default function ReviewSystem({ user }: { user: User }) {
       setProfileData(data);
 
       // Ensure nomination schema is loaded for this profile
-      const nom = data?.submission?.nominationId || data?.submission?.nomination_id;
+      let nom = data?.submission?.nominationId || data?.submission?.nomination_id;
+      
+      // If nomination is just an ID string, fetch the full object
+      if (nom && typeof nom === 'string') {
+        const nomRes = await api.get(`/nominations?id=${nom}`).catch(() => null);
+        if (Array.isArray(nomRes) && nomRes.length > 0) nom = nomRes[0];
+        else if (nomRes && !Array.isArray(nomRes)) nom = nomRes;
+      }
+
       const nomFormId = nom && typeof nom === 'object' ? String(nom.form_id?._id || nom.form_id?.id || nom.form_id || '') : undefined;
       
       if (nomFormId && nomFormId !== 'undefined' && !processedNomFormIds.has(nomFormId)) {
-        const nf = await api.get(`/forms?id=${nomFormId}`).catch(() => null);
+        const rawNf = await api.get(`/forms?id=${nomFormId}`).catch(() => null);
+        const nf = Array.isArray(rawNf) ? rawNf[0] : rawNf;
         if (nf) {
           const schema = nf.form_schema || nf.schema;
           const newFieldMap: Record<string, string> = { ...nominationFieldMap };
@@ -310,16 +337,33 @@ export default function ReviewSystem({ user }: { user: User }) {
             const walk = (list: any[]) => {
               if (!Array.isArray(list)) return;
               list.forEach((f: any) => {
-                if (f.id && f.label) newFieldMap[f.id] = f.label;
+                if (f.id || f.name) {
+                  const label = f.label || f.title || f.name || f.id;
+                  if (f.id) newFieldMap[f.id] = label;
+                  if (f.name) newFieldMap[f.name] = label;
+                }
                 if (f.children) walk(f.children);
               });
             };
             if (parsed.sections) parsed.sections.forEach((s: any) => walk(s.fields || []));
-            else if (parsed.fields) walk(parsed.fields);
-            else if (Array.isArray(parsed)) walk(parsed);
-          }
-          setNominationFieldMap(newFieldMap);
-          setProcessedNomFormIds(prev => new Set(prev).add(nomFormId));
+                else if (parsed.fields) walk(parsed.fields);
+                else if (Array.isArray(parsed)) walk(parsed);
+              }
+
+              // Also check settings for nomination_custom_fields
+              const settings = typeof nf.settings === 'string' ? JSON.parse(nf.settings) : nf.settings;
+              if (settings?.nomination_custom_fields && Array.isArray(settings.nomination_custom_fields)) {
+                settings.nomination_custom_fields.forEach((cf: any) => {
+                  if (cf.id && cf.label) {
+                    newFieldMap[cf.id] = cf.label;
+                    const cleanId = cf.id.replace(/^cf_/i, '');
+                    if (cleanId !== cf.id) newFieldMap[cleanId] = cf.label;
+                  }
+                });
+              }
+
+              setNominationFieldMap(newFieldMap);
+              setProcessedNomFormIds(prev => new Set(prev).add(nomFormId));
         }
       }
     } catch (err) { console.error(err); }
@@ -737,7 +781,7 @@ export default function ReviewSystem({ user }: { user: User }) {
 
     const functionaryFields = Array.from(nominationKeys).map(k => ({
       id: `nom_${k}`,
-      label: `Nomination: ${k.replace(/_/g, ' ')}`
+      label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ')}`
     }));
 
     const dateField = { id: 'submitted_at', label: 'Submission Date' };
@@ -783,7 +827,7 @@ export default function ReviewSystem({ user }: { user: User }) {
 
     const functionaryFields = Array.from(nominationKeys).map(k => ({
       id: `nom_${k}`,
-      label: `Nomination: ${k.replace(/_/g, ' ')}`
+      label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ')}`
     }));
 
     const dateField = { id: 'submitted_at', label: 'Submission Date' };
@@ -1863,7 +1907,11 @@ export default function ReviewSystem({ user }: { user: User }) {
 
                             return (
                               <div key={key} className="space-y-1 border-t border-primary/5 pt-2 sm:border-t-0 sm:pt-0">
-                                <p className="text-[10px] text-muted font-bold uppercase">{nominationFieldMap[key] || key.replace(/_/g, ' ').replace(/^cf\s+/i, '')}</p>
+                                <p className="text-[10px] text-muted font-bold uppercase">
+                                  {nominationFieldMap[key] || 
+                                   nominationFieldMap[`cf_${key}`] || 
+                                   key.replace(/_/g, ' ').replace(/^cf\s+/i, '').replace(/^cf_/i, '')}
+                                </p>
                                 {isFile ? (
                                   <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 text-sm font-semibold">
                                     <ExternalLink size={12} /> View File
@@ -2603,7 +2651,10 @@ export default function ReviewSystem({ user }: { user: User }) {
                   Object.keys(addData).forEach(k => nomKeys.add(k));
                 }
               });
-              const nomFields = Array.from(nomKeys).map(k => ({ id: `nom_${k}`, label: `Nomination: ${k.replace(/_/g, ' ')}` }));
+              const nomFields = Array.from(nomKeys).map(k => ({ 
+                id: `nom_${k}`, 
+                label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ')}` 
+              }));
 
               return [
                 { label: 'Basic Info', fields: [
@@ -2797,7 +2848,10 @@ export default function ReviewSystem({ user }: { user: User }) {
                         Object.keys(addData).forEach(k => nomKeys.add(k));
                       }
                     });
-                    const nomFields = Array.from(nomKeys).map(k => ({ id: `nom_${k}`, label: `Nomination: ${k.replace(/_/g, ' ')}` }));
+                    const nomFields = Array.from(nomKeys).map(k => ({ 
+                      id: `nom_${k}`, 
+                      label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ')}` 
+                    }));
 
                     return [
                       { label: 'Basic Identity', fields: [
