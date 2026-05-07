@@ -9,7 +9,7 @@ import { motion } from 'framer-motion';
 import {
   CheckCircle, XCircle, Clock, Filter, Layers, Save, Star, BarChart3,
   Users, ChevronRight, Eye, Printer, ArrowRight, Award, TrendingUp, UserCheck,
-  Zap, FileText, Settings, History, Plus, FileDown, Archive, Mail, User as UserIcon, School, Fingerprint, Info
+  Zap, FileText, Settings, History, Plus, FileDown, Archive, Mail, User as UserIcon, School, Fingerprint, Info, ExternalLink
 } from 'lucide-react';
 
 export default function ReviewSystem({ user }: { user: User }) {
@@ -90,6 +90,7 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [exportSubNamingStrategy, setExportSubNamingStrategy] = useState('name');
   const [includeNominationData, setIncludeNominationData] = useState(true);
   const [zipSelectedFields, setZipSelectedFields] = useState<string[]>([]);
+  const [nominationFieldMap, setNominationFieldMap] = useState<Record<string, string>>({});
 
   const getExportData = () => {
     const subs = shortlistData?.submissions || [];
@@ -112,8 +113,21 @@ export default function ReviewSystem({ user }: { user: User }) {
         if (f.children) walk(f.children);
       });
     };
-    if (selectedFormObj?.form_schema?.sections) {
-      selectedFormObj.form_schema.sections.forEach((s: any) => walk(s.fields || []));
+
+    const schemaSource = selectedFormObj?.form_schema || selectedFormObj?.schema;
+    if (schemaSource) {
+      try {
+        const schema = typeof schemaSource === 'string' ? JSON.parse(schemaSource) : schemaSource;
+        if (schema?.sections) {
+          schema.sections.forEach((s: any) => walk(s.fields || []));
+        } else if (schema?.fields) {
+          walk(schema.fields);
+        } else if (Array.isArray(schema)) {
+          walk(schema);
+        }
+      } catch (err) {
+        console.error('Error parsing form schema for export:', err);
+      }
     }
     return fields;
   };
@@ -180,6 +194,45 @@ export default function ReviewSystem({ user }: { user: User }) {
       setShortlistData(data);
       setLevels(lvls);
       setSelectedFormObj(formObj);
+
+      // Identify and load unique nomination forms
+      const nomFormIds = new Set<string>();
+      (data?.submissions || []).forEach((s: any) => {
+        const nom = s.nomination_id || s.nominationId;
+        if (nom && typeof nom === 'object' && nom.form_id) {
+          nomFormIds.add(String(nom.form_id));
+        }
+      });
+
+      if (nomFormIds.size > 0) {
+        const nomForms = await Promise.all(
+          Array.from(nomFormIds).map(id => api.get(`/forms?id=${id}`).catch(() => null))
+        );
+        
+        const newFieldMap: Record<string, string> = { ...nominationFieldMap };
+        nomForms.forEach(nf => {
+          if (!nf) return;
+          const schema = nf.form_schema || nf.schema;
+          if (schema) {
+            const parsed = typeof schema === 'string' ? JSON.parse(schema) : schema;
+            const walk = (list: any[]) => {
+              if (!Array.isArray(list)) return;
+              list.forEach(f => {
+                if (f.id && f.label) newFieldMap[f.id] = f.label;
+                if (f.children) walk(f.children);
+              });
+            };
+            if (parsed.sections) {
+              parsed.sections.forEach((s: any) => walk(s.fields || []));
+            } else if (parsed.fields) {
+              walk(parsed.fields);
+            } else if (Array.isArray(parsed)) {
+              walk(parsed);
+            }
+          }
+        });
+        setNominationFieldMap(newFieldMap);
+      }
     } catch (err) { console.error(err); }
     finally { setLoadingSubs(false); }
   };
@@ -226,6 +279,8 @@ export default function ReviewSystem({ user }: { user: User }) {
     return 'contains';
   };
 
+  const [processedNomFormIds, setProcessedNomFormIds] = useState<Set<string>>(new Set());
+
   const openProfile = async (submissionId: string) => {
     setProfileLoading(true); setShowProfile(true);
     try {
@@ -240,6 +295,33 @@ export default function ReviewSystem({ user }: { user: User }) {
         }
       }
       setProfileData(data);
+
+      // Ensure nomination schema is loaded for this profile
+      const nom = data?.submission?.nominationId || data?.submission?.nomination_id;
+      const nomFormId = nom && typeof nom === 'object' ? String(nom.form_id?._id || nom.form_id?.id || nom.form_id || '') : undefined;
+      
+      if (nomFormId && nomFormId !== 'undefined' && !processedNomFormIds.has(nomFormId)) {
+        const nf = await api.get(`/forms?id=${nomFormId}`).catch(() => null);
+        if (nf) {
+          const schema = nf.form_schema || nf.schema;
+          const newFieldMap: Record<string, string> = { ...nominationFieldMap };
+          if (schema) {
+            const parsed = typeof schema === 'string' ? JSON.parse(schema) : schema;
+            const walk = (list: any[]) => {
+              if (!Array.isArray(list)) return;
+              list.forEach((f: any) => {
+                if (f.id && f.label) newFieldMap[f.id] = f.label;
+                if (f.children) walk(f.children);
+              });
+            };
+            if (parsed.sections) parsed.sections.forEach((s: any) => walk(s.fields || []));
+            else if (parsed.fields) walk(parsed.fields);
+            else if (Array.isArray(parsed)) walk(parsed);
+          }
+          setNominationFieldMap(newFieldMap);
+          setProcessedNomFormIds(prev => new Set(prev).add(nomFormId));
+        }
+      }
     } catch (err) { console.error(err); }
     finally { setProfileLoading(false); }
   };
@@ -582,9 +664,16 @@ export default function ReviewSystem({ user }: { user: User }) {
     }
   };
 
+  const toTitleCase = (str: string) => {
+    if (!str) return '';
+    return str.split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  };
+
   const getSubmissionDisplayName = (submission: any, fallbackName?: string) => {
     if (fallbackName && String(fallbackName).trim() && String(fallbackName).trim().toLowerCase() !== 'anonymous') {
-      return String(fallbackName).trim();
+      return toTitleCase(String(fallbackName).trim());
     }
 
     const responseMap = parseResponseRecord(submission?.responses);
@@ -604,7 +693,7 @@ export default function ReviewSystem({ user }: { user: User }) {
 
     if (candidateName == null) return 'Anonymous';
     const normalized = String(candidateName).trim();
-    return normalized || 'Anonymous';
+    return normalized ? toTitleCase(normalized) : 'Anonymous';
   };
 
   const escapeHtml = (value: any) =>
@@ -828,13 +917,33 @@ export default function ReviewSystem({ user }: { user: User }) {
     const statusText = String(submission?.status || 'N/A').replace(/_/g, ' ');
 
     const responsesHtml = responseRows.length
-      ? responseRows.map((row, idx) => `
-          <tr>
-            <td>${idx + 1}</td>
-            <td>${escapeHtml(row.label)}</td>
-            <td>${escapeHtml(formatResponseValue(row.value))}</td>
-          </tr>
-        `).join('')
+      ? responseRows.map((row, idx) => {
+          const val = row.value;
+          let displayValue = '';
+          
+          if (Array.isArray(val)) {
+            displayValue = val.join(', ');
+          } else if (val == null) {
+            displayValue = '—';
+          } else {
+            const sVal = String(val);
+            const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com'));
+            if (isFile) {
+              const fileUrl = sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
+              displayValue = `<a href="${fileUrl}" target="_blank" style="color: #2563eb; text-decoration: underline; font-weight: bold;">View File</a>`;
+            } else {
+              displayValue = escapeHtml(sVal);
+            }
+          }
+
+          return `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${escapeHtml(row.label)}</td>
+              <td>${displayValue}</td>
+            </tr>
+          `;
+        }).join('')
       : '<tr><td colspan="3">No responses available.</td></tr>';
 
     const levelsHtml = levels.length
@@ -879,6 +988,23 @@ export default function ReviewSystem({ user }: { user: User }) {
       `
       : '';
 
+    const nom = submission.nominationId || submission.nomination_id;
+    const addData = nom ? parseObject(nom.additional_data) : {};
+    const nominationHtml = nom && Object.keys(addData).length > 0
+      ? `
+        <section class="card">
+          <h2>School Functionary Details</h2>
+          <div class="meta">
+            <div><strong>Nominated Teacher:</strong> ${escapeHtml(nom.teacher_name)}</div>
+            <div><strong>School Code:</strong> ${escapeHtml(nom.school_code)}</div>
+            ${Object.entries(addData).map(([key, val]) => `
+              <div><strong>${escapeHtml(nominationFieldMap[key] || key.replace(/_/g, ' '))}:</strong> ${escapeHtml(String(val))}</div>
+            `).join('')}
+          </div>
+        </section>
+      `
+      : '';
+
     const html = `
       <!doctype html>
       <html>
@@ -914,6 +1040,8 @@ export default function ReviewSystem({ user }: { user: User }) {
             <div><strong>Level Progress:</strong> ${escapeHtml(`${profile?.highest_level || 0}/${profile?.total_levels || 0}`)}</div>
           </div>
         </section>
+
+        ${nominationHtml}
 
         <section class="card">
           <h2>Form Responses</h2>
@@ -1613,15 +1741,34 @@ export default function ReviewSystem({ user }: { user: User }) {
             
             try { 
               const raw = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : (sub.responses || []);
-              if (Array.isArray(raw)) {
-                responseList = raw.map((r: any) => {
-                  const field = (formSchema?.sections || []).flatMap((s: any) => s.fields || []).find((f: any) => f.id === r.fieldId);
-                  return { label: field?.label || r.fieldId, value: r.value };
-                });
-              } else {
-                responseList = Object.entries(raw).map(([k, v]) => ({ label: k, value: v }));
-              }
+              const responses = Array.isArray(raw) ? raw : Object.entries(raw).map(([k, v]) => ({ fieldId: k, value: v }));
+              
+              responseList = responses.map((r: any) => {
+                const schemaObj = typeof formSchema === 'string' ? JSON.parse(formSchema) : formSchema;
+                const fields = (schemaObj?.sections || []).flatMap((s: any) => s.fields || []);
+                const field = fields.find((f: any) => String(f.id) === String(r.fieldId));
+                return { label: field?.label || r.fieldId, value: r.value };
+              });
             } catch {}
+
+            const renderValue = (val: any) => {
+              if (Array.isArray(val)) return val.join(', ');
+              if (val == null) return '—';
+              
+              const sVal = String(val);
+              const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com'));
+              
+              if (isFile) {
+                const fileUrl = sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
+                return (
+                  <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1.5 font-bold">
+                    <ExternalLink size={14} /> View File
+                  </a>
+                );
+              }
+              
+              return sVal;
+            };
 
             return (
               <div className="space-y-5">
@@ -1680,6 +1827,59 @@ export default function ReviewSystem({ user }: { user: User }) {
                   )}
                 </div>
 
+                {/* Nomination Details */}
+                {(() => {
+                  const nom = sub.nominationId || sub.nomination_id;
+                  if (!nom) return null;
+                  const addData = parseObject(nom.additional_data);
+                  if (Object.keys(addData).length === 0) return null;
+
+                  return (
+                    <div className="animate-in fade-in slide-in-from-bottom-2">
+                      <h3 className="text-sm font-bold font-heading mb-3 flex items-center gap-2 text-primary"><School size={15} /> School Functionary Details</h3>
+                      <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted font-bold uppercase">Nominated Teacher</p>
+                            <p className="text-sm font-semibold">{nom.teacher_name}</p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted font-bold uppercase">School Code</p>
+                            <p className="text-sm font-semibold font-mono">{nom.school_code}</p>
+                          </div>
+                          {Object.entries(addData).map(([key, val]) => {
+                            const strVal = typeof val === 'string' ? val.trim() : '';
+                            const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(strVal) || /^\/?uploads\//i.test(strVal);
+                            const isFile = typeof val === 'string' && (
+                              /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) ||
+                              strVal.includes('res.cloudinary.com') ||
+                              isUploadPath
+                            );
+                            const fileUrl = isFile
+                              ? (strVal.startsWith('http')
+                                ? strVal
+                                : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(strVal)}`)
+                              : '';
+
+                            return (
+                              <div key={key} className="space-y-1 border-t border-primary/5 pt-2 sm:border-t-0 sm:pt-0">
+                                <p className="text-[10px] text-muted font-bold uppercase">{nominationFieldMap[key] || key.replace(/_/g, ' ').replace(/^cf\s+/i, '')}</p>
+                                {isFile ? (
+                                  <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 text-sm font-semibold">
+                                    <ExternalLink size={12} /> View File
+                                  </a>
+                                ) : (
+                                  <p className="text-sm font-semibold">{String(val)}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Responses */}
                 <div>
                   <h3 className="text-sm font-bold font-heading mb-3">Form Responses</h3>
@@ -1688,7 +1888,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                       responseList.map((res, idx) => (
                         <div key={idx} className="flex flex-col sm:flex-row gap-1 py-1.5 border-b border-slate-200 last:border-0">
                           <span className="text-xs font-semibold text-slate-500 min-w-[150px]">{res.label}:</span>
-                          <span className="text-sm">{Array.isArray(res.value) ? res.value.join(', ') : String(res.value)}</span>
+                          <span className="text-sm font-medium">{renderValue(res.value)}</span>
                         </div>
                       ))}
                   </div>
@@ -1727,6 +1927,250 @@ export default function ReviewSystem({ user }: { user: User }) {
               </div>
             );
           })()}
+        </Modal>
+
+        {/* Export Modals */}
+        <Modal open={showCsvConfig} onClose={() => setShowCsvConfig(false)} title="Export CSV Configuration" size="lg">
+          <div className="space-y-6">
+            <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-primary">Select Columns to Export</h4>
+                <p className="text-[11px] text-muted">Choose which fields you want in your Excel/CSV file</p>
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => {
+                    const base = ['id', 'form_title', 'user_name', 'user_email', 'school_code', 'status', 'score'];
+                    const dynamic = filterableFields.map(f => f.id);
+                    const nomKeys = new Set<string>();
+                    const subs = getExportData();
+                    subs.forEach((s: any) => {
+                      const nom = s.nomination_id || s.nominationId;
+                      if (nom && typeof nom === 'object') {
+                        const addData = parseObject(nom.additional_data);
+                        Object.keys(addData).forEach(k => nomKeys.add(k));
+                      }
+                    });
+                    const noms = Array.from(nomKeys).map(k => `nom_${k}`);
+                    setCsvSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
+                  }}
+                  className="text-[10px] font-bold text-primary hover:underline"
+                >
+                  Select All
+                </button>
+                <span className="text-slate-300">|</span>
+                <button onClick={() => setCsvSelectedFields([])} className="text-[10px] font-bold text-rose-500 hover:underline">Clear All</button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 max-h-[400px] overflow-y-auto px-1 custom-scrollbar">
+              {(() => {
+                const nomKeys = new Set<string>();
+                const subs = getExportData();
+                subs.forEach((s: any) => {
+                  const nom = s.nomination_id || s.nominationId;
+                  if (nom && typeof nom === 'object') {
+                    const addData = parseObject(nom.additional_data);
+                    Object.keys(addData).forEach(k => nomKeys.add(k));
+                  }
+                });
+                const nomFields = Array.from(nomKeys).map(k => ({ 
+                  id: `nom_${k}`, 
+                  label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '')}` 
+                }));
+
+                return [
+                  { label: 'Basic Info', fields: [
+                    { id: 'id', label: 'Reference ID' },
+                    { id: 'form_title', label: 'Form Title' },
+                    { id: 'user_name', label: 'Submitted By' },
+                    { id: 'user_email', label: 'Email' },
+                    { id: 'school_code', label: 'School Code' },
+                    { id: 'status', label: 'Status' },
+                    { id: 'score', label: 'Score' },
+                    { id: 'submitted_at', label: 'Submission Date' }
+                  ]},
+                  ...(nomFields.length > 0 ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
+                  ...(filterableFields.length > 0 ? [{ label: 'Form Specific Fields', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
+                ].map((section, idx) => (
+                  <div key={idx} className="space-y-3">
+                    <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1">{section.label}</h5>
+                    <div className="space-y-2">
+                      {section.fields.map(field => (
+                        <label key={field.id} className="flex items-center gap-3 group cursor-pointer">
+                          <div className="relative flex items-center">
+                            <input 
+                              type="checkbox" 
+                              className="peer appearance-none w-5 h-5 rounded-md border-2 border-slate-200 checked:bg-primary checked:border-primary transition-all"
+                              checked={csvSelectedFields.includes(field.id)}
+                              onChange={e => {
+                                if (e.target.checked) setCsvSelectedFields(prev => [...prev, field.id]);
+                                else setCsvSelectedFields(prev => prev.filter(id => id !== field.id));
+                              }}
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center text-white scale-0 peer-checked:scale-100 transition-transform pointer-events-none">
+                              <CheckCircle size={12} strokeWidth={3} />
+                            </div>
+                          </div>
+                          <span className="text-sm font-medium text-slate-700 group-hover:text-primary transition-colors">{field.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t border-slate-100">
+              <button onClick={() => setShowCsvConfig(false)} className="flex-1 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all">Cancel</button>
+              <button onClick={handleCsvDownload} className="flex-[2] py-3 bg-primary text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:bg-primary-hover transition-all">
+                <FileDown size={18} /> Download Excel/CSV
+              </button>
+            </div>
+          </div>
+        </Modal>
+
+        <Modal open={showExportConfig} onClose={() => setShowExportConfig(false)} title="Export ZIP Package Configuration" size="xl">
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left Column: Settings */}
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2"><Settings size={16} className="text-primary" /> Package Settings</h4>
+                  <div className="space-y-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">File Naming Convention</label>
+                      <div className="grid grid-cols-1 gap-2">
+                        {[
+                          { id: 'email', label: 'By User Email', desc: 'example@email.pdf' },
+                          { id: 'name', label: 'By Teacher Name', desc: 'john_doe.pdf' },
+                          { id: 'school', label: 'By School Code', desc: 'KV001_john_doe.pdf' }
+                        ].map(opt => (
+                          <button key={opt.id} onClick={() => setExportNamingStrategy(opt.id)}
+                            className={`flex flex-col p-3 rounded-xl border text-left transition-all ${exportNamingStrategy === opt.id ? 'border-primary bg-white ring-2 ring-primary/10' : 'border-slate-200 bg-white/50 hover:bg-white'}`}>
+                            <span className={`text-xs font-bold ${exportNamingStrategy === opt.id ? 'text-primary' : 'text-slate-700'}`}>{opt.label}</span>
+                            <span className="text-[10px] text-slate-400 mt-0.5">{opt.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-100">
+                      <input type="checkbox" checked={includeNominationData} onChange={e => setIncludeNominationData(e.target.checked)} className="w-4 h-4 rounded accent-primary" />
+                      <div>
+                        <p className="text-xs font-bold text-slate-700">Include Nomination Data</p>
+                        <p className="text-[10px] text-slate-400">Add CSV with school functionary details</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0 mt-0.5"><History size={16} /></div>
+                  <div>
+                    <p className="text-[11px] font-bold text-amber-800">Large Export Notice</p>
+                    <p className="text-[10px] text-amber-700/80 leading-relaxed mt-0.5">Generating ZIP packages with many attachments can take up to 2 minutes. Please keep this tab open.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Column Selection */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2"><Layers size={16} className="text-primary" /> Data Columns</h4>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => {
+                        const base = ['id', 'form_title', 'user_name', 'user_email', 'school_code', 'status', 'score'];
+                        const dynamic = filterableFields.map(f => f.id);
+                        const nomKeys = new Set<string>();
+                        const subs = getExportData();
+                        subs.forEach((s: any) => {
+                          const nom = s.nomination_id || s.nominationId;
+                          if (nom && typeof nom === 'object') {
+                            const addData = parseObject(nom.additional_data);
+                            Object.keys(addData).forEach(k => nomKeys.add(k));
+                          }
+                        });
+                        const noms = Array.from(nomKeys).map(k => `nom_${k}`);
+                        setZipSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
+                      }}
+                      className="text-[9px] font-black text-primary hover:underline uppercase tracking-tighter"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-slate-300 text-[9px]">|</span>
+                    <button onClick={() => setZipSelectedFields([])} className="text-[9px] font-black text-rose-500 hover:underline uppercase tracking-tighter">Clear All</button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 max-h-[450px] overflow-y-auto px-1 custom-scrollbar">
+                  {(() => {
+                    const nomKeys = new Set<string>();
+                    const subs = getExportData();
+                    subs.forEach((s: any) => {
+                      const nom = s.nomination_id || s.nominationId;
+                      if (nom && typeof nom === 'object') {
+                        const addData = parseObject(nom.additional_data);
+                        Object.keys(addData).forEach(k => nomKeys.add(k));
+                      }
+                    });
+                    const nomFields = Array.from(nomKeys).map(k => ({ 
+                      id: `nom_${k}`, 
+                      label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '')}` 
+                    }));
+
+                    return [
+                      { label: 'Basic Identity', fields: [
+                        { id: 'id', label: 'Reference ID' },
+                        { id: 'form_title', label: 'Form Title' },
+                        { id: 'user_name', label: 'Submitted By' },
+                        { id: 'user_email', label: 'Email Address' },
+                        { id: 'school_code', label: 'School Code' },
+                        { id: 'status', label: 'Submission Status' },
+                        { id: 'score', label: 'Evaluation Score' },
+                        { id: 'submitted_at', label: 'Timestamp' }
+                      ]},
+                      ...(nomFields.length > 0 ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
+                      ...(filterableFields.length > 0 ? [{ label: 'Form Response Data', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
+                    ].map((section, idx) => (
+                      <div key={idx} className="space-y-3">
+                        <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 p-1 rounded">{section.label}</h5>
+                        <div className="space-y-2.5">
+                          {section.fields.map(field => (
+                            <label key={field.id} className="flex items-center gap-3 group cursor-pointer">
+                              <div className="relative flex items-center">
+                                <input 
+                                  type="checkbox" 
+                                  className="peer appearance-none w-4.5 h-4.5 rounded border-2 border-slate-200 checked:bg-primary checked:border-primary transition-all"
+                                  checked={zipSelectedFields.includes(field.id)}
+                                  onChange={e => {
+                                    if (e.target.checked) setZipSelectedFields(prev => [...prev, field.id]);
+                                    else setZipSelectedFields(prev => prev.filter(id => id !== field.id));
+                                  }}
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center text-white scale-0 peer-checked:scale-100 transition-transform pointer-events-none">
+                                  <CheckCircle size={10} strokeWidth={3} />
+                                </div>
+                              </div>
+                              <span className="text-[12px] font-semibold text-slate-700 group-hover:text-primary transition-colors truncate max-w-[180px]">{field.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-4 border-t border-slate-100">
+              <button onClick={() => setShowExportConfig(false)} className="flex-1 py-3.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all">Cancel</button>
+              <button onClick={handleZipDownload} className="flex-[2] py-3.5 bg-primary text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/25 hover:bg-primary-hover transition-all transform active:scale-[0.98]">
+                <Archive size={18} /> Generate Data Package
+              </button>
+            </div>
+          </div>
         </Modal>
       </div>
     );

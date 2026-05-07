@@ -31,11 +31,19 @@ export default function Submissions({ user }: { user: User }) {
   const [includeNominationData, setIncludeNominationData] = useState(true);
   const [zipSelectedFields, setZipSelectedFields] = useState<string[]>([]);
   const [visibleFields, setVisibleFields] = useState<string[]>([]);
+  const [nominationFieldMap, setNominationFieldMap] = useState<Record<string, string>>({});
 
   const canSeeScore = user.role === 'admin' || user.role === 'reviewer' || user.role === 'functionary';
   const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const emailLocal = (v: any) => norm(v).split('@')[0];
   const compact = (v: any) => norm(v).replace(/[^a-z0-9]/g, '');
+  
+  const toTitleCase = (str: string) => {
+    if (!str) return '';
+    return str.split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  };
   
   const parseObject = (raw: any): Record<string, any> => {
     if (!raw) return {};
@@ -202,6 +210,40 @@ export default function Submissions({ user }: { user: User }) {
       
       setSubmissions(mappedSubs);
       setForms(Array.isArray(f) ? f : []);
+
+      // Identify and load nomination forms
+      const nomFormIds = new Set<string>();
+      mappedSubs.forEach((s: any) => {
+        const nom = s.nomination_id || s.nominationId;
+        if (nom && typeof nom === 'object' && nom.form_id) {
+          nomFormIds.add(String(nom.form_id));
+        }
+      });
+
+      if (nomFormIds.size > 0) {
+        const nomForms = await Promise.all(
+          Array.from(nomFormIds).map(id => api.get(`/forms?id=${id}`).catch(() => null))
+        );
+        const newFieldMap: Record<string, string> = { ...nominationFieldMap };
+        nomForms.forEach(nf => {
+          if (!nf) return;
+          const schema = nf.form_schema || nf.schema;
+          if (schema) {
+            const parsed = typeof schema === 'string' ? JSON.parse(schema) : schema;
+            const walk = (list: any[]) => {
+              if (!Array.isArray(list)) return;
+              list.forEach(fld => {
+                if (fld.id && fld.label) newFieldMap[fld.id] = fld.label;
+                if (fld.children) walk(fld.children);
+              });
+            };
+            if (parsed.sections) parsed.sections.forEach((s: any) => walk(s.fields || []));
+            else if (parsed.fields) walk(parsed.fields);
+            else if (Array.isArray(parsed)) walk(parsed);
+          }
+        });
+        setNominationFieldMap(newFieldMap);
+      }
     } catch (err) { 
       console.error('Error fetching submissions:', err);
       setSubmissions([]);
@@ -400,7 +442,7 @@ export default function Submissions({ user }: { user: User }) {
 
     const functionaryFields = Array.from(nominationKeys).map(k => ({
       id: `nom_${k}`,
-      label: `Nomination: ${k.replace(/_/g, ' ')}`
+      label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '')}`
     }));
 
     const dateField = { id: 'submitted_at', label: 'Submission Date' };
@@ -446,7 +488,7 @@ export default function Submissions({ user }: { user: User }) {
 
     const functionaryFields = Array.from(nominationKeys).map(k => ({
       id: `nom_${k}`,
-      label: `Nomination: ${k.replace(/_/g, ' ')}`
+      label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '')}`
     }));
 
     const dateField = { id: 'submitted_at', label: 'Submission Date' };
@@ -617,8 +659,8 @@ export default function Submissions({ user }: { user: User }) {
           <p className="text-sm font-medium group-hover:text-primary">
             {(() => {
               const { name } = extractNameEmailFromSubmission(row);
-              if (isAnonymousDirectForm(row)) return name || 'Anonymous';
-              return v || name || 'Anonymous';
+              const displayName = isAnonymousDirectForm(row) ? (name || 'Anonymous') : (v || name || 'Anonymous');
+              return toTitleCase(displayName);
             })()}
           </p>
           <p className="text-[10px] text-muted">
@@ -641,9 +683,16 @@ export default function Submissions({ user }: { user: User }) {
           const resps = parseResponses(row.responses);
           const val = resps[fieldId];
           if (val === undefined || val === null) return <span className="text-muted">—</span>;
-          const isFile = typeof val === 'string' && (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(val) || val.includes('res.cloudinary.com'));
+          const stringVal = typeof val === 'string' ? val.trim() : '';
+          const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(stringVal) || /^\/?uploads\//i.test(stringVal);
+          const isFile = typeof val === 'string' && (
+            field?.type === 'file' ||
+            /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(stringVal) ||
+            stringVal.includes('res.cloudinary.com') ||
+            isUploadPath
+          );
           if (isFile) {
-            const fileUrl = val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`;
+            const fileUrl = stringVal.startsWith('http') ? stringVal : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(stringVal)}`;
             return <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 text-xs"><ExternalLink size={10} /> View</a>;
           }
           if (Array.isArray(val)) return val.join(', ');
@@ -758,7 +807,7 @@ export default function Submissions({ user }: { user: User }) {
                       <div className="space-y-1"><p className="text-[10px] text-muted uppercase font-bold">School Code</p><p className="text-sm font-semibold font-mono">{selectedNomination.school_code}</p></div>
                       {Object.entries(nominationAdditionalData).map(([key, val]) => (
                         <div key={key} className="space-y-1">
-                          <p className="text-[10px] text-muted uppercase font-bold">{key.replace(/_/g, ' ')}</p>
+                          <p className="text-[10px] text-muted uppercase font-bold">{nominationFieldMap[key] || key.replace(/_/g, ' ').replace(/^cf\s+/i, '')}</p>
                           <p className="text-sm font-semibold">{String(val)}</p>
                         </div>
                       ))}
@@ -771,8 +820,15 @@ export default function Submissions({ user }: { user: User }) {
                   <h4 className="text-sm font-bold flex items-center gap-2 text-slate-700 border-b border-slate-200 pb-2"><Send size={14} /> {selectedNomination ? '2. Teacher Form Responses' : 'Form Responses'}</h4>
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 max-h-[400px] overflow-y-auto">
                     {Object.keys(responses).length > 0 ? Object.entries(responses).map(([key, val]) => {
-                      const isFile = typeof val === 'string' && (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(val) || val.includes('res.cloudinary.com'));
-                      const fileUrl = isFile ? (val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`) : '';
+                      const strVal = typeof val === 'string' ? val.trim() : '';
+                      const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(strVal) || /^\/?uploads\//i.test(strVal);
+                      const isFile = typeof val === 'string' && (
+                        fieldMap[key]?.type === 'file' ||
+                        /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) ||
+                        strVal.includes('res.cloudinary.com') ||
+                        isUploadPath
+                      );
+                      const fileUrl = isFile ? (strVal.startsWith('http') ? strVal : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(strVal)}`) : '';
                       return (
                         <div key={key} className="space-y-1 pb-2 border-b border-slate-200 last:border-0">
                           <p className="text-[10px] text-muted font-bold uppercase">{fieldMap[key]?.label || key}</p>
@@ -928,7 +984,7 @@ export default function Submissions({ user }: { user: User }) {
                         Object.keys(addData).forEach(k => nomKeys.add(k));
                       }
                     });
-                    const nomFields = Array.from(nomKeys).map(k => ({ id: `nom_${k}`, label: `Nomination: ${k.replace(/_/g, ' ')}` }));
+                    const nomFields = Array.from(nomKeys).map(k => ({ id: `nom_${k}`, label: `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '')}` }));
 
                     return [
                       { label: 'Basic Identity', fields: [
@@ -1035,7 +1091,7 @@ export default function Submissions({ user }: { user: User }) {
                   Object.keys(addData).forEach(k => nomKeys.add(k));
                 }
               });
-              const nomFields = Array.from(nomKeys).map(k => ({ id: `nom_${k}`, label: `Nomination: ${k.replace(/_/g, ' ')}` }));
+              const nomFields = Array.from(nomKeys).map(k => ({ id: `nom_${k}`, label: `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '')}` }));
 
               return [
                 { label: 'Basic Info', fields: [

@@ -41,7 +41,8 @@ export default function Forms({ user }: { user: User }) {
   const [activeForm, setActiveForm] = useState<any>(null);
   const [builderFields, setBuilderFields] = useState<FormField[]>([]);
   const [versions, setVersions] = useState<any[]>([]);
-  const [openMenu, setOpenMenu] = useState<number | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [activeFormId, setActiveFormId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     title: '', description: '', form_type: 'normal', status: 'draft', expires_at: '',
@@ -185,9 +186,22 @@ export default function Forms({ user }: { user: User }) {
     setOpenMenu(null);
   };
 
-  const handleClone = async (id: number) => { await api.post('/forms', { action: 'clone', form_id: id, created_by: user.id }); fetchForms(); setOpenMenu(null); };
-  const handleDelete = async (id: number) => { if (!confirm('Delete this form permanently?')) return; await api.del('/forms', { id }); fetchForms(); setOpenMenu(null); };
-  const viewVersions = async (formId: number) => { setVersions(await api.get(`/form-versions?form_id=${formId}`)); setShowVersions(true); setOpenMenu(null); };
+  const handleClone = async (id: string) => { await api.post('/forms', { action: 'clone', form_id: id, created_by: user.id }); fetchForms(); setOpenMenu(null); };
+  const handleDelete = async (id: string) => { 
+    console.log('handleDelete called with id:', id);
+    if (!confirm('Delete this form permanently?')) return; 
+    try {
+      console.log('Sending DELETE request for:', id);
+      const res = await api.del(`/forms/${id}`); 
+      console.log('DELETE response:', res);
+      await fetchForms(); 
+      setOpenMenu(null); 
+    } catch (err: any) {
+      console.error('Delete failed:', err);
+      alert('Failed to delete form: ' + err.message);
+    }
+  };
+  const viewVersions = async (formId: string) => { setVersions(await api.get(`/form-versions?form_id=${formId}`)); setShowVersions(true); setOpenMenu(null); };
 
   // Click outside menu
   useEffect(() => {
@@ -235,6 +249,9 @@ export default function Forms({ user }: { user: User }) {
                 }`}>
                 {t} <span className="ml-1 opacity-60">({
                   forms.filter(f => {
+                    // APPLY ROLE FILTERING TO COUNT TOO
+                    if (user.role === 'functionary' && f.form_type !== 'nomination') return false;
+                    
                     const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
                     let finalStatus = f.status;
                     if (isExpired) finalStatus = 'expired';
@@ -295,10 +312,10 @@ export default function Forms({ user }: { user: User }) {
 
             return (
               <div key={row.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col group">
+                className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col group relative">
 
                 {/* Color bar top */}
-                <div className={`h-1.5 ${
+                <div className={`h-1.5 rounded-t-2xl ${
                   row.form_type === 'normal' ? 'bg-accent-blue' :
                   row.form_type === 'nomination' ? 'bg-success' :
                   row.form_type === 'branching' ? 'bg-accent-purple' :
@@ -317,18 +334,18 @@ export default function Forms({ user }: { user: User }) {
                       {isAdmin && (
                         <div className="relative">
                           <button onClick={e => { e.stopPropagation(); setOpenMenu(openMenu === row.id ? null : row.id); }}
-                            className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity">
+                            className={`p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-900 transition-all ${openMenu === row.id ? 'bg-slate-100 text-slate-900 opacity-100' : 'opacity-40 group-hover:opacity-100'}`}>
                             <MoreHorizontal size={16} />
                           </button>
                           {openMenu === row.id && (
-                            <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-xl border border-slate-200 z-30 py-1" onClick={e => e.stopPropagation()}>
+                            <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-2xl border border-slate-200 z-[100] py-1" onClick={e => e.stopPropagation()}>
                               <button onClick={() => openEditModal(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Settings size={13} className="text-slate-500" /> Settings</button>
                               <button onClick={() => openBuilder(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Pencil size={13} className="text-slate-500" /> Edit Fields</button>
                               <button onClick={() => openPreviewModal(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Eye size={13} className="text-slate-500" /> Preview</button>
                               <button onClick={() => viewVersions(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><History size={13} className="text-slate-500" /> Versions</button>
                               <button onClick={() => handleClone(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Copy size={13} className="text-slate-500" /> Clone</button>
                               <div className="border-t border-slate-200 my-1" />
-                              <button onClick={() => handleDelete(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-red-50 flex items-center gap-2.5 text-danger"><Trash2 size={13} /> Delete</button>
+                              <button onClick={() => handleDelete(row._id || row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-red-50 flex items-center gap-2.5 text-danger"><Trash2 size={13} /> Delete</button>
                             </div>
                           )}
                         </div>
@@ -360,7 +377,7 @@ export default function Forms({ user }: { user: User }) {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2 mt-4">
+                  <div className="flex flex-wrap gap-2 mt-4">
                     {canFill && user.role !== 'functionary' && (
                       <button onClick={() => {
                         if (user.role === 'teacher') {
@@ -374,30 +391,34 @@ export default function Forms({ user }: { user: User }) {
                         }
                         openPreviewModal(row);
                       }}
-                        className="flex-1 py-2.5 bg-accent-green text-white rounded-xl text-sm font-bold hover:bg-accent-green-hover transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm">
+                        className="flex-1 min-w-[120px] py-2.5 bg-accent-green text-white rounded-xl text-sm font-bold hover:bg-accent-green-hover transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm">
                         {user.role === 'teacher' ? <Play size={14} /> : <Eye size={14} />}
-                        {user.role === 'teacher' ? 'Fill Form' : 'Preview Form'}
+                        {user.role === 'teacher' ? 'Fill Form' : 'Preview'}
                       </button>
                     )}
-                    {canFill && user.role === 'functionary' && row.form_type === 'nomination' && (
+                    
+                    {canFill && user.role === 'functionary' && (
                       <button onClick={() => navigate(`/nominations?form_id=${row.id}`)}
-                        className="flex-1 py-2.5 bg-accent-green text-white rounded-xl text-sm font-bold hover:bg-accent-green-hover transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm">
-                        <Play size={14} /> Nominate Teachers
-                      </button>
-                    )}
-                    {canFill && user.role === 'functionary' && row.form_type !== 'nomination' && (
-                      <button onClick={() => navigate(`/nominations?form_id=${row.id}`)}
-                        className="flex-1 py-2.5 bg-accent-green text-white rounded-xl text-sm font-bold hover:bg-accent-green-hover transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm">
-                        <Award size={14} /> Nominate Teachers
+                        className="flex-1 min-w-[140px] py-2.5 bg-accent-green text-white rounded-xl text-sm font-bold hover:bg-accent-green-hover transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm">
+                        {row.form_type === 'nomination' ? <Play size={14} /> : <Award size={14} />}
+                        Nominate
                       </button>
                     )}
 
                     {isAdmin && (
-                      <button onClick={() => openBuilder(row)}
-                        className={`${canFill ? '' : 'flex-1'} py-2.5 px-4 bg-primary/10 text-primary rounded-xl text-sm font-bold hover:bg-primary/20 transition-colors flex items-center justify-center gap-2 min-h-[44px]`}>
-                        <Pencil size={14} /> {canFill ? 'Edit' : 'Edit Fields'}
-                      </button>
+                      <>
+                        <button onClick={() => openBuilder(row)}
+                          className="flex-1 min-w-[100px] py-2.5 px-4 bg-primary/10 text-primary rounded-xl text-sm font-bold hover:bg-primary/20 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
+                          <Pencil size={14} /> Edit
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); handleDelete(row._id || row.id); }}
+                          className="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center min-h-[44px] border border-red-100"
+                          title="Delete Form">
+                          <Trash2 size={16} />
+                        </button>
+                      </>
                     )}
+                    
                     {!canFill && !isAdmin && (
                       <div className="flex-1 py-2.5 bg-slate-100 rounded-xl text-sm text-slate-500 font-medium text-center min-h-[44px] flex items-center justify-center gap-2 border border-slate-200">
                         <Clock size={14} /> {row.status === 'draft' ? 'Not yet active' : 'Form closed'}

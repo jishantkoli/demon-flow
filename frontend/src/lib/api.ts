@@ -59,7 +59,7 @@ export const api = {
   get: (url: string) => request(url),
   post: (url: string, body: any) => request(url, { method: 'POST', body: JSON.stringify(body) }),
   put: (url: string, body: any) => request(url, { method: 'PUT', body: JSON.stringify(body) }),
-  del: (url: string, body: any) => request(url, { method: 'DELETE', body: JSON.stringify(body) }),
+  del: (url: string, body?: any) => request(url, { method: 'DELETE', body: body ? JSON.stringify(body) : undefined }),
   upload: (url: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);

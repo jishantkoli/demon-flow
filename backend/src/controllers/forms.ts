@@ -178,12 +178,18 @@ export const updateForm = async (req: AuthRequest, res: Response) => {
 
 export const deleteForm = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.body;
+    const id = req.params.id || req.body.id;
+    console.log('Delete request received for ID:', id, 'Params:', req.params, 'Body:', req.body);
     if (!id) return res.status(400).json({ error: 'Form ID required' });
     const form = await Form.findByIdAndDelete(id);
-    if (!form) return res.status(404).json({ error: 'Form not found' });
+    if (!form) {
+      console.log('Form not found for deletion:', id);
+      return res.status(404).json({ error: 'Form not found' });
+    }
+    console.log('Form deleted successfully:', id);
     res.status(200).json({ success: true });
   } catch (err: any) {
+    console.error('Delete error:', err);
     res.status(500).json({ error: err.message });
   }
 };

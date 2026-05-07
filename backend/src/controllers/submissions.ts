@@ -171,6 +171,21 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
 
     console.log('📋 Submission data:', { formId: submissionData.formId, nominationId: submissionData.nominationId, userEmail: submissionData.userEmail, schoolCode: submissionData.schoolCode });
 
+    // Check for existing non-draft submission to prevent duplicates
+    if (!submissionData.isDraft) {
+      const existingSub = await Submission.findOne({
+        formId: form._id,
+        userEmail: { $regex: new RegExp(`^${submissionData.userEmail.trim()}$`, 'i') },
+        isDraft: false
+      });
+
+      if (existingSub) {
+        // Update existing instead of creating new
+        const updated = await Submission.findByIdAndUpdate(existingSub._id, submissionData, { new: true });
+        return res.status(200).json({ ...updated!.toObject(), id: updated!._id, is_duplicate: true });
+      }
+    }
+
     const submission = await Submission.create(submissionData);
 
     // Update nomination status to 'completed' after successful non-draft submission

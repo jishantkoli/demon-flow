@@ -73,7 +73,7 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
       if (!mongoose.Types.ObjectId.isValid(submission_id as string)) {
         return res.status(400).json({ error: 'Invalid submission_id format' });
       }
-      const sub = await Submission.findById(submission_id).populate('formId');
+      const sub = await Submission.findById(submission_id).populate('formId').populate('nominationId');
       if (!sub) return res.status(404).json({ error: 'Submission not found' });
 
       const levels = await Level.find({ formId: sub.formId }).sort({ levelNumber: 1 });

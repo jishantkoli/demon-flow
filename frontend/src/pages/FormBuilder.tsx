@@ -312,6 +312,13 @@ export default function FormBuilder() {
 
   const save = async (isManual = true, shouldNavigate = true) => {
     if (saving) return;
+    
+    // Don't auto-save empty new forms
+    if (!isManual && isNew && form.title === 'Untitled form' && form.schema.sections[0].fields.length <= 1 && !form.description) {
+      if (shouldNavigate) nav('/forms');
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
