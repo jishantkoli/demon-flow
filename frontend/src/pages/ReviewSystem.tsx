@@ -8,9 +8,10 @@ import Modal from '../components/Modal';
 import { motion } from 'framer-motion';
 import {
   CheckCircle, XCircle, Clock, Filter, Layers, Save, Star, BarChart3,
-  Users, ChevronRight, Eye, Printer, ArrowRight, Award, TrendingUp, UserCheck,
+  Users, ChevronRight, ChevronDown, Eye, Printer, ArrowRight, Award, TrendingUp, UserCheck,
   Zap, FileText, Settings, History, Plus, FileDown, Archive, Mail, User as UserIcon, School, Fingerprint, Info, ExternalLink
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 export default function ReviewSystem({ user }: { user: User }) {
   type FieldFilterRow = {
@@ -50,15 +51,20 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [activeFilterLevel, setActiveFilterLevel] = useState(1); // Track which level we are currently filtering for
   const [showFilters, setShowFilters] = useState(false);
   const [selectedLevelColumn, setSelectedLevelColumn] = useState<string>('all');
+  const [selectedLevels, setSelectedLevels] = useState<number[]>([]);
+  const [showLevelDropdown, setShowLevelDropdown] = useState(false);
 
   useEffect(() => {
     // Default to current stage level whenever stage changes.
     if (activeFilterLevel > 1) {
-      setSelectedLevelColumn(String(activeFilterLevel - 1));
+      const prevLvl = activeFilterLevel - 1;
+      setSelectedLevelColumn(String(prevLvl));
+      setSelectedLevels([prevLvl]);
       return;
     }
     // Total pool: keep all levels visible by default.
     setSelectedLevelColumn('all');
+    setSelectedLevels([]);
   }, [activeFilterLevel]);
 
   // Reviewer modal
@@ -91,6 +97,9 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [includeNominationData, setIncludeNominationData] = useState(true);
   const [zipSelectedFields, setZipSelectedFields] = useState<string[]>([]);
   const [nominationFieldMap, setNominationFieldMap] = useState<Record<string, string>>({});
+
+  const effectiveForm = (selectedFormId ? forms.find(f => String(f.id || f._id) === String(selectedFormId)) : null) || (Array.isArray(selectedFormObj) ? selectedFormObj[0] : selectedFormObj);
+  const isNominationForm = !!selectedFormId && (effectiveForm?.form_type === 'nomination' || effectiveForm?.formType === 'nomination');
 
   const getExportData = () => {
     const subs = shortlistData?.submissions || [];
@@ -196,22 +205,25 @@ export default function ReviewSystem({ user }: { user: User }) {
       setSelectedFormObj(formObj);
 
       // Identify and load unique nomination forms
-      const nomFormIds = new Set<string>();
-      (data?.submissions || []).forEach((s: any) => {
-        const nom = s.nomination_id || s.nominationId;
-        if (nom && typeof nom === 'object' && nom.form_id) {
-          const fid = String(nom.form_id?._id || nom.form_id?.id || nom.form_id);
-          if (fid && fid !== 'undefined') nomFormIds.add(fid);
-        }
-      });
+    const nomFormIds = new Set<string>();
+    (data?.submissions || []).forEach((s: any) => {
+      const nom = s.nomination_id || s.nominationId;
+      if (nom && typeof nom === 'object' && nom.form_id) {
+        const fid = String(nom.form_id?._id || nom.form_id?.id || nom.form_id);
+        if (fid && fid !== 'undefined') nomFormIds.add(fid);
+      }
+    });
 
-      if (nomFormIds.size > 0) {
-        const nomForms = await Promise.all(
-          Array.from(nomFormIds).map(id => api.get(`/forms?id=${id}`).catch(() => null))
-        );
-        
-        const newFieldMap: Record<string, string> = { ...nominationFieldMap };
-        nomForms.forEach(rawNf => {
+    // Clear previous nomination field map to prevent pollution across forms
+    const newFieldMap: Record<string, string> = {};
+    setProcessedNomFormIds(new Set());
+
+    if (nomFormIds.size > 0) {
+      const nomForms = await Promise.all(
+        Array.from(nomFormIds).map(id => api.get(`/forms?id=${id}`).catch(() => null))
+      );
+      
+      nomForms.forEach(rawNf => {
           const nf = Array.isArray(rawNf) ? rawNf[0] : rawNf;
           if (!nf) return;
           const schema = nf.form_schema || nf.schema;
@@ -754,6 +766,35 @@ export default function ReviewSystem({ user }: { user: User }) {
     return String(value);
   };
 
+  const buildNominationExportFields = (nomKeys: Set<string>) => {
+    const staticFields = [
+      { id: 'nom_teacher_name', label: 'Nomination: Nominated Name' },
+      { id: 'nom_teacher_email', label: 'Nomination: Nominated Email' },
+      { id: 'nom_nom_school_code', label: 'Nomination: School Code' },
+    ];
+
+    const dynamicFields = Array.from(nomKeys)
+      .filter(k => !['teacher_name', 'teacher_email', 'school_code', 'nom_school_code'].includes(String(k)))
+      .map(k => ({
+        id: `nom_${k}`,
+        label: nominationFieldMap[k]
+          ? `Nomination: ${nominationFieldMap[k]}`
+          : `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '').replace(/^cf_/i, '')}`
+      }));
+
+    const seenIds = new Set<string>();
+    const seenLabels = new Set<string>();
+    
+    return [...staticFields, ...dynamicFields].filter(f => {
+      if (seenIds.has(f.id)) return false;
+      if (seenLabels.has(f.label)) return false; // Prevent duplicate labels
+      
+      seenIds.add(f.id);
+      seenLabels.add(f.label);
+      return true;
+    });
+  };
+
   const exportCSV = async () => {
     if (!selectedFormId) return;
     
@@ -779,10 +820,7 @@ export default function ReviewSystem({ user }: { user: User }) {
       }
     });
 
-    const functionaryFields = Array.from(nominationKeys).map(k => ({
-      id: `nom_${k}`,
-      label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ')}`
-    }));
+    const functionaryFields = buildNominationExportFields(nominationKeys);
 
     const dateField = { id: 'submitted_at', label: 'Submission Date' };
 
@@ -825,10 +863,7 @@ export default function ReviewSystem({ user }: { user: User }) {
       }
     });
 
-    const functionaryFields = Array.from(nominationKeys).map(k => ({
-      id: `nom_${k}`,
-      label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ')}`
-    }));
+    const functionaryFields = buildNominationExportFields(nominationKeys);
 
     const dateField = { id: 'submitted_at', label: 'Submission Date' };
 
@@ -853,6 +888,9 @@ export default function ReviewSystem({ user }: { user: User }) {
         if (f.id === 'submitted_at') return formatDate(s.submitted_at || s.createdAt || '');
         
         if (f.id.startsWith('nom_')) {
+          if (f.id === 'nom_teacher_name') return nom?.teacher_name || '';
+          if (f.id === 'nom_teacher_email') return nom?.teacher_email || '';
+          if (f.id === 'nom_nom_school_code') return nom?.school_code || '';
           const key = f.id.replace('nom_', '');
           const val = nomData[key];
           if (val === undefined || val === null) return '';
@@ -867,12 +905,15 @@ export default function ReviewSystem({ user }: { user: User }) {
       });
     });
 
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Review Export');
+    const xlsxArray = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([xlsxArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `review-export-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `review-export-${new Date().toISOString().split('T')[0]}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
     setShowCsvConfig(false);
@@ -893,7 +934,7 @@ export default function ReviewSystem({ user }: { user: User }) {
         Object.keys(addData).forEach(k => nomKeys.add(k));
       }
     });
-    const noms = Array.from(nomKeys).map(k => `nom_${k}`);
+    const noms = buildNominationExportFields(nomKeys).map(f => f.id);
     setZipSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
     
     setShowExportConfig(true);
@@ -1171,11 +1212,10 @@ export default function ReviewSystem({ user }: { user: User }) {
     const selectableLevels = !currentStageNumber
       ? formLevels
       : formLevels.filter((l: any) => l.level_number <= currentStageNumber);
-    const selectedLevelNumber = selectedLevelColumn === 'all' ? null : Number(selectedLevelColumn);
-    const hasSelectedLevel = selectedLevelNumber != null && selectableLevels.some((l: any) => l.level_number === selectedLevelNumber);
-    const visibleLevelColumns = selectedLevelColumn === 'all'
+    
+    const visibleLevelColumns = selectedLevels.length === 0
       ? selectableLevels
-      : (hasSelectedLevel ? selectableLevels.filter((l: any) => l.level_number === selectedLevelNumber) : selectableLevels);
+      : selectableLevels.filter((l: any) => selectedLevels.includes(l.level_number));
 
     const subColumns = [
       { key: 'id', label: 'Reference ID', sortable: true, render: (_v: string, row: any) => {
@@ -1253,7 +1293,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                 onClick={exportCSV}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 shadow-sm transition-all"
               >
-                <FileDown size={16} /> Export CSV
+                <FileDown size={16} /> Export Excel (XLSX)
               </button>
               <button 
                 onClick={exportZIP}
@@ -1608,20 +1648,61 @@ export default function ReviewSystem({ user }: { user: User }) {
                   ? `${filteredResults.length} teachers selected for shortlisting` 
                   : (currentStageNumber ? `Showing teachers currently in Stage ${currentStageNumber}` : "Use the filters on the left to shortlist teachers for review")}
                 headerActions={selectableLevels.length > 0 ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Level</span>
-                    <select
-                      value={hasSelectedLevel || selectedLevelColumn === 'all' ? selectedLevelColumn : 'all'}
-                      onChange={(e) => setSelectedLevelColumn(e.target.value)}
-                      className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold outline-none focus:border-primary"
-                    >
-                      <option value="all">All Levels</option>
-                      {selectableLevels.map((l: any) => (
-                        <option key={l.id} value={String(l.level_number)}>
-                          L{l.level_number}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="flex items-center gap-2 relative">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Stages</span>
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowLevelDropdown(!showLevelDropdown)}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold outline-none hover:border-primary transition-all min-w-[100px] justify-between"
+                      >
+                        <span>
+                          {selectedLevels.length === 0 
+                            ? "All Stages" 
+                            : selectedLevels.length === 1 
+                              ? `Stage ${selectedLevels[0]}` 
+                              : `${selectedLevels.length} Stages`}
+                        </span>
+                        <ChevronDown size={12} className={`transition-transform ${showLevelDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {showLevelDropdown && (
+                        <>
+                          <div className="fixed inset-0 z-30" onClick={() => setShowLevelDropdown(false)} />
+                          <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl border border-slate-200 shadow-xl z-40 py-2 animate-in fade-in zoom-in-95 duration-100">
+                            <button
+                              onClick={() => {
+                                setSelectedLevels([]);
+                                setShowLevelDropdown(false);
+                              }}
+                              className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${selectedLevels.length === 0 ? 'text-primary' : 'text-slate-600'}`}
+                            >
+                              All Stages
+                              {selectedLevels.length === 0 && <CheckCircle size={12} />}
+                            </button>
+                            <div className="h-px bg-slate-100 my-1" />
+                            {selectableLevels.map((l: any) => {
+                              const isSelected = selectedLevels.includes(l.level_number);
+                              return (
+                                <button
+                                  key={l.id}
+                                  onClick={() => {
+                                    setSelectedLevels(prev => 
+                                      isSelected 
+                                        ? prev.filter(ln => ln !== l.level_number)
+                                        : [...prev, l.level_number].sort((a, b) => a - b)
+                                    );
+                                  }}
+                                  className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${isSelected ? 'text-primary' : 'text-slate-600'}`}
+                                >
+                                  Stage {l.level_number}
+                                  {isSelected && <CheckCircle size={12} />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 ) : null}
                 columns={subColumns}
@@ -1715,7 +1796,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                         <div>
                           <p className="text-xs font-bold text-slate-700">Show Previous Reviews</p>
                           <p className="text-[10px] text-slate-500">
-                            {levelForm.level_number === 1 ? 'Level 1 me hamesha OFF rahega' : 'Reviewers can see marks'}
+                            {levelForm.level_number === 1 ? 'Always off for Level 1' : 'Reviewers can see marks'}
                           </p>
                         </div>
                       </label>
@@ -1978,12 +2059,12 @@ export default function ReviewSystem({ user }: { user: User }) {
         </Modal>
 
         {/* Export Modals */}
-        <Modal open={showCsvConfig} onClose={() => setShowCsvConfig(false)} title="Export CSV Configuration" size="lg">
+        <Modal open={showCsvConfig} onClose={() => setShowCsvConfig(false)} title="Export Excel (XLSX) Configuration" size="lg">
           <div className="space-y-6">
             <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 flex items-center justify-between">
               <div>
                 <h4 className="text-sm font-bold text-primary">Select Columns to Export</h4>
-                <p className="text-[11px] text-muted">Choose which fields you want in your Excel/CSV file</p>
+                <p className="text-[11px] text-muted">Choose which fields you want in your Excel (XLSX) file</p>
               </div>
               <div className="flex gap-2">
                 <button 
@@ -1999,7 +2080,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                         Object.keys(addData).forEach(k => nomKeys.add(k));
                       }
                     });
-                    const noms = Array.from(nomKeys).map(k => `nom_${k}`);
+                    const noms = isNominationForm ? buildNominationExportFields(nomKeys).map(f => f.id) : [];
                     setCsvSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
                   }}
                   className="text-[10px] font-bold text-primary hover:underline"
@@ -2022,10 +2103,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                     Object.keys(addData).forEach(k => nomKeys.add(k));
                   }
                 });
-                const nomFields = Array.from(nomKeys).map(k => ({ 
-                  id: `nom_${k}`, 
-                  label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '')}` 
-                }));
+                const nomFields = buildNominationExportFields(nomKeys);
 
                 return [
                   { label: 'Basic Info', fields: [
@@ -2038,7 +2116,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                     { id: 'score', label: 'Score' },
                     { id: 'submitted_at', label: 'Submission Date' }
                   ]},
-                  ...(nomFields.length > 0 ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
+                  ...(nomFields.length > 0 && isNominationForm ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
                   ...(filterableFields.length > 0 ? [{ label: 'Form Specific Fields', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
                 ].map((section, idx) => (
                   <div key={idx} className="space-y-3">
@@ -2072,142 +2150,195 @@ export default function ReviewSystem({ user }: { user: User }) {
             <div className="flex gap-3 pt-4 border-t border-slate-100">
               <button onClick={() => setShowCsvConfig(false)} className="flex-1 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all">Cancel</button>
               <button onClick={handleCsvDownload} className="flex-[2] py-3 bg-primary text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:bg-primary-hover transition-all">
-                <FileDown size={18} /> Download Excel/CSV
+                <FileDown size={18} /> Download Excel (XLSX)
               </button>
             </div>
           </div>
         </Modal>
 
-        <Modal open={showExportConfig} onClose={() => setShowExportConfig(false)} title="Export ZIP Package Configuration" size="xl">
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Left Column: Settings */}
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2"><Settings size={16} className="text-primary" /> Package Settings</h4>
-                  <div className="space-y-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">File Naming Convention</label>
-                      <div className="grid grid-cols-1 gap-2">
-                        {[
-                          { id: 'email', label: 'By User Email', desc: 'example@email.pdf' },
-                          { id: 'name', label: 'By Teacher Name', desc: 'john_doe.pdf' },
-                          { id: 'school', label: 'By School Code', desc: 'KV001_john_doe.pdf' }
-                        ].map(opt => (
-                          <button key={opt.id} onClick={() => setExportNamingStrategy(opt.id)}
-                            className={`flex flex-col p-3 rounded-xl border text-left transition-all ${exportNamingStrategy === opt.id ? 'border-primary bg-white ring-2 ring-primary/10' : 'border-slate-200 bg-white/50 hover:bg-white'}`}>
-                            <span className={`text-xs font-bold ${exportNamingStrategy === opt.id ? 'text-primary' : 'text-slate-700'}`}>{opt.label}</span>
-                            <span className="text-[10px] text-slate-400 mt-0.5">{opt.desc}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+        <Modal open={showExportConfig} onClose={() => setShowExportConfig(false)} title="Export Submissions Package" size="xl">
+          <div className="space-y-6">
+            <div className="bg-primary/5 p-6 rounded-2xl border border-primary/10 space-y-4">
+              <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center text-primary shadow-inner">
+                <Archive size={28} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-slate-900 tracking-tight">Bulk Export (ZIP Format)</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Configure how your archive will be structured and select the specific data fields you wish to include in the submission reports.
+                </p>
+              </div>
+            </div>
 
-                    <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-100">
-                      <input type="checkbox" checked={includeNominationData} onChange={e => setIncludeNominationData(e.target.checked)} className="w-4 h-4 rounded accent-primary" />
-                      <div>
-                        <p className="text-xs font-bold text-slate-700">Include Nomination Data</p>
-                        <p className="text-[10px] text-slate-400">Add CSV with school functionary details</p>
-                      </div>
-                    </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="space-y-6 lg:col-span-1">
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">1. Root Organization</h4>
+                  <div className="grid grid-cols-1 gap-2">
+                    {[
+                      { id: 'school', label: 'By School Code', desc: '📂 [School_Code] / 📂 [Teacher_ID]', icon: School },
+                      { id: 'email', label: 'By Email', desc: '📂 [Teacher_Email]', icon: Mail },
+                      { id: 'name', label: 'By Name', desc: '📂 [Teacher_Name]', icon: UserIcon },
+                      { id: 'id', label: 'By ID', desc: '📂 [Submission_ID]', icon: Fingerprint },
+                    ].map((strategy) => (
+                      <button key={strategy.id} onClick={() => setExportNamingStrategy(strategy.id)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${exportNamingStrategy === strategy.id ? 'bg-primary/5 border-primary ring-1 ring-primary' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${exportNamingStrategy === strategy.id ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}><strategy.icon size={16} /></div>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold">{strategy.label}</p>
+                          <p className="text-[10px] text-slate-400">{strategy.desc}</p>
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0 mt-0.5"><History size={16} /></div>
-                  <div>
-                    <p className="text-[11px] font-bold text-amber-800">Large Export Notice</p>
-                    <p className="text-[10px] text-amber-700/80 leading-relaxed mt-0.5">Generating ZIP packages with many attachments can take up to 2 minutes. Please keep this tab open.</p>
+                {exportNamingStrategy === 'school' && (
+                  <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">2. Sub-folder Naming</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: 'name', label: 'Name' },
+                        { id: 'email', label: 'Email' },
+                        { id: 'phone', label: 'Phone' },
+                        { id: 'id', label: 'Sub. ID' },
+                      ].map((sub) => (
+                        <button key={sub.id} onClick={() => setExportSubNamingStrategy(sub.id)}
+                          className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition-all ${exportSubNamingStrategy === sub.id ? 'bg-primary text-white border-primary shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-primary/50'}`}>
+                          {sub.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {exportNamingStrategy === 'school' && (
+                  <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">3. Additional Data</h4>
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-between group hover:border-primary/30 transition-colors">
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">Include Nomination Data?</p>
+                        <p className="text-[10px] text-slate-500">School functionary form & uploads</p>
+                      </div>
+                      <button onClick={() => setIncludeNominationData(!includeNominationData)} className={`w-10 h-5 rounded-full transition-all relative ${includeNominationData ? 'bg-primary shadow-lg shadow-primary/20' : 'bg-slate-300'}`}>
+                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${includeNominationData ? 'left-5.5' : 'left-0.5'}`} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Info size={14} className="text-primary" />
+                    <h4 className="text-[10px] font-bold text-slate-500 uppercase">Current Hierarchy</h4>
+                  </div>
+                  <div className="font-mono text-[10px] space-y-2 text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <span className="text-amber-600">📂 {exportNamingStrategy === 'school' ? '[School_Code]' : `[${exportNamingStrategy.toUpperCase()}_ID]`}</span>
+                    </div>
+                    {exportNamingStrategy === 'school' && (
+                      <div className="flex items-center gap-2 ml-4">
+                        <span className="text-blue-600">📂 [{exportSubNamingStrategy.toUpperCase()}_ID]</span>
+                      </div>
+                    )}
+                    <div className={`${exportNamingStrategy === 'school' ? 'ml-8' : 'ml-4'} text-[9px] text-slate-400 italic space-y-1`}>
+                      <p>📄 submission.xlsx (Teacher Data)</p>
+                      <p>📂 uploads/ (Teacher Files)</p>
+                      {exportNamingStrategy === 'school' && includeNominationData && (
+                        <>
+                          <p className="text-amber-500/70">📄 nomination.xlsx (Functionary Data)</p>
+                          <p className="text-amber-500/70">📂 nomination_uploads/ (Functionary Files)</p>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Right Column: Column Selection */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2"><Layers size={16} className="text-primary" /> Data Columns</h4>
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={() => {
-                        const base = ['id', 'form_title', 'user_name', 'user_email', 'school_code', 'status', 'score'];
-                        const dynamic = filterableFields.map(f => f.id);
-                        const nomKeys = new Set<string>();
-                        const subs = getExportData();
-                        subs.forEach((s: any) => {
-                          const nom = s.nomination_id || s.nominationId;
-                          if (nom && typeof nom === 'object') {
-                            const addData = parseObject(nom.additional_data);
-                            Object.keys(addData).forEach(k => nomKeys.add(k));
-                          }
-                        });
-                        const noms = Array.from(nomKeys).map(k => `nom_${k}`);
-                        setZipSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
-                      }}
-                      className="text-[9px] font-black text-primary hover:underline uppercase tracking-tighter"
-                    >
-                      Select All
-                    </button>
-                    <span className="text-slate-300 text-[9px]">|</span>
-                    <button onClick={() => setZipSelectedFields([])} className="text-[9px] font-black text-rose-500 hover:underline uppercase tracking-tighter">Clear All</button>
+              <div className="lg:col-span-2 space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">3. Select Report Columns</h4>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          const base = ['id', 'form_title', 'user_name', 'user_email', 'school_code', 'status', 'score'];
+                          const dynamic = filterableFields.map(f => f.id);
+                          const nomKeys = new Set<string>();
+                          const subs = getExportData();
+                          subs.forEach((s: any) => {
+                            const nom = s.nomination_id || s.nominationId;
+                            if (nom && typeof nom === 'object') {
+                              const addData = parseObject(nom.additional_data);
+                              Object.keys(addData).forEach(k => nomKeys.add(k));
+                            }
+                          });
+                          const noms = isNominationForm ? buildNominationExportFields(nomKeys).map(f => f.id) : [];
+                          setZipSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
+                        }}
+                        className="text-[9px] font-black text-primary hover:underline uppercase tracking-tighter"
+                      >
+                        Select All
+                      </button>
+                      <span className="text-slate-300 text-[9px]">|</span>
+                      <button onClick={() => setZipSelectedFields([])} className="text-[9px] font-black text-rose-500 hover:underline uppercase tracking-tighter">Clear All</button>
+                    </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 max-h-[450px] overflow-y-auto px-1 custom-scrollbar">
-                  {(() => {
-                    const nomKeys = new Set<string>();
-                    const subs = getExportData();
-                    subs.forEach((s: any) => {
-                      const nom = s.nomination_id || s.nominationId;
-                      if (nom && typeof nom === 'object') {
-                        const addData = parseObject(nom.additional_data);
-                        Object.keys(addData).forEach(k => nomKeys.add(k));
-                      }
-                    });
-                    const nomFields = Array.from(nomKeys).map(k => ({ 
-                      id: `nom_${k}`, 
-                      label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '')}` 
-                    }));
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 max-h-[450px] overflow-y-auto px-1 custom-scrollbar">
+                    {(() => {
+                      const nomKeys = new Set<string>();
+                      const subs = getExportData();
+                      subs.forEach((s: any) => {
+                        const nom = s.nomination_id || s.nominationId;
+                        if (nom && typeof nom === 'object') {
+                          const addData = parseObject(nom.additional_data);
+                          Object.keys(addData).forEach(k => nomKeys.add(k));
+                        }
+                      });
+                      const nomFields = buildNominationExportFields(nomKeys);
 
-                    return [
-                      { label: 'Basic Identity', fields: [
-                        { id: 'id', label: 'Reference ID' },
-                        { id: 'form_title', label: 'Form Title' },
-                        { id: 'user_name', label: 'Submitted By' },
-                        { id: 'user_email', label: 'Email Address' },
-                        { id: 'school_code', label: 'School Code' },
-                        { id: 'status', label: 'Submission Status' },
-                        { id: 'score', label: 'Evaluation Score' },
-                        { id: 'submitted_at', label: 'Timestamp' }
-                      ]},
-                      ...(nomFields.length > 0 ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
-                      ...(filterableFields.length > 0 ? [{ label: 'Form Response Data', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
-                    ].map((section, idx) => (
-                      <div key={idx} className="space-y-3">
-                        <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 p-1 rounded">{section.label}</h5>
-                        <div className="space-y-2.5">
-                          {section.fields.map(field => (
-                            <label key={field.id} className="flex items-center gap-3 group cursor-pointer">
-                              <div className="relative flex items-center">
-                                <input 
-                                  type="checkbox" 
-                                  className="peer appearance-none w-4.5 h-4.5 rounded border-2 border-slate-200 checked:bg-primary checked:border-primary transition-all"
-                                  checked={zipSelectedFields.includes(field.id)}
-                                  onChange={e => {
-                                    if (e.target.checked) setZipSelectedFields(prev => [...prev, field.id]);
-                                    else setZipSelectedFields(prev => prev.filter(id => id !== field.id));
-                                  }}
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center text-white scale-0 peer-checked:scale-100 transition-transform pointer-events-none">
-                                  <CheckCircle size={10} strokeWidth={3} />
+                      return [
+                        { label: 'Basic Identity', fields: [
+                          { id: 'id', label: 'Reference ID' },
+                          { id: 'form_title', label: 'Form Title' },
+                          { id: 'user_name', label: 'Submitted By' },
+                          { id: 'user_email', label: 'Email Address' },
+                          { id: 'school_code', label: 'School Code' },
+                          { id: 'status', label: 'Submission Status' },
+                          { id: 'score', label: 'Evaluation Score' },
+                          { id: 'submitted_at', label: 'Timestamp' }
+                        ]},
+                        ...(nomFields.length > 0 && isNominationForm ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
+                        ...(filterableFields.length > 0 ? [{ label: 'Form Response Data', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
+                      ].map((section, idx) => (
+                        <div key={idx} className="space-y-3">
+                          <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 p-1 rounded">{section.label}</h5>
+                          <div className="space-y-2.5">
+                            {section.fields.map(field => (
+                              <label key={field.id} className="flex items-center gap-3 group cursor-pointer">
+                                <div className="relative flex items-center">
+                                  <input
+                                    type="checkbox"
+                                    className="peer appearance-none w-4.5 h-4.5 rounded border-2 border-slate-200 checked:bg-primary checked:border-primary transition-all"
+                                    checked={zipSelectedFields.includes(field.id)}
+                                    onChange={e => {
+                                      if (e.target.checked) setZipSelectedFields(prev => [...prev, field.id]);
+                                      else setZipSelectedFields(prev => prev.filter(id => id !== field.id));
+                                    }}
+                                  />
+                                  <div className="absolute inset-0 flex items-center justify-center text-white scale-0 peer-checked:scale-100 transition-transform pointer-events-none">
+                                    <CheckCircle size={10} strokeWidth={3} />
+                                  </div>
                                 </div>
-                              </div>
-                              <span className="text-[12px] font-semibold text-slate-700 group-hover:text-primary transition-colors truncate max-w-[180px]">{field.label}</span>
-                            </label>
-                          ))}
+                                <span className="text-[12px] font-semibold text-slate-700 group-hover:text-primary transition-colors truncate max-w-[180px]">{field.label}</span>
+                              </label>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ));
-                  })()}
+                      ));
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2608,13 +2739,13 @@ export default function ReviewSystem({ user }: { user: User }) {
         })()}
       </Modal>
 
-      {/* CSV Export Configuration Modal */}
-      <Modal open={showCsvConfig} onClose={() => setShowCsvConfig(false)} title="Export CSV Configuration" size="lg">
+      {/* Excel (XLSX) Export Configuration Modal */}
+      <Modal open={showCsvConfig} onClose={() => setShowCsvConfig(false)} title="Export Excel (XLSX) Configuration" size="lg">
         <div className="space-y-6">
           <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 flex items-center justify-between">
             <div>
               <h4 className="text-sm font-bold text-primary">Select Columns to Export</h4>
-              <p className="text-[11px] text-muted">Choose which fields you want in your Excel/CSV file</p>
+              <p className="text-[11px] text-muted">Choose which fields you want in your Excel (XLSX) file</p>
             </div>
             <div className="flex gap-2">
               <button 
@@ -2629,7 +2760,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                       Object.keys(addData).forEach(k => nomKeys.add(k));
                     }
                   });
-                  const noms = Array.from(nomKeys).map(k => `nom_${k}`);
+                  const noms = isNominationForm ? buildNominationExportFields(nomKeys).map(f => f.id) : [];
                   setCsvSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
                 }}
                 className="text-[10px] font-bold text-primary hover:underline"
@@ -2651,10 +2782,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                   Object.keys(addData).forEach(k => nomKeys.add(k));
                 }
               });
-              const nomFields = Array.from(nomKeys).map(k => ({ 
-                id: `nom_${k}`, 
-                label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ')}` 
-              }));
+              const nomFields = buildNominationExportFields(nomKeys);
 
               return [
                 { label: 'Basic Info', fields: [
@@ -2667,7 +2795,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                   { id: 'score', label: 'Score' },
                   { id: 'submitted_at', label: 'Submission Date' }
                 ]},
-                ...(nomFields.length > 0 ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
+                ...(nomFields.length > 0 && isNominationForm ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
                 ...(filterableFields.length > 0 ? [{ label: 'Form Specific Fields', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
               ].map((section, idx) => (
                 <div key={idx} className="space-y-3">
@@ -2701,7 +2829,7 @@ export default function ReviewSystem({ user }: { user: User }) {
           <div className="flex gap-3 pt-4 border-t border-border">
             <button onClick={() => setShowCsvConfig(false)} className="flex-1 py-3 bg-surface border border-border rounded-xl text-sm font-bold">Cancel</button>
             <button onClick={handleCsvDownload} className="flex-[2] py-3 bg-primary text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
-              <FileDown size={18} /> Download Excel/CSV
+              <FileDown size={18} /> Download Excel (XLSX)
             </button>
           </div>
         </div>
@@ -2826,7 +2954,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                             Object.keys(addData).forEach(k => nomKeys.add(k));
                           }
                         });
-                        const noms = Array.from(nomKeys).map(k => `nom_${k}`);
+                        const noms = isNominationForm ? buildNominationExportFields(nomKeys).map(f => f.id) : [];
                         setZipSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
                       }}
                       className="text-[9px] font-black text-primary hover:underline uppercase tracking-tighter"
@@ -2848,10 +2976,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                         Object.keys(addData).forEach(k => nomKeys.add(k));
                       }
                     });
-                    const nomFields = Array.from(nomKeys).map(k => ({ 
-                      id: `nom_${k}`, 
-                      label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ')}` 
-                    }));
+                    const nomFields = buildNominationExportFields(nomKeys);
 
                     return [
                       { label: 'Basic Identity', fields: [
@@ -2864,7 +2989,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                         { id: 'score', label: 'Evaluation Score' },
                         { id: 'submitted_at', label: 'Timestamp' }
                       ]},
-                      ...(nomFields.length > 0 ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
+                      ...(nomFields.length > 0 && isNominationForm ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
                       ...(filterableFields.length > 0 ? [{ label: 'Form Response Data', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
                     ].map((section, idx) => (
                       <div key={idx} className="space-y-3">

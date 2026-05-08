@@ -263,7 +263,10 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
       query.$and.push(...fieldFilters);
     }
 
-    const submissions = await Submission.find(query).populate('nominationId');
+    const submissions = await Submission.find(query).populate({
+      path: 'nominationId',
+      populate: { path: 'form_id' }
+    });
     if (submissions.length === 0) return res.status(404).json({ error: 'No submissions found matching the current filters' });
 
     const archive = archiver('zip', { zlib: { level: 9 } });
@@ -272,16 +275,55 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
 
     // Helper to extract field labels
     const fieldMap: Record<string, string> = {};
-    const walkSchema = (list: any[]) => {
+    const nominationLabelMap: Record<string, string> = {};
+
+    const walkSchema = (list: any[], map: Record<string, string>) => {
       if (!Array.isArray(list)) return;
       list.forEach(f => {
-        if (f.id && f.label) fieldMap[f.id] = f.label;
-        if (Array.isArray(f.children)) walkSchema(f.children);
+        if (f.id && f.label) map[f.id] = f.label;
+        if (Array.isArray(f.children)) walkSchema(f.children, map);
       });
     };
+
     if (form.form_schema?.sections) {
-      form.form_schema.sections.forEach((s: any) => walkSchema(s.fields || []));
+      form.form_schema.sections.forEach((s: any) => walkSchema(s.fields || [], fieldMap));
+    } else if (Array.isArray(form.form_schema)) {
+      walkSchema(form.form_schema, fieldMap);
     }
+
+    // Pre-build nomination labels map from all involved nomination forms
+    submissions.forEach(sub => {
+      const nom = sub.nominationId as any;
+      const nomForm = nom?.form_id;
+      if (nomForm) {
+        const settings = typeof nomForm.settings === 'string' ? (()=>{try{return JSON.parse(nomForm.settings)}catch{return {}}})() : (nomForm.settings || {});
+        if (settings.nomination_custom_fields && Array.isArray(settings.nomination_custom_fields)) {
+          settings.nomination_custom_fields.forEach((cf: any) => {
+            if (cf.id && cf.label) {
+              nominationLabelMap[cf.id] = cf.label;
+              // Also map without cf_ prefix
+              const cleanId = String(cf.id).replace(/^cf_/i, '');
+              if (cleanId !== String(cf.id)) nominationLabelMap[cleanId] = cf.label;
+            }
+          });
+        }
+        const schema = typeof nomForm.form_schema === 'string' ? (()=>{try{return JSON.parse(nomForm.form_schema)}catch{return {}}})() : (nomForm.form_schema || {});
+        const walk = (list: any[]) => {
+          if (!Array.isArray(list)) return;
+          list.forEach(f => {
+            if (f.id && f.label) {
+              nominationLabelMap[f.id] = f.label;
+              const cleanId = String(f.id).replace(/^cf_/i, '');
+              if (cleanId !== String(f.id)) nominationLabelMap[cleanId] = f.label;
+            }
+            if (Array.isArray(f.children)) walk(f.children);
+          });
+        };
+        if (schema.sections) schema.sections.forEach((s: any) => walk(s.fields || []));
+        else if (schema.fields) walk(schema.fields);
+        else if (Array.isArray(schema)) walk(schema);
+      }
+    });
 
     for (const sub of submissions) {
       const nomination = sub.nominationId as any;
@@ -411,12 +453,14 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
           nomRows.push(['School Code', nomination.school_code || 'N/A']);
 
           for (const [k, v] of Object.entries(addData)) {
-            nomRows.push([k.replace(/_/g, ' '), String(v)]);
+            const cleanK = String(k).replace(/^cf_/i, '');
+            const label = nominationLabelMap[k] || nominationLabelMap[cleanK] || k.replace(/_/g, ' ').replace(/^cf\s+/i, '').replace(/^cf_/i, '');
+            nomRows.push([label, String(v)]);
   
             // Handle files in nomination data (Cloudinary URLs or local files)
             const fileVal = v as string;
             const isCloudinaryUrl = typeof fileVal === 'string' && (fileVal.includes('res.cloudinary.com') || fileVal.includes('cloudinary'));
-            const isLocalFile = typeof fileVal === 'string' && /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(fileVal);
+            const isLocalFile = typeof fileVal === 'string' && /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp|csv)$/i.test(fileVal);
             if (isCloudinaryUrl || isLocalFile) {
               if (fileVal.startsWith('http')) {
                 try {
@@ -449,7 +493,7 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
       for (const resp of sub.responses) {
         const val = resp.value;
         const isCloudUrl = typeof val === 'string' && (val.includes('res.cloudinary.com') || val.includes('cloudinary'));
-        const isLocalFile = typeof val === 'string' && /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(val);
+        const isLocalFile = typeof val === 'string' && /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp|csv)$/i.test(val);
         
         if (isCloudUrl || isLocalFile) {
           const fileName = val as string;

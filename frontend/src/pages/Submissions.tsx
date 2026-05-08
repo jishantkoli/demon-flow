@@ -35,9 +35,6 @@ export default function Submissions({ user }: { user: User }) {
   const [nominationFieldMap, setNominationFieldMap] = useState<Record<string, string>>({});
   const [processedNomFormIds, setProcessedNomFormIds] = useState<Set<string>>(new Set());
 
-  const canSeeScore = user.role === 'admin' || user.role === 'reviewer' || user.role === 'functionary';
-  const canViewNominationDetails = user.role !== 'teacher';
-  const showNominationDetails = canViewNominationDetails && !!selectedNomination;
   const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const emailLocal = (v: any) => norm(v).split('@')[0];
   const compact = (v: any) => norm(v).replace(/[^a-z0-9]/g, '');
@@ -92,6 +89,13 @@ export default function Submissions({ user }: { user: User }) {
     const formType = f?.form_type || f?.formType || row?.form_type || row?.formType;
     return formType === 'nomination';
   };
+
+  const effectiveForm = (formFilter ? forms.find(f => String(f.id || f._id) === String(formFilter)) : null) || (Array.isArray(selectedFormObj) ? selectedFormObj[0] : selectedFormObj);
+  const isNominationForm = !!formFilter && (effectiveForm?.form_type === 'nomination' || effectiveForm?.formType === 'nomination');
+
+  const canSeeScore = user.role === 'admin' || user.role === 'reviewer' || user.role === 'functionary';
+  const canViewNominationDetails = user.role !== 'teacher';
+  const showNominationDetails = canViewNominationDetails && !!selectedNomination;
 
   const isAnonymousDirectForm = (row: any) => {
     const f = getFormForSubmission(row);
@@ -225,14 +229,16 @@ export default function Submissions({ user }: { user: User }) {
         }
       });
 
+      // Clear previous nomination field map to prevent pollution across forms
+      const newFieldMap: Record<string, string> = {};
+      const newProcessed = new Set<string>();
+
       if (nomFormIds.size > 0) {
-        const idsToFetch = Array.from(nomFormIds).filter(id => !processedNomFormIds.has(id));
+        const idsToFetch = Array.from(nomFormIds);
         if (idsToFetch.length > 0) {
           const nomForms = await Promise.all(
             idsToFetch.map(id => api.get(`/forms?id=${id}`).catch(() => null))
           );
-          const newFieldMap: Record<string, string> = { ...nominationFieldMap };
-          const newProcessed = new Set(processedNomFormIds);
           
           nomForms.forEach(rawNf => {
             const nf = Array.isArray(rawNf) ? rawNf[0] : rawNf;
@@ -538,6 +544,37 @@ export default function Submissions({ user }: { user: User }) {
     setNewComment('');
   };
 
+  const buildNominationExportFields = (nomKeys: Set<string>) => {
+    const staticFields = [
+      { id: 'nom_teacher_name', label: 'Nomination: Nominated Name' },
+      { id: 'nom_teacher_email', label: 'Nomination: Nominated Email' },
+      { id: 'nom_nom_school_code', label: 'Nomination: School Code' },
+    ];
+    const dynamicFields = Array.from(nomKeys).map(k => ({
+      id: `nom_${k}`,
+      label: nominationFieldMap[k]
+        ? `Nomination: ${nominationFieldMap[k]}`
+        : `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '').replace(/^cf_/i, '')}`
+    }));
+    const seenIds = new Set<string>();
+    const seenLabels = new Set<string>();
+    
+    return [...staticFields, ...dynamicFields].filter(f => {
+      if (seenIds.has(f.id)) return false;
+      if (seenLabels.has(f.label)) return false; // Prevent duplicate labels
+      
+      // Skip redundant IDs if they match static fields
+      const cleanKey = f.id.replace('nom_', '');
+      if (['teacher_name', 'teacher_email', 'school_code', 'nom_school_code'].includes(cleanKey)) {
+         if (f.id !== 'nom_teacher_name' && f.id !== 'nom_teacher_email' && f.id !== 'nom_nom_school_code') return false;
+      }
+      
+      seenIds.add(f.id);
+      seenLabels.add(f.label);
+      return true;
+    });
+  };
+
   const exportCSV = async () => {
     // Collect all possible fields
     const baseFields = [
@@ -562,10 +599,7 @@ export default function Submissions({ user }: { user: User }) {
       }
     });
 
-    const functionaryFields = Array.from(nominationKeys).map(k => ({
-      id: `nom_${k}`,
-      label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '')}`
-    }));
+    const functionaryFields = buildNominationExportFields(nominationKeys);
 
     const dateField = { id: 'submitted_at', label: 'Submission Date' };
 
@@ -608,10 +642,7 @@ export default function Submissions({ user }: { user: User }) {
       }
     });
 
-    const functionaryFields = Array.from(nominationKeys).map(k => ({
-      id: `nom_${k}`,
-      label: nominationFieldMap[k] ? `Nomination: ${nominationFieldMap[k]}` : `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '')}`
-    }));
+    const functionaryFields = buildNominationExportFields(nominationKeys);
 
     const dateField = { id: 'submitted_at', label: 'Submission Date' };
 
@@ -636,6 +667,9 @@ export default function Submissions({ user }: { user: User }) {
         if (f.id === 'submitted_at') return formatDate(s.submitted_at || '');
         
         if (f.id.startsWith('nom_')) {
+          if (f.id === 'nom_teacher_name') return nom?.teacher_name || '';
+          if (f.id === 'nom_teacher_email') return nom?.teacher_email || '';
+          if (f.id === 'nom_nom_school_code') return nom?.school_code || '';
           const key = f.id.replace('nom_', '');
           const val = nomData[key];
           if (val === undefined || val === null) return '';
@@ -680,7 +714,7 @@ export default function Submissions({ user }: { user: User }) {
         Object.keys(addData).forEach(k => nomKeys.add(k));
       }
     });
-    const noms = Array.from(nomKeys).map(k => `nom_${k}`);
+    const noms = buildNominationExportFields(nomKeys).map(f => f.id);
     setZipSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
     
     setShowExportConfig(true);
@@ -811,7 +845,7 @@ export default function Submissions({ user }: { user: User }) {
           const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(stringVal) || /^\/?uploads\//i.test(stringVal);
           const isFile = typeof val === 'string' && (
             field?.type === 'file' ||
-            /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(stringVal) ||
+            /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp|csv)$/i.test(stringVal) ||
             stringVal.includes('res.cloudinary.com') ||
             isUploadPath
           );
@@ -822,6 +856,8 @@ export default function Submissions({ user }: { user: User }) {
           if (Array.isArray(val)) return val.join(', ');
           const options = Array.isArray(field?.options) ? field.options : [];
           if (options.length > 0) {
+            const opt = options.find((o: any) => String(o.value) === String(val));
+            if (opt) return String(opt.label);
             const idx = Number(String(val));
             if (!Number.isNaN(idx) && options[idx] !== undefined) return String(options[idx]);
           }
@@ -845,7 +881,7 @@ export default function Submissions({ user }: { user: User }) {
         </div>
         {user.role === 'admin' && (
           <div className="flex items-center gap-2">
-            <button onClick={exportCSV} className="inline-flex items-center gap-2 px-4 py-2 bg-surface-card border border-border rounded-xl text-sm font-medium hover:bg-surface shadow-sm"><FileDown size={16} /> Export Excel</button>
+            <button onClick={exportCSV} className="inline-flex items-center gap-2 px-4 py-2 bg-surface-card border border-border rounded-xl text-sm font-medium hover:bg-surface shadow-sm"><FileDown size={16} /> Export Excel (XLSX)</button>
             <button onClick={exportZIP} className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-hover shadow-sm"><Archive size={16} /> Export ZIP</button>
           </div>
         )}
@@ -1109,7 +1145,7 @@ export default function Submissions({ user }: { user: User }) {
                             Object.keys(addData).forEach(k => nomKeys.add(k));
                           }
                         });
-                        const noms = Array.from(nomKeys).map(k => `nom_${k}`);
+                        const noms = isNominationForm ? buildNominationExportFields(nomKeys).map(f => f.id) : [];
                         setZipSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
                       }}
                       className="text-[9px] font-black text-primary hover:underline uppercase tracking-tighter"
@@ -1131,12 +1167,7 @@ export default function Submissions({ user }: { user: User }) {
                         Object.keys(addData).forEach(k => nomKeys.add(k));
                       }
                     });
-                    const nomFields = Array.from(nomKeys).map(k => ({
-                      id: `nom_${k}`,
-                      label: nominationFieldMap[k]
-                        ? `Nomination: ${nominationFieldMap[k]}`
-                        : `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '')}`
-                    }));
+                    const nomFields = buildNominationExportFields(nomKeys);
 
                     return [
                       { label: 'Basic Identity', fields: [
@@ -1149,7 +1180,7 @@ export default function Submissions({ user }: { user: User }) {
                         { id: 'score', label: 'Evaluation Score' },
                         { id: 'submitted_at', label: 'Timestamp' }
                       ]},
-                      ...(nomFields.length > 0 ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
+                      ...(nomFields.length > 0 && isNominationForm ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
                       ...(filterableFields.length > 0 ? [{ label: 'Form Response Data', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
                     ].map((section, idx) => (
                       <div key={idx} className="space-y-3">
@@ -1201,12 +1232,12 @@ export default function Submissions({ user }: { user: User }) {
         </div>
       </Modal>
 
-      <Modal open={showCsvConfig} onClose={() => setShowCsvConfig(false)} title="Export Excel Configuration" size="lg">
+      <Modal open={showCsvConfig} onClose={() => setShowCsvConfig(false)} title="Export Excel (XLSX) Configuration" size="lg">
         <div className="space-y-6">
           <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 flex items-center justify-between">
             <div>
               <h4 className="text-sm font-bold text-primary">Select Columns to Export</h4>
-              <p className="text-[11px] text-muted">Choose which fields you want in your Excel file</p>
+              <p className="text-[11px] text-muted">Choose which fields you want in your Excel (XLSX) file</p>
             </div>
             <div className="flex gap-2">
               <button 
@@ -1221,7 +1252,7 @@ export default function Submissions({ user }: { user: User }) {
                       Object.keys(addData).forEach(k => nomKeys.add(k));
                     }
                   });
-                  const noms = Array.from(nomKeys).map(k => `nom_${k}`);
+                  const noms = isNominationForm ? buildNominationExportFields(nomKeys).map(f => f.id) : [];
                   setCsvSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
                 }}
                 className="text-[10px] font-bold text-primary hover:underline"
@@ -1243,12 +1274,7 @@ export default function Submissions({ user }: { user: User }) {
                   Object.keys(addData).forEach(k => nomKeys.add(k));
                 }
               });
-              const nomFields = Array.from(nomKeys).map(k => ({
-                id: `nom_${k}`,
-                label: nominationFieldMap[k]
-                  ? `Nomination: ${nominationFieldMap[k]}`
-                  : `Nomination: ${k.replace(/_/g, ' ').replace(/^cf\s+/i, '')}`
-              }));
+              const nomFields = buildNominationExportFields(nomKeys);
 
               return [
                 { label: 'Basic Info', fields: [
@@ -1261,7 +1287,7 @@ export default function Submissions({ user }: { user: User }) {
                   { id: 'score', label: 'Score' },
                   { id: 'submitted_at', label: 'Submission Date' }
                 ]},
-                ...(nomFields.length > 0 ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
+                ...(nomFields.length > 0 && isNominationForm ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
                 ...(filterableFields.length > 0 ? [{ label: 'Form Specific Fields', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
               ].map((section, idx) => (
                 <div key={idx} className="space-y-3">
@@ -1295,7 +1321,7 @@ export default function Submissions({ user }: { user: User }) {
           <div className="flex gap-3 pt-4 border-t border-border">
             <button onClick={() => setShowCsvConfig(false)} className="flex-1 py-3 bg-surface border border-border rounded-xl text-sm font-bold">Cancel</button>
             <button onClick={handleCsvDownload} className="flex-[2] py-3 bg-primary text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
-              <FileDown size={18} /> Download Excel
+              <FileDown size={18} /> Download Excel (XLSX)
             </button>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 
 interface Column { key: string; label: string; sortable?: boolean; render?: (value: any, row: any) => React.ReactNode; hidden?: boolean; }
 interface DataTableProps {
@@ -18,6 +18,10 @@ export default function DataTable({
 }: DataTableProps) {
   const [internalSearch, setInternalSearch] = useState('');
   const search = searchValue !== undefined ? searchValue : internalSearch;
+
+  const handlePrint = () => {
+    window.print();
+  };
   const handleSearchChange = (val: string) => {
     if (onSearch) onSearch(val);
     else setInternalSearch(val);
@@ -34,7 +38,28 @@ export default function DataTable({
     // Only filter client-side if we are NOT using external search
     if (search && !onSearch) {
       const q = search.toLowerCase();
-      result = result.filter(row => visibleCols.some(col => String(row[col.key] || '').toLowerCase().includes(q)));
+      result = result.filter(row => {
+        // 1. Search in visible column keys
+        const matchInCols = visibleCols.some(col => String(row[col.key] || '').toLowerCase().includes(q));
+        if (matchInCols) return true;
+
+        // 2. Deep search in responses if they exist
+        let responses = row.responses;
+        if (typeof responses === 'string') {
+          try { responses = JSON.parse(responses); } catch { responses = []; }
+        }
+        if (Array.isArray(responses)) {
+          const matchInResponses = responses.some(r => String(r.value || '').toLowerCase().includes(q));
+          if (matchInResponses) return true;
+        } else if (responses && typeof responses === 'object') {
+          const matchInResponses = Object.values(responses).some(v => String(v || '').toLowerCase().includes(q));
+          if (matchInResponses) return true;
+        }
+
+        // 3. Search in other common fields that might not be visible as columns
+        const otherFields = ['user_email', 'userEmail', 'school_code', 'schoolCode', 'form_title', 'formTitle'];
+        return otherFields.some(f => String(row[f] || '').toLowerCase().includes(q));
+      });
     }
     if (sortKey) {
       result = [...result].sort((a, b) => {
@@ -51,10 +76,10 @@ export default function DataTable({
   const toggleSort = (key: string) => { if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortKey(key); setSortDir('asc'); } };
 
   return (
-    <div className="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm relative">
+    <div className="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm relative print-container">
       {/* Loading overlay for smoother search/filter experience */}
       {loading && (
-        <div className="absolute inset-0 bg-surface/40 backdrop-blur-[1px] z-10 flex items-center justify-center">
+        <div className="absolute inset-0 bg-surface/40 backdrop-blur-[1px] z-10 flex items-center justify-center no-print">
           <div className="flex flex-col items-center gap-2 bg-white/80 p-4 rounded-2xl shadow-xl border border-border animate-in zoom-in-95 duration-200">
             <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
             <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Loading...</p>
@@ -63,13 +88,19 @@ export default function DataTable({
       )}
 
       {(title || headerActions) && (
-        <div className="px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+        <div className="px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3 no-print">
           <div>{title && <h3 className="font-semibold font-heading text-sm">{title}</h3>}{subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}</div>
           {headerActions}
         </div>
       )}
+      {/* Printable Title (Only visible during print) */}
+      <div className="print-only hidden py-6 text-center">
+        <h1 className="text-2xl font-bold text-black uppercase tracking-wider">{title || 'Form Submissions Data'}</h1>
+        <p className="text-sm text-gray-500 mt-1">Generated on {new Date().toLocaleDateString()}</p>
+      </div>
+
       {(searchable || filters) && (
-        <div className="px-5 py-3 border-b border-border/50 flex flex-wrap items-center gap-3">
+        <div className="px-5 py-3 border-b border-border/50 flex flex-wrap items-center gap-3 no-print">
           {searchable && (
             <div className="flex items-center gap-2 bg-surface rounded-xl px-3 py-2 flex-1 min-w-[200px] max-w-sm border border-border">
               <Search size={14} className="text-muted" />
@@ -77,10 +108,20 @@ export default function DataTable({
                 className="bg-transparent text-sm outline-none w-full placeholder-muted" aria-label="Search" />
             </div>
           )}
-          {filters}
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handlePrint}
+              className="flex items-center gap-2 px-3 py-2 bg-surface hover:bg-slate-50 text-slate-700 rounded-xl border border-border text-sm font-medium transition-colors"
+              title="Print Table"
+            >
+              <Printer size={14} />
+              <span>Print</span>
+            </button>
+            {filters}
+          </div>
         </div>
       )}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto printable-area">
         <table className="w-full" role="table">
           <thead>
             <tr className="border-b border-border">

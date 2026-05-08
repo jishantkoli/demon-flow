@@ -108,3 +108,89 @@
 @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 .skeleton { background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
 
+@layer utilities {
+  .no-print {
+    display: flex !important;
+  }
+  .print-only {
+    display: none !important;
+  }
+}
+
+@media print {
+  /* Hide everything by default */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show only the targeted print container and its contents */
+  .print-container, .print-container * {
+    visibility: visible;
+  }
+
+  /* Position the print container at the top left */
+  .print-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Hide specific UI elements inside the container */
+  .no-print, .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Show print-only header */
+  .print-only {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  /* Refine table formatting for print */
+  .printable-area {
+    overflow: visible !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 11pt !important;
+    color: black !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important;
+    color: black !important;
+    font-weight: bold !important;
+    border: 1px solid #cbd5e1 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  td {
+    border: 1px solid #e2e8f0 !important;
+    padding: 10px !important;
+    word-break: break-word !important;
+  }
+
+  /* Remove backgrounds/shadows for better printing */
+  body {
+    background: white !important;
+  }
+
+  /* Page breaks */
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Hide actions column during print */
+  th:last-child, td:last-child {
+    display: none !important;
+  }
+}
+
