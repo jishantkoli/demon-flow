@@ -5,8 +5,9 @@ import { api } from '../lib/api';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
-import { Eye, MessageSquare, Filter, Send, FileDown, Inbox, ExternalLink, Archive, User as UserIcon, Mail, Hash, School, Fingerprint, Search, X, SlidersHorizontal, Info, ChevronDown, CheckCircle } from 'lucide-react';
+import { Eye, MessageSquare, Filter, Send, FileDown, Inbox, ExternalLink, Archive, User as UserIcon, Mail, Hash, School, Fingerprint, Search, X, SlidersHorizontal, Info, ChevronDown, CheckCircle, Layers, Printer, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 
 export default function Submissions({ user }: { user: User }) {
   const navigate = useNavigate();
@@ -21,6 +22,8 @@ export default function Submissions({ user }: { user: User }) {
   const [statusFilter, setStatusFilter] = useState('');
   const [forms, setForms] = useState<any[]>([]);
   const [formFilter, setFormFilter] = useState('');
+  const [levelFilter, setLevelFilter] = useState<number[]>([]);
+  const [showLevelFilterDropdown, setShowLevelFilterDropdown] = useState(false);
   const [schoolFilter, setSchoolFilter] = useState('');
   const [includeReviews, setIncludeReviews] = useState(false);
   const [search, setSearch] = useState('');
@@ -30,6 +33,8 @@ export default function Submissions({ user }: { user: User }) {
   const [exportNamingStrategy, setExportNamingStrategy] = useState('email');
   const [exportSubNamingStrategy, setExportSubNamingStrategy] = useState('name');
   const [includeNominationData, setIncludeNominationData] = useState(true);
+  const [isBulkPrinting, setIsBulkPrinting] = useState(false);
+  const [isBulkZipping, setIsBulkZipping] = useState(false);
   const [zipSelectedFields, setZipSelectedFields] = useState<string[]>([]);
   const [visibleFields, setVisibleFields] = useState<string[]>([]);
   const [nominationFieldMap, setNominationFieldMap] = useState<Record<string, string>>({});
@@ -194,6 +199,7 @@ export default function Submissions({ user }: { user: User }) {
       if (user.role === 'teacher') url += `user_id=${user.id}&`;
       if (statusFilter) url += `status=${statusFilter}&`;
       if (formFilter) url += `form_id=${formFilter}&`;
+      if (levelFilter.length > 0) url += `level=${levelFilter.join(',')}&`;
       if (schoolFilter) url += `school_code=${encodeURIComponent(schoolFilter)}&`;
       if (search) url += `search=${encodeURIComponent(search)}&`;
       
@@ -296,7 +302,7 @@ export default function Submissions({ user }: { user: User }) {
       fetchData(); 
     }, 300);
     return () => clearTimeout(timer);
-  }, [statusFilter, formFilter, schoolFilter, search]);
+  }, [statusFilter, formFilter, levelFilter, schoolFilter, search]);
 
   const getFilterableFields = () => {
     if (!formFilter) return [];
@@ -768,6 +774,312 @@ export default function Submissions({ user }: { user: User }) {
     }
   };
 
+  const printBulkProfiles = async () => {
+    if (submissions.length === 0) {
+      alert('No submissions found to print.');
+      return;
+    }
+
+    if (submissions.length > 50) {
+      if (!confirm(`You are about to print ${submissions.length} profiles. This may take a while. Continue?`)) {
+        return;
+      }
+    }
+
+    setIsBulkPrinting(true);
+    try {
+      const printWindow = window.open('', '_blank', 'width=1100,height=850');
+      if (!printWindow) {
+        alert('Popup blocked. Please allow popups to print profiles.');
+        setIsBulkPrinting(false);
+        return;
+      }
+
+      let combinedHtml = `
+        <!doctype html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Bulk Profiles Print - Submissions</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; line-height: 1.45; }
+            .page { padding: 24px; page-break-after: always; min-height: 100vh; }
+            .page:last-child { page-break-after: auto; }
+            .header { border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+            .title { font-size: 22px; font-weight: 700; margin: 0; }
+            .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; font-size: 13px; }
+            .muted { color: #475569; font-size: 12px; }
+            .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin: 12px 0; page-break-inside: avoid; }
+            h2 { margin: 0 0 10px 0; font-size: 18px; }
+            h3 { margin: 0 0 6px 0; font-size: 15px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; vertical-align: top; font-size: 12px; }
+            th { background: #f8fafc; font-weight: 700; }
+            @media print {
+              body { margin: 0; }
+              .page { padding: 12mm; border: none; }
+            }
+          </style>
+        </head>
+        <body>
+      `;
+
+      for (const sub of submissions) {
+        try {
+          // Fetch full details (similar to openDetail)
+          const formIdParam = sub.form_id || sub.formId;
+          const nominationIdParamRaw = sub.nomination_id || sub.nominationId;
+          const nominationIdParam = typeof nominationIdParamRaw === 'object'
+            ? (nominationIdParamRaw?._id || nominationIdParamRaw?.id || '')
+            : nominationIdParamRaw;
+          
+          const [comms, formRes, nomsRes] = await Promise.all([
+            api.get(`/comments?submission_id=${sub.id}`).catch(() => []),
+            formIdParam ? api.get(`/forms?id=${formIdParam}`).catch(() => null) : Promise.resolve(null),
+            nominationIdParam ? api.get(`/nominations?id=${nominationIdParam}`).catch(() => []) : Promise.resolve([])
+          ]);
+
+          const formObj = Array.isArray(formRes) ? formRes[0] : formRes;
+          const allNoms = Array.isArray(nomsRes) ? nomsRes : (nomsRes as any)?.data ? [(nomsRes as any).data] : [nomsRes];
+          const nomination = pickBestNomination(allNoms, sub, nominationIdParam);
+          
+          const { name } = extractNameEmailFromSubmission(sub);
+          const displayName = toTitleCase(isAnonymousDirectForm(sub) ? (name || 'Anonymous') : (sub.user_name || name || 'Anonymous'));
+          const statusText = String(sub.status || 'N/A').replace(/_/g, ' ');
+          const scoreVal = sub.score != null ? `${Number(typeof sub.score === 'object' ? sub.score?.percentage : sub.score).toFixed(2)}%` : 'N/A';
+
+          // Responses
+          let responses: Record<string, any> = {};
+          if (sub.responses) {
+            try {
+              const parsed = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : sub.responses;
+              if (Array.isArray(parsed)) parsed.forEach((r: any) => { if (r.fieldId) responses[r.fieldId] = r.value; });
+              else responses = parsed || {};
+            } catch { responses = {}; }
+          }
+
+          // Field Map
+          const currentFieldMap: Record<string, any> = {};
+          const walk = (list: any[]) => {
+            if (!Array.isArray(list)) return;
+            list.forEach((f: any) => {
+              if (f?.id) currentFieldMap[f.id] = f;
+              if (f?.children) walk(f.children);
+            });
+          };
+          const schemaSource = formObj?.form_schema || formObj?.schema;
+          if (schemaSource) {
+            const parsed = typeof schemaSource === 'string' ? JSON.parse(schemaSource) : schemaSource;
+            if (Array.isArray(parsed)) walk(parsed);
+            else if (parsed?.sections) parsed.sections.forEach((s: any) => walk(s.fields || []));
+            else if (parsed?.fields) walk(parsed.fields);
+          }
+
+          const responsesHtml = Object.keys(responses).length > 0
+            ? Object.entries(responses).map(([k, v], idx) => {
+                const field = currentFieldMap[k];
+                const label = field?.label || k;
+                let displayValue = '';
+                const strVal = typeof v === 'string' ? v.trim() : '';
+                const isFile = typeof v === 'string' && (field?.type === 'file' || /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) || strVal.includes('res.cloudinary.com'));
+                displayValue = isFile ? '<span style="color: #2563eb; font-weight: bold;">[File Attached]</span>' : String(formatResponseValue(k, v, currentFieldMap));
+                return `<tr><td>${idx + 1}</td><td>${label}</td><td>${displayValue}</td></tr>`;
+              }).join('')
+            : '<tr><td colspan="3">No responses found.</td></tr>';
+
+          const nomData = nomination ? parseObject(nomination.additional_data) : {};
+          const nominationHtml = nomination && Object.keys(nomData).length > 0
+            ? `<section class="card"><h2>School Functionary Details</h2><div class="meta"><div><strong>Nominated Teacher:</strong> ${nomination.teacher_name}</div><div><strong>School Code:</strong> ${nomination.school_code}</div>${Object.entries(nomData).map(([key, val]) => `<div><strong>${nominationFieldMap[key] || key.replace(/_/g, ' ')}:</strong> ${String(val)}</div>`).join('')}</div></section>`
+            : '';
+
+          combinedHtml += `
+            <div class="page">
+              <section class="header">
+                <h1 class="title">${displayName}</h1>
+                <div class="muted">${sub.user_email || ''}</div>
+                <div class="meta">
+                  <div><strong>Form:</strong> ${sub.form_title || '-'}</div>
+                  <div><strong>Status:</strong> ${statusText}</div>
+                  <div><strong>Score:</strong> ${scoreVal}</div>
+                  <div><strong>Submitted:</strong> ${new Date(sub.submitted_at).toLocaleDateString()}</div>
+                </div>
+              </section>
+              ${nominationHtml}
+              <section class="card"><h2>Form Responses</h2><table><thead><tr><th>#</th><th>Field</th><th>Response</th></tr></thead><tbody>${responsesHtml}</tbody></table></section>
+            </div>
+          `;
+        } catch (e) {
+          console.error('Error adding submission to bulk print:', e);
+        }
+      }
+
+      combinedHtml += '</body></html>';
+      printWindow.document.open();
+      printWindow.document.write(combinedHtml);
+      printWindow.document.close();
+
+      setTimeout(() => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch {
+          alert('Unable to start printing automatically. Please use Ctrl+P in the print window.');
+        }
+        setIsBulkPrinting(false);
+      }, 500);
+
+    } catch (err: any) {
+      console.error('Bulk Print Error:', err);
+      alert('Failed to generate bulk print: ' + err.message);
+      setIsBulkPrinting(false);
+    }
+  };
+
+  const zipBulkProfiles = async () => {
+    if (submissions.length === 0) {
+      alert('No submissions found to ZIP.');
+      return;
+    }
+
+    if (submissions.length > 50) {
+      if (!confirm(`You are about to generate ZIP for ${submissions.length} profiles. This may take a while. Continue?`)) {
+        return;
+      }
+    }
+
+    setIsBulkZipping(true);
+    const zip = new JSZip();
+
+    try {
+      for (const sub of submissions) {
+        try {
+          // Fetch full details
+          const formIdParam = sub.form_id || sub.formId;
+          const nominationIdParamRaw = sub.nomination_id || sub.nominationId;
+          const nominationIdParam = typeof nominationIdParamRaw === 'object'
+            ? (nominationIdParamRaw?._id || nominationIdParamRaw?.id || '')
+            : nominationIdParamRaw;
+          
+          const [comms, formRes, nomsRes] = await Promise.all([
+            api.get(`/comments?submission_id=${sub.id}`).catch(() => []),
+            formIdParam ? api.get(`/forms?id=${formIdParam}`).catch(() => null) : Promise.resolve(null),
+            nominationIdParam ? api.get(`/nominations?id=${nominationIdParam}`).catch(() => []) : Promise.resolve([])
+          ]);
+
+          const formObj = Array.isArray(formRes) ? formRes[0] : formRes;
+          const allNoms = Array.isArray(nomsRes) ? nomsRes : (nomsRes as any)?.data ? [(nomsRes as any).data] : [nomsRes];
+          const nomination = pickBestNomination(allNoms, sub, nominationIdParam);
+          
+          const { name } = extractNameEmailFromSubmission(sub);
+          const displayName = toTitleCase(isAnonymousDirectForm(sub) ? (name || 'Anonymous') : (sub.user_name || name || 'Anonymous'));
+          const statusText = String(sub.status || 'N/A').replace(/_/g, ' ');
+          const scoreVal = sub.score != null ? `${Number(typeof sub.score === 'object' ? sub.score?.percentage : sub.score).toFixed(2)}%` : 'N/A';
+
+          // Responses
+          let responses: Record<string, any> = {};
+          if (sub.responses) {
+            try {
+              const parsed = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : sub.responses;
+              if (Array.isArray(parsed)) parsed.forEach((r: any) => { if (r.fieldId) responses[r.fieldId] = r.value; });
+              else responses = parsed || {};
+            } catch { responses = {}; }
+          }
+
+          // Field Map
+          const currentFieldMap: Record<string, any> = {};
+          const walk = (list: any[]) => {
+            if (!Array.isArray(list)) return;
+            list.forEach((f: any) => {
+              if (f?.id) currentFieldMap[f.id] = f;
+              if (f?.children) walk(f.children);
+            });
+          };
+          const schemaSource = formObj?.form_schema || formObj?.schema;
+          if (schemaSource) {
+            const parsed = typeof schemaSource === 'string' ? JSON.parse(schemaSource) : schemaSource;
+            if (Array.isArray(parsed)) walk(parsed);
+            else if (parsed?.sections) parsed.sections.forEach((s: any) => walk(s.fields || []));
+            else if (parsed?.fields) walk(parsed.fields);
+          }
+
+          const responsesHtml = Object.keys(responses).length > 0
+            ? Object.entries(responses).map(([k, v], idx) => {
+                const field = currentFieldMap[k];
+                const label = field?.label || k;
+                let displayValue = '';
+                const strVal = typeof v === 'string' ? v.trim() : '';
+                const isFile = typeof v === 'string' && (field?.type === 'file' || /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) || strVal.includes('res.cloudinary.com'));
+                displayValue = isFile ? `<span style="color: #2563eb; font-weight: bold;">[File Attached]</span>` : String(formatResponseValue(k, v, currentFieldMap));
+                return `<tr><td>${idx + 1}</td><td>${label}</td><td>${displayValue}</td></tr>`;
+              }).join('')
+            : '<tr><td colspan="3">No responses found.</td></tr>';
+
+          const nomData = nomination ? parseObject(nomination.additional_data) : {};
+          const nominationHtml = nomination && Object.keys(nomData).length > 0
+            ? `<section class="card"><h2>School Functionary Details</h2><div class="meta"><div><strong>Nominated Teacher:</strong> ${nomination.teacher_name}</div><div><strong>School Code:</strong> ${nomination.school_code}</div>${Object.entries(nomData).map(([key, val]) => `<div><strong>${nominationFieldMap[key] || key.replace(/_/g, ' ')}:</strong> ${String(val)}</div>`).join('')}</div></section>`
+            : '';
+
+          const htmlContent = `
+            <!doctype html>
+            <html>
+            <head>
+              <meta charset="utf-8" />
+              <title>${displayName} - Profile</title>
+              <style>
+                body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; padding: 24px; line-height: 1.45; }
+                .header { border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+                .title { font-size: 22px; font-weight: 700; margin: 0; }
+                .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; font-size: 13px; }
+                .muted { color: #475569; font-size: 12px; }
+                .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin: 12px 0; }
+                h2 { margin: 0 0 10px 0; font-size: 18px; }
+                h3 { margin: 0 0 6px 0; font-size: 15px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+                th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; vertical-align: top; font-size: 12px; }
+                th { background: #f8fafc; font-weight: 700; }
+              </style>
+            </head>
+            <body>
+              <section class="header">
+                <h1 class="title">${displayName}</h1>
+                <div class="muted">${sub.user_email || ''}</div>
+                <div class="meta">
+                  <div><strong>Form:</strong> ${sub.form_title || '-'}</div>
+                  <div><strong>Status:</strong> ${statusText}</div>
+                  <div><strong>Score:</strong> ${scoreVal}</div>
+                  <div><strong>Submitted:</strong> ${new Date(sub.submitted_at).toLocaleDateString()}</div>
+                </div>
+              </section>
+              ${nominationHtml}
+              <section class="card"><h2>Form Responses</h2><table><thead><tr><th>#</th><th>Field</th><th>Response</th></tr></thead><tbody>${responsesHtml}</tbody></table></section>
+            </body>
+            </html>
+          `;
+
+          const fileName = `${displayName.replace(/[^a-z0-9]/gi, '_')}_${sub.id}.html`;
+          zip.file(fileName, htmlContent);
+        } catch (e) {
+          console.error('Error adding submission to bulk ZIP:', e);
+        }
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = window.URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Submissions_Rendered_Profiles.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      setIsBulkZipping(false);
+
+    } catch (err: any) {
+      console.error('Bulk ZIP Error:', err);
+      alert('Failed to generate bulk ZIP: ' + err.message);
+      setIsBulkZipping(false);
+    }
+  };
+
   let responses: Record<string, any> = {};
   if (selected?.responses) { 
     try { 
@@ -847,6 +1159,7 @@ export default function Submissions({ user }: { user: User }) {
       ) 
     },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
+    { key: 'currentLevel', label: 'Level', sortable: true, render: (v: any) => <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{v === 0 ? 'Initial' : `Level ${v}`}</span> },
     { key: 'score', label: 'Score', sortable: true, hidden: !canSeeScore, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{Number(typeof v === 'object' ? v?.percentage : v).toFixed(2)}%</span> : <span className="text-muted">—</span> },
     ...visibleFields.map(fieldId => {
       const field = fieldMap[fieldId];
@@ -892,6 +1205,30 @@ export default function Submissions({ user }: { user: User }) {
           <div className="flex items-center gap-2">
             <button onClick={exportCSV} className="inline-flex items-center gap-2 px-4 py-2 bg-surface-card border border-border rounded-xl text-sm font-medium hover:bg-surface shadow-sm"><FileDown size={16} /> Export Excel (XLSX)</button>
             <button onClick={exportZIP} className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-hover shadow-sm"><Archive size={16} /> Export ZIP</button>
+            <button 
+              onClick={printBulkProfiles} 
+              disabled={isBulkPrinting}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-medium hover:bg-slate-900 shadow-sm disabled:opacity-50 transition-all"
+            >
+              {isBulkPrinting ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Printer size={16} />
+              )}
+              <span>{isBulkPrinting ? 'Preparing...' : 'Bulk Print Profiles'}</span>
+            </button>
+            <button 
+              onClick={zipBulkProfiles} 
+              disabled={isBulkZipping}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-xl text-sm font-medium hover:bg-slate-700 shadow-sm disabled:opacity-50 transition-all"
+            >
+              {isBulkZipping ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Download size={16} />
+              )}
+              <span>{isBulkZipping ? 'Preparing ZIP...' : 'ZIP Profiles'}</span>
+            </button>
           </div>
         )}
       </div>
@@ -908,6 +1245,65 @@ export default function Submissions({ user }: { user: User }) {
                 <option value="">All Forms</option>
                 {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
               </select>
+            </div>
+
+            <div className="relative">
+              <button 
+                onClick={() => setShowLevelFilterDropdown(!showLevelFilterDropdown)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm text-xs font-bold text-slate-700 min-w-[120px] justify-between hover:border-primary transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Layers size={14} className="text-primary" />
+                  <span>
+                    {levelFilter.length === 0 
+                      ? "All Levels" 
+                      : levelFilter.length === 1 
+                        ? (levelFilter[0] === 0 ? "Initial" : `Level ${levelFilter[0]}`)
+                        : `${levelFilter.length} Levels`}
+                  </span>
+                </div>
+                <ChevronDown size={12} className={`transition-transform ${showLevelFilterDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showLevelFilterDropdown && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowLevelFilterDropdown(false)} />
+                  <div className="absolute left-0 mt-2 w-48 bg-white rounded-xl border border-slate-200 shadow-xl z-40 py-2 animate-in fade-in zoom-in-95 duration-100">
+                    <button
+                      onClick={() => {
+                        setLevelFilter([]);
+                        setShowLevelFilterDropdown(false);
+                      }}
+                      className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${levelFilter.length === 0 ? 'text-primary' : 'text-slate-600'}`}
+                    >
+                      All Levels
+                      {levelFilter.length === 0 && <CheckCircle size={12} />}
+                    </button>
+                    <div className="h-px bg-slate-100 my-1" />
+                    {[0, 1, 2, 3, 4, 5].map((lvl) => {
+                      const isSelected = levelFilter.includes(lvl);
+                      return (
+                        <button
+                          key={lvl}
+                          onClick={() => {
+                            setLevelFilter(prev => 
+                              isSelected 
+                                ? prev.filter(l => l !== lvl)
+                                : [...prev, lvl].sort((a, b) => a - b)
+                            );
+                          }}
+                          className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${isSelected ? 'text-primary' : 'text-slate-600'}`}
+                        >
+                          {lvl === 0 ? 'Initial Pool (L0)' : `Level ${lvl}`}
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'border-slate-300'}`}>
+                            {isSelected && <CheckCircle size={10} className="text-white" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
 
             {formFilter && filterableFields.length > 0 && (

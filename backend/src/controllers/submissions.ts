@@ -292,7 +292,16 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
     if (user_email) query.userEmail = { $regex: new RegExp(`^${user_email}$`, 'i') };
     if (status) query.status = status;
     if (school_code) query.schoolCode = { $regex: new RegExp(`^${school_code}$`, 'i') };
-    if (level !== undefined && level !== '') query.currentLevel = Number(level);
+    
+    // Support multiple levels (comma separated)
+    if (level !== undefined && level !== '') {
+      const levelStr = String(level);
+      if (levelStr.includes(',')) {
+        query.currentLevel = { $in: levelStr.split(',').map(Number) };
+      } else {
+        query.currentLevel = Number(level);
+      }
+    }
 
     // Filter by Shortlisted candidates at a specific level
     if (shortlisted_only === 'true' && level !== undefined && level !== '') {

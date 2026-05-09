@@ -9,9 +9,10 @@ import { motion } from 'framer-motion';
 import {
   CheckCircle, XCircle, Clock, Filter, Layers, Save, Star, BarChart3,
   Users, ChevronRight, ChevronDown, Eye, Printer, ArrowRight, Award, TrendingUp, UserCheck,
-  Zap, FileText, Settings, History, Plus, FileDown, Archive, Mail, User as UserIcon, School, Fingerprint, Info, ExternalLink
+  Zap, FileText, Settings, History, Plus, FileDown, Archive, Mail, User as UserIcon, School, Fingerprint, Info, ExternalLink, Download
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 
 export default function ReviewSystem({ user }: { user: User }) {
   type FieldFilterRow = {
@@ -29,6 +30,8 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [reviewers, setReviewers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSubs, setLoadingSubs] = useState(false);
+  const [isBulkPrinting, setIsBulkPrinting] = useState(false);
+  const [isBulkZipping, setIsBulkZipping] = useState(false);
 
   // Shortlist creation
   const [showCreateLevel, setShowCreateLevel] = useState(false);
@@ -48,6 +51,8 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [shortlistResult, setShortlistResult] = useState<any>(null);
   const [isFiltering, setIsFiltering] = useState(false);
   const [filteredResults, setFilteredResults] = useState<any[] | null>(null);
+  const [levelFilter, setLevelFilter] = useState<number[]>([]);
+  const [showLevelFilterDropdown, setShowLevelFilterDropdown] = useState(false);
   const [activeFilterLevel, setActiveFilterLevel] = useState(1); // Track which level we are currently filtering for
   const [showFilters, setShowFilters] = useState(false);
   const [selectedLevelColumn, setSelectedLevelColumn] = useState<string>('all');
@@ -429,6 +434,10 @@ export default function ReviewSystem({ user }: { user: User }) {
   const isFinalizedReview = (status: any) =>
     ['approved', 'rejected', 'completed'].includes(String(status));
 
+  useEffect(() => {
+    applyFilters();
+  }, [levelFilter, shortlistFilter, fieldFilters]);
+
   const isNominationSubmission = (row: any) => {
     if (!row) return false;
     if (row.nomination_id || row.nominationId || row.unique_token || row.nomination_token || row.nominationToken) return true;
@@ -448,6 +457,11 @@ export default function ReviewSystem({ user }: { user: User }) {
         const scoreVal = typeof s.score === 'object' ? s.score?.percentage : s.score;
         return (scoreVal || 0) >= val;
       });
+    }
+
+    // Filter by Level (New)
+    if (levelFilter.length > 0) {
+      results = results.filter(s => levelFilter.includes(s.highest_level || 0));
     }
 
     // Filter by Recommendation
@@ -1029,6 +1043,332 @@ export default function ReviewSystem({ user }: { user: User }) {
     }
   };
 
+  const printBulkProfiles = async () => {
+    const subsToPrint = actionCandidates || (filteredResults !== null ? filteredResults : (shortlistData?.submissions || []));
+    if (!subsToPrint || subsToPrint.length === 0) {
+      alert('No teachers found to print.');
+      return;
+    }
+
+    if (subsToPrint.length > 50) {
+      if (!confirm(`You are about to print ${subsToPrint.length} profiles. This may take a while and could consume significant memory. Continue?`)) {
+        return;
+      }
+    }
+
+    setIsBulkPrinting(true);
+    try {
+      const printWindow = window.open('', '_blank', 'width=1100,height=850');
+      if (!printWindow) {
+        alert('Popup blocked. Please allow popups to print profiles.');
+        setIsBulkPrinting(false);
+        return;
+      }
+
+      // Start building the HTML
+      let combinedHtml = `
+        <!doctype html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Bulk Profiles Print - ${selectedFormObj?.title || 'Teachers'}</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; line-height: 1.45; }
+            .page { padding: 24px; page-break-after: always; min-height: 100vh; }
+            .page:last-child { page-break-after: auto; }
+            .header { border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+            .title { font-size: 22px; font-weight: 700; margin: 0; }
+            .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; font-size: 13px; }
+            .muted { color: #475569; font-size: 12px; }
+            .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin: 12px 0; page-break-inside: avoid; }
+            h2 { margin: 0 0 10px 0; font-size: 18px; }
+            h3 { margin: 0 0 6px 0; font-size: 15px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; vertical-align: top; font-size: 12px; }
+            th { background: #f8fafc; font-weight: 700; }
+            .comment { border-top: 1px dashed #cbd5e1; padding-top: 8px; margin-top: 8px; white-space: pre-wrap; }
+            @media print {
+              body { margin: 0; }
+              .page { padding: 12mm; border: none; }
+            }
+          </style>
+        </head>
+        <body>
+      `;
+
+      // Fetch all profile data
+      for (let i = 0; i < subsToPrint.length; i++) {
+        const sub = subsToPrint[i];
+        let profileData;
+        
+        try {
+          if (user.role === 'admin') {
+            profileData = await api.get(`/shortlist?submission_id=${sub.id}`);
+          } else {
+            const res = await api.get(`/submissions/${sub.id}`);
+            if (res.success && res.data) {
+              profileData = { submission: res.data, levels: [], highest_level: 0, total_levels: 0 };
+            }
+          }
+
+          if (!profileData) continue;
+
+          const submission = profileData.submission;
+          const name = getSubmissionDisplayName(submission, submission?.user_name);
+          const formScore = submission?.score != null
+            ? `${Number(typeof submission.score === 'object' ? submission.score?.percentage : submission.score).toFixed(2)}%`
+            : 'N/A';
+
+          const levels = Array.isArray(profileData?.levels) ? profileData.levels : [];
+          const comments = Array.isArray(profileData?.comments) ? profileData.comments : [];
+          const statusText = String(submission?.status || 'N/A').replace(/_/g, ' ');
+
+          // Form Responses
+          const formSchema = submission.formId?.form_schema || selectedFormObj?.form_schema;
+          let responseRows: { label: string, value: any }[] = [];
+          try { 
+            const raw = typeof submission.responses === 'string' ? JSON.parse(submission.responses) : (submission.responses || []);
+            const responses = Array.isArray(raw) ? raw : Object.entries(raw).map(([k, v]) => ({ fieldId: k, value: v }));
+            const schemaObj = typeof formSchema === 'string' ? JSON.parse(formSchema) : formSchema;
+            const fields = (schemaObj?.sections || []).flatMap((s: any) => s.fields || []);
+            const profileFieldMap = Object.fromEntries(fields.map((f: any) => [String(f.id), f]));
+            
+            responseRows = responses.map((r: any) => {
+              const field = fields.find((f: any) => String(f.id) === String(r.fieldId));
+              const displayVal = formatResponseLabelValue(String(r.fieldId), r.value, profileFieldMap);
+              return { label: field?.label || r.fieldId, value: displayVal };
+            });
+          } catch {}
+
+          const responsesHtml = responseRows.length
+            ? responseRows.map((row, idx) => {
+                const val = row.value;
+                let displayValue = '';
+                if (Array.isArray(val)) displayValue = val.join(', ');
+                else if (val == null) displayValue = '—';
+                else {
+                  const sVal = String(val);
+                  const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com'));
+                  displayValue = isFile ? '<span style="color: #2563eb; font-weight: bold;">[File Attached]</span>' : escapeHtml(sVal);
+                }
+                return `<tr><td>${idx + 1}</td><td>${escapeHtml(row.label)}</td><td>${displayValue}</td></tr>`;
+              }).join('')
+            : '<tr><td colspan="3">No responses available.</td></tr>';
+
+          const levelsHtml = levels.length
+            ? levels.map((lvl: any) => {
+                const scoreRows = Array.isArray(lvl?.scores) ? lvl.scores : [];
+                const scoreHtml = scoreRows.length
+                  ? scoreRows.map((s: any, i: number) => `<tr><td>R${i + 1}</td><td>${escapeHtml(s?.overall_score ?? 'N/A')}</td><td>${escapeHtml(String(s?.recommendation || '').replace(/_/g, ' ') || 'N/A')}</td><td>${escapeHtml(s?.comments || '-')}</td></tr>`).join('')
+                  : '<tr><td colspan="4">No reviews recorded at this level.</td></tr>';
+                return `<section class="card"><h3>Level ${escapeHtml(lvl?.level_number || '-')} - ${escapeHtml(lvl?.level_name || 'Unnamed')}</h3><table><thead><tr><th>Reviewer</th><th>Score</th><th>Recommendation</th><th>Comments</th></tr></thead><tbody>${scoreHtml}</tbody></table></section>`;
+              }).join('')
+            : '';
+
+          const nom = submission.nominationId || submission.nomination_id;
+          const addData = nom ? parseObject(nom.additional_data) : {};
+          const nominationHtml = nom && Object.keys(addData).length > 0
+            ? `<section class="card"><h2>School Functionary Details</h2><div class="meta"><div><strong>Nominated Teacher:</strong> ${escapeHtml(nom.teacher_name)}</div><div><strong>School Code:</strong> ${escapeHtml(nom.school_code)}</div>${Object.entries(addData).map(([key, val]) => `<div><strong>${escapeHtml(nominationFieldMap[key] || key.replace(/_/g, ' '))}:</strong> ${escapeHtml(String(val))}</div>`).join('')}</div></section>`
+            : '';
+
+          combinedHtml += `
+            <div class="page">
+              <section class="header">
+                <h1 class="title">${escapeHtml(name)}</h1>
+                <div class="muted">${escapeHtml(submission?.user_email || '')}</div>
+                <div class="meta">
+                  <div><strong>Form:</strong> ${escapeHtml(submission?.form_title || '-')}</div>
+                  <div><strong>Status:</strong> ${escapeHtml(statusText)}</div>
+                  <div><strong>Form Score:</strong> ${escapeHtml(formScore)}</div>
+                  <div><strong>Level Progress:</strong> ${escapeHtml(`${profileData?.highest_level || 0}/${profileData?.total_levels || 0}`)}</div>
+                </div>
+              </section>
+              ${nominationHtml}
+              <section class="card"><h2>Form Responses</h2><table><thead><tr><th>#</th><th>Field</th><th>Response</th></tr></thead><tbody>${responsesHtml}</tbody></table></section>
+              ${levelsHtml}
+            </div>
+          `;
+        } catch (err) {
+          console.error(`Error fetching profile for submission ${sub.id}:`, err);
+        }
+      }
+
+      combinedHtml += '</body></html>';
+      
+      printWindow.document.open();
+      printWindow.document.write(combinedHtml);
+      printWindow.document.close();
+      
+      setTimeout(() => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch {
+          alert('Unable to start printing automatically. Please use Ctrl+P in the print window.');
+        }
+        setIsBulkPrinting(false);
+      }, 500);
+
+    } catch (err: any) {
+      console.error('Bulk Print Error:', err);
+      alert('Failed to generate bulk print: ' + err.message);
+      setIsBulkPrinting(false);
+    }
+  };
+
+  const zipBulkProfiles = async () => {
+    const subsToPrint = actionCandidates || (filteredResults !== null ? filteredResults : (shortlistData?.submissions || []));
+    if (!subsToPrint || subsToPrint.length === 0) {
+      alert('No teachers found to ZIP.');
+      return;
+    }
+
+    if (subsToPrint.length > 50) {
+      if (!confirm(`You are about to generate ZIP for ${subsToPrint.length} profiles. This may take a while. Continue?`)) {
+        return;
+      }
+    }
+
+    setIsBulkZipping(true);
+    const zip = new JSZip();
+    
+    try {
+      for (let i = 0; i < subsToPrint.length; i++) {
+        const sub = subsToPrint[i];
+        let profileData;
+        
+        try {
+          if (user.role === 'admin') {
+            profileData = await api.get(`/shortlist?submission_id=${sub.id}`);
+          } else {
+            const res = await api.get(`/submissions/${sub.id}`);
+            if (res.success && res.data) {
+              profileData = { submission: res.data, levels: [], highest_level: 0, total_levels: 0 };
+            }
+          }
+
+          if (!profileData) continue;
+
+          const submission = profileData.submission;
+          const name = getSubmissionDisplayName(submission, submission?.user_name);
+          const formScore = submission?.score != null
+            ? `${Number(typeof submission.score === 'object' ? submission.score?.percentage : submission.score).toFixed(2)}%`
+            : 'N/A';
+
+          const levels = Array.isArray(profileData?.levels) ? profileData.levels : [];
+          const statusText = String(submission?.status || 'N/A').replace(/_/g, ' ');
+
+          // Form Responses
+          const formSchema = submission.formId?.form_schema || selectedFormObj?.form_schema;
+          let responseRows: { label: string, value: any }[] = [];
+          try { 
+            const raw = typeof submission.responses === 'string' ? JSON.parse(submission.responses) : (submission.responses || []);
+            const responses = Array.isArray(raw) ? raw : Object.entries(raw).map(([k, v]) => ({ fieldId: k, value: v }));
+            const schemaObj = typeof formSchema === 'string' ? JSON.parse(formSchema) : formSchema;
+            const fields = (schemaObj?.sections || []).flatMap((s: any) => s.fields || []);
+            const profileFieldMap = Object.fromEntries(fields.map((f: any) => [String(f.id), f]));
+            
+            responseRows = responses.map((r: any) => {
+              const field = fields.find((f: any) => String(f.id) === String(r.fieldId));
+              const displayVal = formatResponseLabelValue(String(r.fieldId), r.value, profileFieldMap);
+              return { label: field?.label || r.fieldId, value: displayVal };
+            });
+          } catch {}
+
+          const responsesHtml = responseRows.length
+            ? responseRows.map((row, idx) => {
+                const val = row.value;
+                let displayValue = '';
+                if (Array.isArray(val)) displayValue = val.join(', ');
+                else if (val == null) displayValue = '—';
+                else {
+                  const sVal = String(val);
+                  const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com'));
+                  displayValue = isFile ? `<span style="color: #2563eb; font-weight: bold;">[File Attached]</span>` : escapeHtml(sVal);
+                }
+                return `<tr><td>${idx + 1}</td><td>${escapeHtml(row.label)}</td><td>${displayValue}</td></tr>`;
+              }).join('')
+            : '<tr><td colspan="3">No responses available.</td></tr>';
+
+          const levelsHtml = levels.length
+            ? levels.map((lvl: any) => {
+                const scoreRows = Array.isArray(lvl?.scores) ? lvl.scores : [];
+                const scoreHtml = scoreRows.length
+                  ? scoreRows.map((s: any, i: number) => `<tr><td>R${i + 1}</td><td>${escapeHtml(s?.overall_score ?? 'N/A')}</td><td>${escapeHtml(String(s?.recommendation || '').replace(/_/g, ' ') || 'N/A')}</td><td>${escapeHtml(s?.comments || '-')}</td></tr>`).join('')
+                  : '<tr><td colspan="4">No reviews recorded at this level.</td></tr>';
+                return `<section class="card"><h3>Level ${escapeHtml(lvl?.level_number || '-')} - ${escapeHtml(lvl?.level_name || 'Unnamed')}</h3><table><thead><tr><th>Reviewer</th><th>Score</th><th>Recommendation</th><th>Comments</th></tr></thead><tbody>${scoreHtml}</tbody></table></section>`;
+              }).join('')
+            : '';
+
+          const nom = submission.nominationId || submission.nomination_id;
+          const addData = nom ? parseObject(nom.additional_data) : {};
+          const nominationHtml = nom && Object.keys(addData).length > 0
+            ? `<section class="card"><h2>School Functionary Details</h2><div class="meta"><div><strong>Nominated Teacher:</strong> ${escapeHtml(nom.teacher_name)}</div><div><strong>School Code:</strong> ${escapeHtml(nom.school_code)}</div>${Object.entries(addData).map(([key, val]) => `<div><strong>${escapeHtml(nominationFieldMap[key] || key.replace(/_/g, ' '))}:</strong> ${escapeHtml(String(val))}</div>`).join('')}</div></section>`
+            : '';
+
+          const htmlContent = `
+            <!doctype html>
+            <html>
+            <head>
+              <meta charset="utf-8" />
+              <title>${escapeHtml(name)} - Profile</title>
+              <style>
+                body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; padding: 24px; line-height: 1.45; }
+                .header { border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+                .title { font-size: 22px; font-weight: 700; margin: 0; }
+                .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; font-size: 13px; }
+                .muted { color: #475569; font-size: 12px; }
+                .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin: 12px 0; }
+                h2 { margin: 0 0 10px 0; font-size: 18px; }
+                h3 { margin: 0 0 6px 0; font-size: 15px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+                th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; vertical-align: top; font-size: 12px; }
+                th { background: #f8fafc; font-weight: 700; }
+              </style>
+            </head>
+            <body>
+              <section class="header">
+                <h1 class="title">${escapeHtml(name)}</h1>
+                <div class="muted">${escapeHtml(submission?.user_email || '')}</div>
+                <div class="meta">
+                  <div><strong>Form:</strong> ${escapeHtml(submission?.form_title || '-')}</div>
+                  <div><strong>Status:</strong> ${escapeHtml(statusText)}</div>
+                  <div><strong>Form Score:</strong> ${escapeHtml(formScore)}</div>
+                  <div><strong>Level Progress:</strong> ${escapeHtml(`${profileData?.highest_level || 0}/${profileData?.total_levels || 0}`)}</div>
+                </div>
+              </section>
+              ${nominationHtml}
+              <section class="card"><h2>Form Responses</h2><table><thead><tr><th>#</th><th>Field</th><th>Response</th></tr></thead><tbody>${responsesHtml}</tbody></table></section>
+              ${levelsHtml}
+            </body>
+            </html>
+          `;
+
+          const fileName = `${name.replace(/[^a-z0-9]/gi, '_')}_${submission._id}.html`;
+          zip.file(fileName, htmlContent);
+
+        } catch (err) {
+          console.error(`Error adding profile to ZIP: ${sub.id}`, err);
+        }
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = window.URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedFormObj?.title || 'Profiles'}_Rendered_Package.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      setIsBulkZipping(false);
+
+    } catch (err: any) {
+      console.error('Bulk ZIP Error:', err);
+      alert('Failed to generate bulk ZIP: ' + err.message);
+      setIsBulkZipping(false);
+    }
+  };
+
   const printSubmissionProfile = ({
     profile,
     submission,
@@ -1353,6 +1693,30 @@ export default function ReviewSystem({ user }: { user: User }) {
                 className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-hover shadow-sm transition-all"
               >
                 <Archive size={16} /> Export ZIP
+              </button>
+              <button 
+                onClick={printBulkProfiles}
+                disabled={isBulkPrinting}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-navy text-white rounded-xl text-sm font-medium hover:bg-navy-light shadow-sm transition-all disabled:opacity-50"
+              >
+                {isBulkPrinting ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Printer size={16} />
+                )}
+                <span>{isBulkPrinting ? 'Preparing...' : 'Bulk Print Profiles'}</span>
+              </button>
+              <button 
+                onClick={zipBulkProfiles}
+                disabled={isBulkZipping}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-xl text-sm font-medium hover:bg-slate-800 shadow-sm transition-all disabled:opacity-50"
+              >
+                {isBulkZipping ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Download size={16} />
+                )}
+                <span>{isBulkZipping ? 'Preparing ZIP...' : 'ZIP Profiles'}</span>
               </button>
             </div>
           )}
@@ -1762,6 +2126,66 @@ export default function ReviewSystem({ user }: { user: User }) {
                 data={filteredResults !== null ? filteredResults : stageDefaultSubmissions}
                 searchPlaceholder="Search by name, email..."
                 onRowClick={(row: any) => openProfile(row.id)}
+                filters={
+                  <div className="relative">
+                    <button 
+                      onClick={() => setShowLevelFilterDropdown(!showLevelFilterDropdown)}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm text-xs font-bold text-slate-700 min-w-[140px] justify-between hover:border-primary transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Layers size={14} className="text-primary" />
+                        <span>
+                          {levelFilter.length === 0 
+                            ? "Filter by Level" 
+                            : levelFilter.length === 1 
+                              ? (levelFilter[0] === 0 ? "Initial (L0)" : `Level ${levelFilter[0]}`)
+                              : `${levelFilter.length} Levels`}
+                        </span>
+                      </div>
+                      <ChevronDown size={12} className={`transition-transform ${showLevelFilterDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showLevelFilterDropdown && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setShowLevelFilterDropdown(false)} />
+                        <div className="absolute left-0 mt-2 w-48 bg-white rounded-xl border border-slate-200 shadow-xl z-40 py-2 animate-in fade-in zoom-in-95 duration-100">
+                          <button
+                            onClick={() => {
+                              setLevelFilter([]);
+                              setShowLevelFilterDropdown(false);
+                            }}
+                            className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${levelFilter.length === 0 ? 'text-primary' : 'text-slate-600'}`}
+                          >
+                            All Levels
+                            {levelFilter.length === 0 && <CheckCircle size={12} />}
+                          </button>
+                          <div className="h-px bg-slate-100 my-1" />
+                          {[0, 1, 2, 3, 4, 5].map((lvl) => {
+                            const isSelected = levelFilter.includes(lvl);
+                            return (
+                              <button
+                                key={lvl}
+                                onClick={() => {
+                                  setLevelFilter(prev => 
+                                    isSelected 
+                                      ? prev.filter(l => l !== lvl)
+                                      : [...prev, lvl].sort((a, b) => a - b)
+                                  );
+                                }}
+                                className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${isSelected ? 'text-primary' : 'text-slate-600'}`}
+                              >
+                                {lvl === 0 ? 'Initial Pool (L0)' : `Level ${lvl}`}
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'border-slate-300'}`}>
+                                  {isSelected && <CheckCircle size={10} className="text-white" />}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                }
                 actions={(row: any) => (
                   <button onClick={e => { e.stopPropagation(); openProfile(row.id); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-primary" title="View Profile"><Eye size={14} /></button>
                 )}
