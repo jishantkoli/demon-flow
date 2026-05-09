@@ -137,6 +137,7 @@
     background: white !important;
     border: none !important;
     box-shadow: none !important;
+    padding: 0 !important;
   }
 
   /* Hide specific UI elements inside the container */
@@ -145,7 +146,7 @@
     visibility: hidden !important;
   }
 
-  /* Show print-only header */
+  /* Show print-only elements */
   .print-only {
     display: block !important;
     visibility: visible !important;
@@ -154,43 +155,72 @@
   /* Refine table formatting for print */
   .printable-area {
     overflow: visible !important;
+    width: 100% !important;
   }
 
   table {
     width: 100% !important;
     border-collapse: collapse !important;
-    font-size: 11pt !important;
+    font-size: 10pt !important;
     color: black !important;
+    table-layout: auto !important;
   }
 
   th {
-    background-color: #f1f5f9 !important;
+    background-color: #f8fafc !important;
     color: black !important;
-    font-weight: bold !important;
-    border: 1px solid #cbd5e1 !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    font-size: 9pt !important;
+    border: 1.5pt solid #000 !important;
+    padding: 10px 8px !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
   td {
-    border: 1px solid #e2e8f0 !important;
-    padding: 10px !important;
+    border: 0.5pt solid #cbd5e1 !important;
+    padding: 8px !important;
     word-break: break-word !important;
+    vertical-align: middle !important;
   }
 
-  /* Remove backgrounds/shadows for better printing */
+  /* Alternating row colors for better readability */
+  tr:nth-child(even) {
+    background-color: #f9fafb !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Page breaks and general cleanup */
   body {
     background: white !important;
+    margin: 0 !important;
+    padding: 15mm !important;
   }
 
-  /* Page breaks */
+  @page {
+    size: A4 landscape;
+    margin: 15mm;
+  }
+
   tr {
-    page-break-inside: avoid;
+    page-break-inside: avoid !important;
   }
 
-  /* Hide actions column during print */
+  /* Hide actions and unnecessary columns */
   th:last-child, td:last-child {
     display: none !important;
+  }
+
+  /* Highlight important data like scores */
+  .text-primary {
+    color: #2563eb !important;
+    font-weight: bold !important;
+  }
+
+  .font-bold {
+    font-weight: bold !important;
   }
 }
 

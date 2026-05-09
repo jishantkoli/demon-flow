@@ -87,20 +87,23 @@ export default function DataTable({
         </div>
       )}
 
-      {(title || headerActions) && (
-        <div className="px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3 no-print">
-          <div>{title && <h3 className="font-semibold font-heading text-sm">{title}</h3>}{subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}</div>
-          {headerActions}
-        </div>
-      )}
-      {/* Printable Title (Only visible during print) */}
-      <div className="print-only hidden py-6 text-center">
-        <h1 className="text-2xl font-bold text-black uppercase tracking-wider">{title || 'Form Submissions Data'}</h1>
-        <p className="text-sm text-gray-500 mt-1">Generated on {new Date().toLocaleDateString()}</p>
-      </div>
+      {/* Printable Header (Only visible during print) */}
+       <div className="print-only hidden mb-8 border-b-2 border-black pb-4">
+         <div className="flex justify-between items-start">
+           <div>
+             <h1 className="text-2xl font-black text-black uppercase tracking-tighter mb-1">Teacher Selection Report</h1>
+             <p className="text-sm font-bold text-gray-700">{title || 'Form Submissions'}</p>
+             {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
+           </div>
+           <div className="text-right">
+             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Generated On</p>
+             <p className="text-sm font-black text-black">{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+           </div>
+         </div>
+       </div>
 
-      {(searchable || filters) && (
-        <div className="px-5 py-3 border-b border-border/50 flex flex-wrap items-center gap-3 no-print">
+       {(searchable || filters) && (
+         <div className="px-5 py-3 border-b border-border/50 flex flex-wrap items-center gap-3 no-print">
           {searchable && (
             <div className="flex items-center gap-2 bg-surface rounded-xl px-3 py-2 flex-1 min-w-[200px] max-w-sm border border-border">
               <Search size={14} className="text-muted" />
