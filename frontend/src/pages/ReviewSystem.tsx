@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
+// If JSZip fails, you might need: import * as JSZip from 'jszip';
 
 export default function ReviewSystem({ user }: { user: User }) {
   type FieldFilterRow = {
@@ -30,7 +31,6 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [reviewers, setReviewers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSubs, setLoadingSubs] = useState(false);
-  const [isBulkPrinting, setIsBulkPrinting] = useState(false);
   const [isBulkZipping, setIsBulkZipping] = useState(false);
 
   // Shortlist creation
@@ -1044,7 +1044,7 @@ export default function ReviewSystem({ user }: { user: User }) {
   };
 
   const printBulkProfiles = async () => {
-    const subsToPrint = actionCandidates || (filteredResults !== null ? filteredResults : (shortlistData?.submissions || []));
+    const subsToPrint = getExportData();
     if (!subsToPrint || subsToPrint.length === 0) {
       alert('No teachers found to print.');
       return;
@@ -1217,7 +1217,7 @@ export default function ReviewSystem({ user }: { user: User }) {
   };
 
   const zipBulkProfiles = async () => {
-    const subsToPrint = actionCandidates || (filteredResults !== null ? filteredResults : (shortlistData?.submissions || []));
+    const subsToPrint = getExportData();
     if (!subsToPrint || subsToPrint.length === 0) {
       alert('No teachers found to ZIP.');
       return;
@@ -1344,23 +1344,29 @@ export default function ReviewSystem({ user }: { user: User }) {
             </html>
           `;
 
-          const fileName = `${name.replace(/[^a-z0-9]/gi, '_')}_${submission._id}.html`;
+          const fileName = `${name.replace(/[^a-z0-9]/gi, '_')}_${submission.id || submission._id}.html`;
           zip.file(fileName, htmlContent);
 
         } catch (err) {
-          console.error(`Error adding profile to ZIP: ${sub.id}`, err);
+          console.error(`Error adding profile to ZIP for sub ${sub.id}:`, err);
         }
       }
 
+      console.log('Generating ZIP file...');
       const content = await zip.generateAsync({ type: 'blob' });
+      console.log('ZIP file generated, triggering download...');
       const url = window.URL.createObjectURL(content);
       const a = document.createElement('a');
       a.href = url;
       a.download = `${selectedFormObj?.title || 'Profiles'}_Rendered_Package.zip`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
       setIsBulkZipping(false);
+      console.log('Bulk ZIP completed.');
 
     } catch (err: any) {
       console.error('Bulk ZIP Error:', err);
@@ -1693,18 +1699,6 @@ export default function ReviewSystem({ user }: { user: User }) {
                 className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-hover shadow-sm transition-all"
               >
                 <Archive size={16} /> Export ZIP
-              </button>
-              <button 
-                onClick={printBulkProfiles}
-                disabled={isBulkPrinting}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-navy text-white rounded-xl text-sm font-medium hover:bg-navy-light shadow-sm transition-all disabled:opacity-50"
-              >
-                {isBulkPrinting ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Printer size={16} />
-                )}
-                <span>{isBulkPrinting ? 'Preparing...' : 'Bulk Print Profiles'}</span>
               </button>
               <button 
                 onClick={zipBulkProfiles}

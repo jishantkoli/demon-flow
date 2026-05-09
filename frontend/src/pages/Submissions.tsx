@@ -10,6 +10,15 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 
 export default function Submissions({ user }: { user: User }) {
+  const escapeHtml = (unsafe: any) => {
+    return String(unsafe || '')
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  };
+
   const navigate = useNavigate();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +42,6 @@ export default function Submissions({ user }: { user: User }) {
   const [exportNamingStrategy, setExportNamingStrategy] = useState('email');
   const [exportSubNamingStrategy, setExportSubNamingStrategy] = useState('name');
   const [includeNominationData, setIncludeNominationData] = useState(true);
-  const [isBulkPrinting, setIsBulkPrinting] = useState(false);
   const [isBulkZipping, setIsBulkZipping] = useState(false);
   const [zipSelectedFields, setZipSelectedFields] = useState<string[]>([]);
   const [visibleFields, setVisibleFields] = useState<string[]>([]);
@@ -1009,14 +1017,14 @@ export default function Submissions({ user }: { user: User }) {
                 let displayValue = '';
                 const strVal = typeof v === 'string' ? v.trim() : '';
                 const isFile = typeof v === 'string' && (field?.type === 'file' || /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) || strVal.includes('res.cloudinary.com'));
-                displayValue = isFile ? `<span style="color: #2563eb; font-weight: bold;">[File Attached]</span>` : String(formatResponseValue(k, v, currentFieldMap));
-                return `<tr><td>${idx + 1}</td><td>${label}</td><td>${displayValue}</td></tr>`;
+                displayValue = isFile ? `<span style="color: #2563eb; font-weight: bold;">[File Attached]</span>` : escapeHtml(String(formatResponseValue(k, v, currentFieldMap)));
+                return `<tr><td>${idx + 1}</td><td>${escapeHtml(label)}</td><td>${displayValue}</td></tr>`;
               }).join('')
             : '<tr><td colspan="3">No responses found.</td></tr>';
 
           const nomData = nomination ? parseObject(nomination.additional_data) : {};
           const nominationHtml = nomination && Object.keys(nomData).length > 0
-            ? `<section class="card"><h2>School Functionary Details</h2><div class="meta"><div><strong>Nominated Teacher:</strong> ${nomination.teacher_name}</div><div><strong>School Code:</strong> ${nomination.school_code}</div>${Object.entries(nomData).map(([key, val]) => `<div><strong>${nominationFieldMap[key] || key.replace(/_/g, ' ')}:</strong> ${String(val)}</div>`).join('')}</div></section>`
+            ? `<section class="card"><h2>School Functionary Details</h2><div class="meta"><div><strong>Nominated Teacher:</strong> ${escapeHtml(nomination.teacher_name)}</div><div><strong>School Code:</strong> ${escapeHtml(nomination.school_code)}</div>${Object.entries(nomData).map(([key, val]) => `<div><strong>${escapeHtml(nominationFieldMap[key] || key.replace(/_/g, ' '))}:</strong> ${escapeHtml(String(val))}</div>`).join('')}</div></section>`
             : '';
 
           const htmlContent = `
@@ -1024,7 +1032,7 @@ export default function Submissions({ user }: { user: User }) {
             <html>
             <head>
               <meta charset="utf-8" />
-              <title>${displayName} - Profile</title>
+              <title>${escapeHtml(displayName)} - Profile</title>
               <style>
                 body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; padding: 24px; line-height: 1.45; }
                 .header { border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
@@ -1041,12 +1049,12 @@ export default function Submissions({ user }: { user: User }) {
             </head>
             <body>
               <section class="header">
-                <h1 class="title">${displayName}</h1>
-                <div class="muted">${sub.user_email || ''}</div>
+                <h1 class="title">${escapeHtml(displayName)}</h1>
+                <div class="muted">${escapeHtml(sub.user_email || '')}</div>
                 <div class="meta">
-                  <div><strong>Form:</strong> ${sub.form_title || '-'}</div>
-                  <div><strong>Status:</strong> ${statusText}</div>
-                  <div><strong>Score:</strong> ${scoreVal}</div>
+                  <div><strong>Form:</strong> ${escapeHtml(sub.form_title || '-')}</div>
+                  <div><strong>Status:</strong> ${escapeHtml(statusText)}</div>
+                  <div><strong>Score:</strong> ${escapeHtml(scoreVal)}</div>
                   <div><strong>Submitted:</strong> ${new Date(sub.submitted_at).toLocaleDateString()}</div>
                 </div>
               </section>
@@ -1059,19 +1067,25 @@ export default function Submissions({ user }: { user: User }) {
           const fileName = `${displayName.replace(/[^a-z0-9]/gi, '_')}_${sub.id}.html`;
           zip.file(fileName, htmlContent);
         } catch (e) {
-          console.error('Error adding submission to bulk ZIP:', e);
+          console.error(`Error adding submission to bulk ZIP for sub ${sub.id}:`, e);
         }
       }
 
+      console.log('Generating ZIP file...');
       const content = await zip.generateAsync({ type: 'blob' });
+      console.log('ZIP file generated, triggering download...');
       const url = window.URL.createObjectURL(content);
       const a = document.createElement('a');
       a.href = url;
       a.download = `Submissions_Rendered_Profiles.zip`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
       setIsBulkZipping(false);
+      console.log('Bulk ZIP completed.');
 
     } catch (err: any) {
       console.error('Bulk ZIP Error:', err);
@@ -1205,18 +1219,6 @@ export default function Submissions({ user }: { user: User }) {
           <div className="flex items-center gap-2">
             <button onClick={exportCSV} className="inline-flex items-center gap-2 px-4 py-2 bg-surface-card border border-border rounded-xl text-sm font-medium hover:bg-surface shadow-sm"><FileDown size={16} /> Export Excel (XLSX)</button>
             <button onClick={exportZIP} className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-hover shadow-sm"><Archive size={16} /> Export ZIP</button>
-            <button 
-              onClick={printBulkProfiles} 
-              disabled={isBulkPrinting}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-medium hover:bg-slate-900 shadow-sm disabled:opacity-50 transition-all"
-            >
-              {isBulkPrinting ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Printer size={16} />
-              )}
-              <span>{isBulkPrinting ? 'Preparing...' : 'Bulk Print Profiles'}</span>
-            </button>
             <button 
               onClick={zipBulkProfiles} 
               disabled={isBulkZipping}
