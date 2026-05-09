@@ -144,17 +144,33 @@ export default function ReviewSystem({ user }: { user: User }) {
   const filterableFields = getFilterableFields();
   const filterableFieldMap = Object.fromEntries(filterableFields.map((f: any) => [f.id, f]));
 
-  const formatResponseLabelValue = (fieldId: string, val: any) => {
-    const field = filterableFieldMap[fieldId];
+  const formatResponseLabelValue = (fieldId: string, val: any, customFieldMap?: Record<string, any>) => {
+    const field = (customFieldMap && customFieldMap[fieldId]) || filterableFieldMap[fieldId];
     if (field?.options && Array.isArray(field.options)) {
+      const getLabel = (v: any) => {
+        if (v === undefined || v === null) return '';
+        const vStr = String(v).trim();
+        
+        // Find by value (exact or string match)
+        const opt = field.options.find((o: any) => String(o.value) === vStr);
+        if (opt) return opt.label || opt.value;
+        
+        // If the value is a number (common in MCQs), try finding by index if values are not explicit
+        const idx = parseInt(vStr);
+        if (!isNaN(idx) && field.options[idx]) {
+          const o = field.options[idx];
+          return typeof o === 'string' ? o : (o.label || o.value || o);
+        }
+
+        // Fallback: try finding by label match
+        const optByLabel = field.options.find((o: any) => String(o.label) === vStr);
+        return optByLabel ? optByLabel.label : v;
+      };
+
       if (Array.isArray(val)) {
-        return val.map(v => {
-          const opt = field.options.find((o: any) => String(o.value) === String(v));
-          return opt ? opt.label : v;
-        }).join(', ');
+        return val.map(getLabel).join(', ');
       }
-      const opt = field.options.find((o: any) => String(o.value) === String(val));
-      return opt ? opt.label : val;
+      return getLabel(val);
     }
     return val;
   };
@@ -292,6 +308,34 @@ export default function ReviewSystem({ user }: { user: User }) {
     };
     walk(formFields);
     return flat;
+  };
+
+  const getSchemaFieldMap = (schemaSource: any) => {
+    const fieldMap: Record<string, any> = {};
+    try {
+      const parsed = typeof schemaSource === 'string' ? JSON.parse(schemaSource) : schemaSource;
+      const walk = (list: any[]) => {
+        if (!Array.isArray(list)) return;
+        list.forEach((f: any) => {
+          if (f?.id || f?.name) {
+            if (f.id) fieldMap[String(f.id)] = f;
+            if (f.name) fieldMap[String(f.name)] = f;
+          }
+          if (f?.children) walk(f.children);
+        });
+      };
+
+      if (parsed?.sections) {
+        parsed.sections.forEach((s: any) => walk(s.fields || []));
+      } else if (parsed?.fields) {
+        walk(parsed.fields);
+      } else if (Array.isArray(parsed)) {
+        walk(parsed);
+      }
+    } catch {
+      return {};
+    }
+    return fieldMap;
   };
 
   const getFieldOptionValues = (field: any) => {
@@ -767,6 +811,15 @@ export default function ReviewSystem({ user }: { user: User }) {
   };
 
   const buildNominationExportFields = (nomKeys: Set<string>) => {
+    // Determine if we should include nomination fields
+    // 1. Must be an admin
+    // 2. Either the form is explicitly 'nomination' OR at least one submission has nomination data
+    const hasAnyNominationData = getExportData().some((s: any) => s.nomination_id || s.nominationId);
+    
+    if (user.role !== 'admin' || (!isNominationForm && !hasAnyNominationData)) {
+      return [];
+    }
+
     const staticFields = [
       { id: 'nom_teacher_name', label: 'Nomination: Nominated Name' },
       { id: 'nom_teacher_email', label: 'Nomination: Nominated Email' },
@@ -1868,11 +1921,15 @@ export default function ReviewSystem({ user }: { user: User }) {
               const raw = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : (sub.responses || []);
               const responses = Array.isArray(raw) ? raw : Object.entries(raw).map(([k, v]) => ({ fieldId: k, value: v }));
               
+              const schemaObj = typeof formSchema === 'string' ? JSON.parse(formSchema) : formSchema;
+              const fields = (schemaObj?.sections || []).flatMap((s: any) => s.fields || []);
+              const profileFieldMap = Object.fromEntries(fields.map((f: any) => [String(f.id), f]));
+              
               responseList = responses.map((r: any) => {
-                const schemaObj = typeof formSchema === 'string' ? JSON.parse(formSchema) : formSchema;
-                const fields = (schemaObj?.sections || []).flatMap((s: any) => s.fields || []);
                 const field = fields.find((f: any) => String(f.id) === String(r.fieldId));
-                return { label: field?.label || r.fieldId, value: r.value };
+                // Format MCQ/Select values to their labels
+                const displayVal = formatResponseLabelValue(String(r.fieldId), r.value, profileFieldMap);
+                return { label: field?.label || r.fieldId, value: displayVal };
               });
             } catch {}
 
@@ -2627,24 +2684,26 @@ export default function ReviewSystem({ user }: { user: User }) {
         profileData && (() => {
           const sub = profileData.submission;
           const displayName = getSubmissionDisplayName(sub, sub.user_name);
+          const profileFieldMap = getSchemaFieldMap(sub?.formId?.form_schema || sub?.formId?.schema || selectedFormObj?.form_schema || selectedFormObj?.schema);
           
           // Calculate responses for this specific profile view
           let profileResponses: Record<string, any> = {};
           if (sub?.responses) {
             const raw = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : sub.responses;
             if (Array.isArray(raw)) {
-              const formSchema = sub.formId?.form_schema;
-              const fieldMap: Record<string, string> = {};
-              if (formSchema?.sections) {
-                formSchema.sections.forEach((s: any) => s.fields?.forEach((f: any) => { fieldMap[f.id] = f.label; }));
+                raw.forEach((r: any) => {
+                  const fieldMeta = profileFieldMap[String(r.fieldId)] || filterableFieldMap[String(r.fieldId)];
+                  const label = fieldMeta?.label || fieldMeta?.title || fieldMeta?.name || r.fieldId;
+                  profileResponses[label] = formatResponseLabelValue(String(r.fieldId), r.value, profileFieldMap);
+                });
+              } else {
+                profileResponses = Object.fromEntries(
+                  Object.entries(raw).map(([key, value]) => [
+                    profileFieldMap[String(key)]?.label || profileFieldMap[String(key)]?.title || key,
+                    formatResponseLabelValue(String(key), value, profileFieldMap)
+                  ])
+                );
               }
-              raw.forEach((r: any) => {
-                const label = fieldMap[r.fieldId] || r.fieldId;
-                profileResponses[label] = r.value;
-              });
-            } else {
-              profileResponses = raw;
-            }
           }
           const responseRows = Object.entries(profileResponses).map(([label, value]) => ({ label, value }));
 

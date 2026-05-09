@@ -335,17 +335,33 @@ export default function Submissions({ user }: { user: User }) {
   const filterableFields = getFilterableFields();
   const filterableFieldMap = Object.fromEntries(filterableFields.map((f: any) => [f.id, f]));
 
-  const formatResponseValue = (fieldId: string, val: any) => {
-    const field = filterableFieldMap[fieldId];
+  const formatResponseValue = (fieldId: string, val: any, customFieldMap?: Record<string, any>) => {
+    const field = (customFieldMap && customFieldMap[fieldId]) || filterableFieldMap[fieldId];
     if (field?.options && Array.isArray(field.options)) {
+      const getLabel = (v: any) => {
+        if (v === undefined || v === null) return '';
+        const vStr = String(v).trim();
+        
+        // Find by value (exact or string match)
+        const opt = field.options.find((o: any) => String(o.value) === vStr);
+        if (opt) return opt.label || opt.value;
+        
+        // If the value is a number (common in MCQs), try finding by index if values are not explicit
+        const idx = parseInt(vStr);
+        if (!isNaN(idx) && field.options[idx]) {
+          const o = field.options[idx];
+          return typeof o === 'string' ? o : (o.label || o.value);
+        }
+
+        // Fallback: try finding by label match
+        const optByLabel = field.options.find((o: any) => String(o.label) === vStr);
+        return optByLabel ? optByLabel.label : v;
+      };
+
       if (Array.isArray(val)) {
-        return val.map(v => {
-          const opt = field.options.find((o: any) => String(o.value) === String(v));
-          return opt ? opt.label : v;
-        }).join(', ');
+        return val.map(getLabel).join(', ');
       }
-      const opt = field.options.find((o: any) => String(o.value) === String(val));
-      return opt ? opt.label : val;
+      return getLabel(val);
     }
     return val;
   };
@@ -854,14 +870,7 @@ export default function Submissions({ user }: { user: User }) {
             return <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 text-xs"><ExternalLink size={10} /> View</a>;
           }
           if (Array.isArray(val)) return val.join(', ');
-          const options = Array.isArray(field?.options) ? field.options : [];
-          if (options.length > 0) {
-            const opt = options.find((o: any) => String(o.value) === String(val));
-            if (opt) return String(opt.label);
-            const idx = Number(String(val));
-            if (!Number.isNaN(idx) && options[idx] !== undefined) return String(options[idx]);
-          }
-          return <span className="text-xs">{String(val)}</span>;
+          return <span className="text-xs">{String(formatResponseValue(fieldId, val, fieldMap))}</span>;
         }
       };
     }),
@@ -1016,7 +1025,7 @@ export default function Submissions({ user }: { user: User }) {
                     return (
                       <div key={key} className="space-y-1 pb-2 border-b border-slate-200 last:border-0">
                         <p className="text-[10px] text-muted font-bold uppercase">{fieldMap[key]?.label || key}</p>
-                        <div className="text-sm font-semibold">{isFile ? <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline"><ExternalLink size={10} /> View File</a> : String(formatResponseValue(key, val))}</div>
+                        <div className="text-sm font-semibold">{isFile ? <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline"><ExternalLink size={10} /> View File</a> : String(formatResponseValue(key, val, fieldMap))}</div>
                       </div>
                     );
                   }) : <p className="text-sm text-muted py-4 text-center italic">No responses found for this submission.</p>}
