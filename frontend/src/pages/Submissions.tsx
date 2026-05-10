@@ -1175,7 +1175,6 @@ export default function Submissions({ user }: { user: User }) {
       )
     },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
-    { key: 'currentLevel', label: 'Level', sortable: true, hidden: (user.role as string) !== 'admin', render: (v: any) => <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{v === 0 ? 'Initial' : `Level ${v}`}</span> },
     { key: 'score', label: 'Score', sortable: true, hidden: !canSeeScore, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{Number(typeof v === 'object' ? v?.percentage : v).toFixed(2)}%</span> : <span className="text-muted">—</span> },
     ...visibleFields.map(fieldId => {
       const field = fieldMap[fieldId];
@@ -1238,67 +1237,6 @@ export default function Submissions({ user }: { user: User }) {
                   <option value="">All Forms</option>
                   {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
                 </select>
-              </div>
-            )}
-
-            {(user.role as string) === 'admin' && (
-              <div className="relative">
-                <button
-                  onClick={() => setShowLevelFilterDropdown(!showLevelFilterDropdown)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm text-xs font-bold text-slate-700 min-w-[120px] justify-between hover:border-primary transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Layers size={14} className="text-primary" />
-                    <span>
-                      {levelFilter.length === 0
-                        ? "All Levels"
-                        : levelFilter.length === 1
-                          ? (levelFilter[0] === 0 ? "Initial" : `Level ${levelFilter[0]}`)
-                          : `${levelFilter.length} Levels`}
-                    </span>
-                  </div>
-                  <ChevronDown size={12} className={`transition-transform ${showLevelFilterDropdown ? 'rotate-180' : ''}`} />
-                </button>
-
-                {showLevelFilterDropdown && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setShowLevelFilterDropdown(false)} />
-                    <div className="absolute left-0 mt-2 w-48 bg-white rounded-xl border border-slate-200 shadow-xl z-40 py-2 animate-in fade-in zoom-in-95 duration-100">
-                      <button
-                        onClick={() => {
-                          setLevelFilter([]);
-                          setShowLevelFilterDropdown(false);
-                        }}
-                        className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${levelFilter.length === 0 ? 'text-primary' : 'text-slate-600'}`}
-                      >
-                        All Levels
-                        {levelFilter.length === 0 && <CheckCircle size={12} />}
-                      </button>
-                      <div className="h-px bg-slate-100 my-1" />
-                      {[0, 1, 2, 3, 4, 5].map((lvl) => {
-                        const isSelected = levelFilter.includes(lvl);
-                        return (
-                          <button
-                            key={lvl}
-                            onClick={() => {
-                              setLevelFilter(prev =>
-                                isSelected
-                                  ? prev.filter(l => l !== lvl)
-                                  : [...prev, lvl].sort((a, b) => a - b)
-                              );
-                            }}
-                            className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${isSelected ? 'text-primary' : 'text-slate-600'}`}
-                          >
-                            {lvl === 0 ? 'Initial Pool (L0)' : `Level ${lvl}`}
-                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'border-slate-300'}`}>
-                              {isSelected && <CheckCircle size={10} className="text-white" />}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
               </div>
             )}
 

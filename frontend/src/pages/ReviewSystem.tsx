@@ -1637,43 +1637,6 @@ export default function ReviewSystem({ user }: { user: User }) {
             <div><p className="text-sm font-medium">{getSubmissionDisplayName(r, v)}</p><p className="text-[10px] text-slate-500">{r.user_email}</p></div></div>)
       },
       { key: 'score', label: 'Form Score', sortable: true, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{Number(typeof v === 'object' ? v?.percentage : v).toFixed(2)}%</span> : <span className="text-slate-500">—</span> },
-      ...visibleLevelColumns.map((l: any) => ({
-        key: `level_${l.level_number}`, label: `L${l.level_number}`, sortable: true,
-        hidden: user.role === 'teacher' || user.role === 'functionary',
-        render: (_: any, r: any) => {
-          const reviews = (r.level_reviews || []).filter((rv: any) => rv.level === l.level_number);
-          if (reviews.length === 0) return <span className="text-slate-400 text-[10px]">—</span>;
-
-          const completedReviews = reviews.filter((rv: any) => ['approved', 'rejected', 'completed'].includes(String(rv.status)));
-          const scores = completedReviews.map((rv: any) => rv.overall_score || 0);
-          const avg = scores.length > 0 ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
-
-          return (
-            <div className="flex flex-col gap-1.5">
-              <div className="flex flex-wrap gap-1">
-                {reviews.map((rv: any, idx: number) => (
-                  <div key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all ${rv.status === 'pending' ? 'bg-slate-50 border-slate-200 text-slate-400 border-dashed' :
-                      rv.recommendation === 'reject' ? 'bg-red-50 border-red-200 text-red-600' :
-                        rv.recommendation === 'next_level' ? 'bg-amber-50 border-amber-200 text-amber-600' :
-                          'bg-slate-50 border-slate-200 text-slate-600'
-                    }`} title={`${rv.reviewer_name || 'Reviewer'}: ${rv.status === 'pending' ? 'Pending' : rv.recommendation}`}>
-                    {rv.status === 'pending' ? '...' : rv.overall_score}
-                  </div>
-                ))}
-              </div>
-              {completedReviews.length > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <div className="h-px flex-1 bg-primary/10" />
-                  <div className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20 shadow-sm">
-                    AVG: {avg.toFixed(1)}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        }
-      })),
-      { key: 'highest_level', label: 'Reached', sortable: true, hidden: (user.role as string) !== 'admin', render: (v: number) => v > 0 ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">L{v}</span> : <span className="text-slate-500 text-xs">—</span> },
       {
         key: 'status',
         label: 'Status',
@@ -2131,68 +2094,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                 data={filteredResults !== null ? filteredResults : stageDefaultSubmissions}
                 searchPlaceholder="Search by name, email..."
                 onRowClick={(row: any) => openProfile(row.id)}
-                filters={
-                  (user.role as string) === 'admin' && (
-                    <div className="relative">
-                      <button
-                        onClick={() => setShowLevelFilterDropdown(!showLevelFilterDropdown)}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm text-xs font-bold text-slate-700 min-w-[140px] justify-between hover:border-primary transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Layers size={14} className="text-primary" />
-                          <span>
-                            {levelFilter.length === 0
-                              ? "Filter by Level"
-                              : levelFilter.length === 1
-                                ? (levelFilter[0] === 0 ? "Initial (L0)" : `Level ${levelFilter[0]}`)
-                                : `${levelFilter.length} Levels`}
-                          </span>
-                        </div>
-                        <ChevronDown size={12} className={`transition-transform ${showLevelFilterDropdown ? 'rotate-180' : ''}`} />
-                      </button>
-
-                      {showLevelFilterDropdown && (
-                        <>
-                          <div className="fixed inset-0 z-30" onClick={() => setShowLevelFilterDropdown(false)} />
-                          <div className="absolute left-0 mt-2 w-48 bg-white rounded-xl border border-slate-200 shadow-xl z-40 py-2 animate-in fade-in zoom-in-95 duration-100">
-                            <button
-                              onClick={() => {
-                                setLevelFilter([]);
-                                setShowLevelFilterDropdown(false);
-                              }}
-                              className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${levelFilter.length === 0 ? 'text-primary' : 'text-slate-600'}`}
-                            >
-                              All Levels
-                              {levelFilter.length === 0 && <CheckCircle size={12} />}
-                            </button>
-                            <div className="h-px bg-slate-100 my-1" />
-                            {[0, 1, 2, 3, 4, 5].map((lvl) => {
-                              const isSelected = levelFilter.includes(lvl);
-                              return (
-                                <button
-                                  key={lvl}
-                                  onClick={() => {
-                                    setLevelFilter(prev =>
-                                      isSelected
-                                        ? prev.filter(l => l !== lvl)
-                                        : [...prev, lvl].sort((a, b) => a - b)
-                                    );
-                                  }}
-                                  className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${isSelected ? 'text-primary' : 'text-slate-600'}`}
-                                >
-                                  {lvl === 0 ? 'Initial Pool (L0)' : `Level ${lvl}`}
-                                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'border-slate-300'}`}>
-                                    {isSelected && <CheckCircle size={10} className="text-white" />}
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )
-                }
+                filters={null}
                 actions={(row: any) => (
                   <button onClick={e => { e.stopPropagation(); openProfile(row.id); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-primary" title="View Profile"><Eye size={14} /></button>
                 )}
