@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User } from '../lib/auth';
 import { api } from '../lib/api';
+import { getCleanFileName } from '../lib/utils';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
@@ -2374,7 +2375,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                   const fileUrl = sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
                   return (
                     <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1.5 font-bold">
-                      <ExternalLink size={14} /> View File
+                      <ExternalLink size={14} /> {getCleanFileName(sVal)}
                     </a>
                   );
                 }
@@ -2482,7 +2483,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                                   </p>
                                   {isFile ? (
                                     <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 text-sm font-semibold">
-                                      <ExternalLink size={12} /> View File
+                                      <ExternalLink size={12} /> {getCleanFileName(strVal)}
                                     </a>
                                   ) : (
                                     <p className="text-sm font-semibold">{String(val)}</p>

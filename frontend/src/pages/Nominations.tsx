@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { User } from '../lib/auth';
 import { api, API_BASE } from '../lib/api';
-import { copyToClipboard } from '../lib/utils';
+import { copyToClipboard, getCleanFileName } from '../lib/utils';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
@@ -331,7 +331,7 @@ export default function Nominations({ user }: { user: User }) {
                     <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">{label}</p>
                     {isFile ? (
                       <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-primary hover:underline flex items-center gap-1 mt-1">
-                        <Link2 size={12} /> View File
+                        <Link2 size={12} /> {getCleanFileName(val as string)}
                       </a>
                     ) : (
                       <p className="text-sm font-semibold">{String(val)}</p>
@@ -431,7 +431,7 @@ export default function Nominations({ user }: { user: User }) {
                         />
                         {addForm[cf.id] ? (
                           <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg border border-blue-100">
-                            <span className="text-xs flex-1 truncate font-medium">File Uploaded: {String(addForm[cf.id]).split('/').pop()}</span>
+                            <span className="text-xs flex-1 truncate font-medium">{getCleanFileName(String(addForm[cf.id]))}</span>
                             <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAddForm(p => ({ ...p, [cf.id]: '' })); }} className="p-1 text-rose-500 hover:bg-rose-100 rounded-md transition-colors"><Trash2 size={12} /></button>
                           </div>
                         ) : (

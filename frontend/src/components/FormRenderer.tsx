@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, Save, Send, ChevronRight, CheckCircle, AlertCircle, Upload, X, FileText, ExternalLink } from 'lucide-react';
+import { getCleanFileName } from '../lib/utils';
 
 /* ─── Field schema ─── */
 export interface FormField {
@@ -303,7 +304,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
       case 'file': {
         // Cloudinary returns full https:// URLs; fallback for legacy local filenames
         const isUrl = val && String(val).startsWith('http');
-        const displayFilename = val ? String(val).split('?')[0].split('/').pop() || val : '';
+        const displayFilename = getCleanFileName(String(val));
         const fileUrl = val
           ? (isUrl ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`)
           : '';

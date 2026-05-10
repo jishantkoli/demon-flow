@@ -6,6 +6,7 @@ import {
   Inbox
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { getCleanFileName } from '../lib/utils';
 
 import { User } from '../lib/auth';
 
@@ -917,7 +918,7 @@ function FieldRenderer({
                   ) : (value ? (
                     <span className="text-blue flex items-center justify-center gap-2">
                       <CheckCircle2 size={16} className="text-mint"/> 
-                      {String(value).split('?')[0].split('/').pop()}
+                      {getCleanFileName(String(value))}
                     </span>
                   ) : 'Click or drop file to upload')}
                 </div>

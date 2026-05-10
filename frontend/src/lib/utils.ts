@@ -36,3 +36,15 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 
   return false;
 }
+
+/**
+ * Removes the timestamp prefix and folder path from an uploaded filename
+ */
+export function getCleanFileName(urlOrPath: string): string {
+  if (!urlOrPath) return '';
+  // Get filename from path or URL (split by / or \)
+  const baseName = String(urlOrPath).split(/[\\/]/).pop() || '';
+  // Remove timestamp prefix (e.g., 1778417444108-)
+  // Matches a sequence of digits at the start followed by a hyphen
+  return baseName.replace(/^\d+-/, '');
+}

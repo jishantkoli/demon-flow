@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User } from '../lib/auth';
 import { api } from '../lib/api';
+import { getCleanFileName } from '../lib/utils';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
@@ -1195,7 +1196,7 @@ export default function Submissions({ user }: { user: User }) {
           );
           if (isFile) {
             const fileUrl = stringVal.startsWith('http') ? stringVal : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(stringVal)}`;
-            return <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 text-xs"><ExternalLink size={10} /> View</a>;
+            return <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 text-xs"><ExternalLink size={10} /> {getCleanFileName(stringVal)}</a>;
           }
           if (Array.isArray(val)) return val.join(', ');
           return <span className="text-xs">{String(formatResponseValue(fieldId, val, fieldMap))}</span>;
@@ -1387,7 +1388,7 @@ export default function Submissions({ user }: { user: User }) {
                             <div className="text-sm font-semibold">
                               {showAsLink ? (
                                 <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
-                                  <ExternalLink size={10} /> View File
+                                  <ExternalLink size={10} /> {getCleanFileName(rawVal)}
                                 </a>
                               ) : (
                                 String(val)
@@ -1417,7 +1418,7 @@ export default function Submissions({ user }: { user: User }) {
                       return (
                         <div key={key} className="space-y-1 pb-2 border-b border-slate-200 last:border-0">
                           <p className="text-[10px] text-muted font-bold uppercase">{fieldMap[key]?.label || key}</p>
-                          <div className="text-sm font-semibold">{isFile ? <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline"><ExternalLink size={10} /> View File</a> : String(formatResponseValue(key, val, fieldMap))}</div>
+                          <div className="text-sm font-semibold">{isFile ? <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline"><ExternalLink size={10} /> {getCleanFileName(strVal)}</a> : String(formatResponseValue(key, val, fieldMap))}</div>
                         </div>
                       );
                     }) : <p className="text-sm text-muted py-4 text-center italic">No responses found for this submission.</p>}
