@@ -2163,7 +2163,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                             {levelFilter.length === 0 && <CheckCircle size={12} />}
                           </button>
                           <div className="h-px bg-slate-100 my-1" />
-                          {[0, 1, 2, 3, 4, 5].map((lvl) => {
+                          {[0, ...(levels || []).map((_: any, i: number) => i + 1)].map((lvl) => {
                             const isSelected = levelFilter.includes(lvl);
                             return (
                               <button

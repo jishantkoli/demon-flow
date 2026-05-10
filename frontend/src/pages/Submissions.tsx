@@ -32,6 +32,7 @@ export default function Submissions({ user }: { user: User }) {
   const [forms, setForms] = useState<any[]>([]);
   const [formFilter, setFormFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState<number[]>([]);
+  const [levels, setLevels] = useState<any[]>([]);
   const [showLevelFilterDropdown, setShowLevelFilterDropdown] = useState(false);
   const [schoolFilter, setSchoolFilter] = useState('');
   const [includeReviews, setIncludeReviews] = useState(false);
@@ -202,7 +203,18 @@ export default function Submissions({ user }: { user: User }) {
     return null;
   };
 
+  useEffect(() => {
+    if (formFilter) {
+      api.get(`/review-levels?form_id=${formFilter}`)
+        .then(lvls => setLevels(Array.isArray(lvls) ? lvls : []))
+        .catch(() => setLevels([]));
+    } else {
+      setLevels([]);
+    }
+  }, [formFilter]);
+
   const fetchData = async () => {
+    setLoading(true);
     try {
       let url = '/submissions?';
       if (user.role === 'teacher') url += `user_id=${user.id}&`;
@@ -1283,7 +1295,7 @@ export default function Submissions({ user }: { user: User }) {
                       {levelFilter.length === 0 && <CheckCircle size={12} />}
                     </button>
                     <div className="h-px bg-slate-100 my-1" />
-                    {[0, 1, 2, 3, 4, 5].map((lvl) => {
+                    {[0, ...(levels || []).map((_: any, i: number) => i + 1)].map((lvl) => {
                       const isSelected = levelFilter.includes(lvl);
                       return (
                         <button
