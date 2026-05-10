@@ -22,41 +22,63 @@ function bufferToStream(buffer: Buffer): Readable {
 }
 
 function hasCloudinaryConfig(): boolean {
+  const name = process.env.CLOUDINARY_CLOUD_NAME;
+  const key = process.env.CLOUDINARY_API_KEY;
+  const secret = process.env.CLOUDINARY_API_SECRET;
+
   return Boolean(
-    process.env.CLOUDINARY_CLOUD_NAME &&
-    process.env.CLOUDINARY_API_KEY &&
-    process.env.CLOUDINARY_API_SECRET
+    name && name !== 'YOUR_CLOUD_NAME' &&
+    key && key !== 'YOUR_API_KEY' &&
+    secret && secret !== 'YOUR_API_SECRET'
   );
 }
 
 async function saveLocally(req: express.Request, file: Express.Multer.File) {
-  const uploadsDir = path.join(process.cwd(), 'uploads');
-  await fs.mkdir(uploadsDir, { recursive: true });
+  try {
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    await fs.mkdir(uploadsDir, { recursive: true });
 
-  const ext = path.extname(file.originalname || '') || '';
-  const safeBase = path
-    .basename(file.originalname || 'file', ext)
-    .replace(/[^a-zA-Z0-9-_]/g, '_')
-    .slice(0, 60) || 'file';
-  const filename = `${Date.now()}-${safeBase}${ext}`;
-  const absPath = path.join(uploadsDir, filename);
-  await fs.writeFile(absPath, file.buffer);
+    const ext = path.extname(file.originalname || '') || '';
+    const safeBase = path
+      .basename(file.originalname || 'file', ext)
+      .replace(/[^a-zA-Z0-9-_]/g, '_')
+      .slice(0, 60) || 'file';
+    const filename = `${Date.now()}-${safeBase}${ext}`;
+    const absPath = path.join(uploadsDir, filename);
+    await fs.writeFile(absPath, file.buffer);
 
-  const host = req.get('host');
-  const protocol = req.protocol || 'http';
-  return {
-    filename,
-    url: `${protocol}://${host}/uploads/${encodeURIComponent(filename)}`,
-  };
+    const host = req.get('host');
+    const protocol = req.protocol || 'http';
+    return {
+      filename,
+      url: `${protocol}://${host}/uploads/${encodeURIComponent(filename)}`,
+    };
+  } catch (err: any) {
+    console.error('[Local Save Error]', err);
+    throw new Error(`Failed to save file locally: ${err.message}`);
+  }
 }
 
-router.post('/', optionalAuthenticate, upload.single('file'), async (req, res) => {
+router.post('/', optionalAuthenticate, (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+      }
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    } else if (err) {
+      return res.status(500).json({ error: `Unknown upload error: ${err.message}` });
+    }
+    next();
+  });
+}, async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
   try {
     if (!hasCloudinaryConfig()) {
+      console.log('[Upload] Cloudinary not configured or using placeholders, falling back to local storage');
       const local = await saveLocally(req, req.file);
       return res.status(200).json({
         message: 'File uploaded successfully (local storage)',
@@ -99,7 +121,7 @@ router.post('/', optionalAuthenticate, upload.single('file'), async (req, res) =
       });
     } catch (fallbackErr: any) {
       console.error('[Upload Fallback Error]', fallbackErr);
-      res.status(500).json({ error: err.message || fallbackErr?.message || 'File upload failed' });
+      res.status(500).json({ error: `File upload failed: ${err.message}. Local storage also failed: ${fallbackErr.message}` });
     }
   }
 });

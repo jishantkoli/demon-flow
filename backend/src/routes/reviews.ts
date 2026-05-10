@@ -8,19 +8,17 @@ import { authenticate, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.use(authenticate);
-
 // Levels
-router.get('/review-levels', getLevels);
-router.post('/review-levels', authorize('admin'), createLevel);
+router.get('/review-levels', authenticate, getLevels);
+router.post('/review-levels', authenticate, authorize('admin'), createLevel);
 
 // Shortlisting
-router.get('/shortlist', authorize('admin'), getShortlistData);
-router.post('/shortlist', authorize('admin'), createShortlist);
+router.get('/shortlist', authenticate, authorize('admin'), getShortlistData);
+router.post('/shortlist', authenticate, authorize('admin'), createShortlist);
 
 // Reviews
-router.get('/reviews', getReviews);
-router.put('/reviews', authorize('admin', 'reviewer'), updateReview);
-router.post('/review-scores', authorize('admin', 'reviewer'), saveReviewScore);
+router.get('/reviews', authenticate, getReviews);
+router.put('/reviews', authenticate, authorize('admin', 'reviewer'), updateReview);
+router.post('/review-scores', authenticate, authorize('admin', 'reviewer'), saveReviewScore);
 
 export default router;
