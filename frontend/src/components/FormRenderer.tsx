@@ -302,15 +302,19 @@ export default function FormRenderer({ fields, formType, settings, initialValues
         );
       case 'file': {
         // Cloudinary returns full https:// URLs; fallback for legacy local filenames
+        const isUrl = val && String(val).startsWith('http');
+        const displayFilename = val ? String(val).split('?')[0].split('/').pop() || val : '';
         const fileUrl = val
-          ? (val.startsWith('http') ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`)
+          ? (isUrl ? val : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(val)}`)
           : '';
         return wrap(
           <div className="mt-1">
             {val ? (
               <div className="flex items-center gap-3 p-3.5 bg-slate-50 rounded-xl border-2 border-slate-200">
                 <FileText size={18} className="text-blue-600 flex-shrink-0" />
-                <span className="text-sm flex-1 truncate font-medium text-slate-800">{val}</span>
+                <span className="text-sm flex-1 truncate font-medium text-slate-800" title={displayFilename}>
+                  {displayFilename}
+                </span>
                 <div className="flex items-center gap-2">
                   <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
                     className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"

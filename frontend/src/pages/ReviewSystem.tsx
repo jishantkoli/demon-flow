@@ -1481,9 +1481,14 @@ export default function ReviewSystem({ user }: { user: User }) {
           <div class="meta">
             <div><strong>Nominated Teacher:</strong> ${escapeHtml(nom.teacher_name)}</div>
             <div><strong>School Code:</strong> ${escapeHtml(nom.school_code)}</div>
-            ${Object.entries(addData).map(([key, val]) => `
-              <div><strong>${escapeHtml(nominationFieldMap[key] || key.replace(/_/g, ' '))}:</strong> ${escapeHtml(String(val))}</div>
-            `).join('')}
+            ${Object.entries(addData).map(([key, val]) => {
+              const sVal = String(val);
+              const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com') || sVal.includes('/uploads/'));
+              const displayVal = isFile 
+                ? `<a href="${sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`}" target="_blank" style="color: #2563eb; text-decoration: underline; font-weight: bold;">View File</a>`
+                : escapeHtml(sVal);
+              return `<div><strong>${escapeHtml(nominationFieldMap[key] || key.replace(/_/g, ' '))}:</strong> ${displayVal}</div>`;
+            }).join('')}
           </div>
         </section>
       `
@@ -3159,7 +3164,23 @@ export default function ReviewSystem({ user }: { user: User }) {
                           <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Question {idx + 1}</p>
                           <p className="text-xs font-bold text-slate-700 mb-2">{k}</p>
                           <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-sm text-slate-900">
-                            {Array.isArray(v) ? (v as any[]).join(', ') : String(v || 'No answer')}
+                            {(() => {
+                              const sVal = String(v || '');
+                              const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com') || sVal.includes('/uploads/'));
+                              if (isFile && v) {
+                                const isUrl = sVal.startsWith('http');
+                                const displayFilename = sVal.split('?')[0].split('/').pop() || sVal;
+                                const fileUrl = isUrl ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
+                                return (
+                                  <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary font-bold hover:underline flex items-center gap-2">
+                                    <FileText size={14} />
+                                    <span className="truncate max-w-xs">{displayFilename}</span>
+                                    <ExternalLink size={12} />
+                                  </a>
+                                );
+                              }
+                              return Array.isArray(v) ? (v as any[]).join(', ') : String(v || 'No answer');
+                            })()}
                           </div>
                         </div>
                       ))}

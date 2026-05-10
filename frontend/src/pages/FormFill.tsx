@@ -909,8 +909,17 @@ function FieldRenderer({
             return (
               <label className="mt-2 block rounded-xl border-2 border-dashed border-border p-6 text-center cursor-pointer hover:border-blue hover:bg-blue-soft transition-colors">
                 <Upload className="mx-auto text-muted" size={22}/>
-                <div className="text-sm font-medium mt-2">
-                  {uploading ? 'Uploading...' : (value ? String(value) : 'Click or drop file')}
+                <div className="text-sm font-bold mt-2 text-ink">
+                  {uploading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="animate-spin" size={16}/> Uploading...
+                    </span>
+                  ) : (value ? (
+                    <span className="text-blue flex items-center justify-center gap-2">
+                      <CheckCircle2 size={16} className="text-mint"/> 
+                      {String(value).split('?')[0].split('/').pop()}
+                    </span>
+                  ) : 'Click or drop file to upload')}
                 </div>
                 <div className="text-xs text-muted mt-1">{f.fileTypes ? `Types: ${f.fileTypes}` : ''} {f.maxSizeMB ? `· Max ${f.maxSizeMB}MB` : ''}</div>
                 <input type="file" className="hidden" accept={f.fileTypes ? f.fileTypes.split(',').map(x => `.${x.trim()}`).join(',') : undefined}
