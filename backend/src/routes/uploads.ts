@@ -26,11 +26,14 @@ function hasCloudinaryConfig(): boolean {
   const key = process.env.CLOUDINARY_API_KEY;
   const secret = process.env.CLOUDINARY_API_SECRET;
 
-  return Boolean(
+  const valid = Boolean(
     name && name !== 'YOUR_CLOUD_NAME' &&
     key && key !== 'YOUR_API_KEY' &&
     secret && secret !== 'YOUR_API_SECRET'
   );
+
+  console.log(`[Upload] Cloudinary config check: cloud_name=${name ? name.substring(0, 4) + '...' : 'MISSING'}, api_key=${key ? key.substring(0, 6) + '...' : 'MISSING'}, secret=${secret ? 'SET' : 'MISSING'} => valid=${valid}`);
+  return valid;
 }
 
 async function saveLocally(req: express.Request, file: Express.Multer.File) {
@@ -76,6 +79,8 @@ router.post('/', optionalAuthenticate, (req, res, next) => {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
+  console.log(`[Upload] Received file: ${req.file.originalname} (${req.file.size} bytes, type: ${req.file.mimetype})`);
+
   try {
     if (!hasCloudinaryConfig()) {
       console.log('[Upload] Cloudinary not configured or using placeholders, falling back to local storage');
@@ -87,6 +92,8 @@ router.post('/', optionalAuthenticate, (req, res, next) => {
       });
     }
 
+    console.log('[Upload] Attempting Cloudinary upload...');
+
     // Upload buffer to Cloudinary via upload_stream
     const result: any = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
@@ -97,12 +104,17 @@ router.post('/', optionalAuthenticate, (req, res, next) => {
           unique_filename: true,
         },
         (error, result) => {
-          if (error) reject(error);
+          if (error) {
+            console.error('[Upload] Cloudinary upload_stream error:', error);
+            reject(error);
+          }
           else resolve(result);
         }
       );
       bufferToStream(req.file!.buffer).pipe(stream);
     });
+
+    console.log(`[Upload] Cloudinary SUCCESS: ${result.secure_url} (public_id: ${result.public_id})`);
 
     res.status(200).json({
       message: 'File uploaded successfully',
@@ -110,9 +122,11 @@ router.post('/', optionalAuthenticate, (req, res, next) => {
       url: result.secure_url,
     });
   } catch (err: any) {
-    console.error('[Upload Error]', err);
+    console.error('[Upload] Cloudinary upload FAILED:', err?.message || err);
+    console.error('[Upload] Full error:', JSON.stringify(err, null, 2));
     try {
       // Graceful fallback if Cloudinary call fails unexpectedly
+      console.log('[Upload] Falling back to local storage...');
       const local = await saveLocally(req, req.file);
       return res.status(200).json({
         message: 'File uploaded successfully (local fallback)',
