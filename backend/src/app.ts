@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { rateLimit } from 'express-rate-limit';
 import mongoose from 'mongoose';
 
@@ -20,80 +21,47 @@ import settingsRoutes from './routes/settings.js';
 import uploadRoutes from './routes/uploads.js';
 import commentRoutes from './routes/comments.js';
 
-
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Trust proxy for rate limiting on Render
+app.set('trust proxy', 1);
+
 // Security Middlewares
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  contentSecurityPolicy: false
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: false
 }));
 
-// More permissive CORS for development/network access
+// CORS
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // In development, allow all origins
-    if (process.env.NODE_ENV === 'development' || !process.env.FRONTEND_URL) {
-      return callback(null, true);
-    }
-
-    const allowed = process.env.FRONTEND_URL.split(',');
-    if (allowed.indexOf(origin) !== -1 || allowed.includes('*')) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
+    origin: [process.env.FRONTEND_URL || 'http://localhost:5173', 'https://demon-flow.vercel.app'],
+    credentials: true,
 }));
-app.use(cookieParser(process.env.COOKIE_SECRET));
-app.use(express.json());
+
 app.use(morgan('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, '../public')));
 
-// Rate Limiting
+// Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'development' ? 10000 : 500, // 500 in prod (dashboard uses ~5 calls/load)
-  message: 'Too many requests from this IP, please try again after 15 minutes',
-  standardHeaders: true,
-  legacyHeaders: false,
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: 'Too many requests from this IP, please try again after 15 minutes',
 });
-app.use('/api', limiter);
+app.use('/api/', limiter);
 
-// Static fallback for local uploads (used when Cloudinary is unavailable)
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-
-// Routes
-app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/forms', formRoutes);
-app.use('/api/v1/submissions', submissionRoutes);
-app.use('/api/v1/stats', statsRoutes);
-app.use('/api/v1/audit-logs', auditRoutes);
-app.use('/api/v1/notifications', notificationRoutes);
-app.use('/api/v1/nominations', nominationRoutes);
-app.use('/api/v1', reviewRoutes); // Handles /review-levels, /shortlist, /reviews, /review-scores
-app.use('/api/v1/users', userRoutes);
-app.use('/api/v1/settings', settingsRoutes);
-app.use('/api/v1/uploads', uploadRoutes);
-app.use('/api/v1/comments', commentRoutes);
-
-// Health check
-const dbStateLabel = (readyState: number): string => {
-  if (readyState === 0) return 'disconnected';
-  if (readyState === 1) return 'connected';
-  if (readyState === 2) return 'connecting';
-  if (readyState === 3) return 'disconnecting';
-  return 'unknown';
-};
-// Root route for health check
+// Health check routes
 app.get('/', (req, res) => {
     res.json({ status: 'ok', message: 'Demon Flow API is running' });
+});
+
+app.get('/api/v1/uploads-direct', (req, res) => {
+    res.json({ message: 'Direct uploads route is working' });
 });
 
 // Routes
@@ -110,47 +78,9 @@ app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/comments', commentRoutes);
 
-app.get('/health', (req, res) => {
-  const readyState = mongoose.connection.readyState;
-  const dbConnected = readyState === 1;
-  const statusCode = dbConnected ? 200 : 503;
-
-  res.status(statusCode).json({
-    status: dbConnected ? 'ok' : 'degraded',
-    service: 'flow-agent-backend',
-    database: {
-      connected: dbConnected,
-      state: dbStateLabel(readyState)
-    },
-    uptimeSeconds: Math.floor(process.uptime())
-  });
-});
-
-app.get('/api/v1', (req, res) => {
-  res.status(200).json({
-    service: 'flow-agent-backend',
-    version: 'v1',
-    status: 'ok',
-    health: '/health'
-  });
-});
-
-// Dummy endpoint to prevent 404s from older frontend clients or unblocked calls requesting comments
-app.get('/api/v1/comments', (req, res) => {
-  res.status(200).json([]);
-});
-
-// Global error handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const status = err.status || 500;
-  const message = process.env.NODE_ENV === 'production' && status === 500 
-    ? 'Internal Server Error' 
-    : err.message;
-    
-  console.error(`[\u274C Error] ${status} - ${message}`);
-  if (err.stack && process.env.NODE_ENV !== 'production') console.error(err.stack);
-  
-  res.status(status).json({ error: message });
+// Error handling
+app.use((req, res) => {
+    res.status(404).json({ error: 'Not found' });
 });
 
 export default app;
