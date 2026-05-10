@@ -32,7 +32,6 @@ export default function Submissions({ user }: { user: User }) {
   const [forms, setForms] = useState<any[]>([]);
   const [formFilter, setFormFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState<number[]>([]);
-  const [levels, setLevels] = useState<any[]>([]);
   const [showLevelFilterDropdown, setShowLevelFilterDropdown] = useState(false);
   const [schoolFilter, setSchoolFilter] = useState('');
   const [includeReviews, setIncludeReviews] = useState(false);
@@ -203,18 +202,7 @@ export default function Submissions({ user }: { user: User }) {
     return null;
   };
 
-  useEffect(() => {
-    if (formFilter) {
-      api.get(`/review-levels?form_id=${formFilter}`)
-        .then(lvls => setLevels(Array.isArray(lvls) ? lvls : []))
-        .catch(() => setLevels([]));
-    } else {
-      setLevels([]);
-    }
-  }, [formFilter]);
-
   const fetchData = async () => {
-    setLoading(true);
     try {
       let url = '/submissions?';
       if (user.role === 'teacher') url += `user_id=${user.id}&`;
@@ -1186,7 +1174,7 @@ export default function Submissions({ user }: { user: User }) {
       )
     },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
-    { key: 'currentLevel', label: 'Level', sortable: true, render: (v: any) => <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{v === 0 ? 'Initial' : `Level ${v}`}</span> },
+    { key: 'currentLevel', label: 'Level', sortable: true, hidden: user.role === 'teacher' || user.role === 'functionary', render: (v: any) => <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{v === 0 ? 'Initial' : `Level ${v}`}</span> },
     { key: 'score', label: 'Score', sortable: true, hidden: !canSeeScore, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{Number(typeof v === 'object' ? v?.percentage : v).toFixed(2)}%</span> : <span className="text-muted">—</span> },
     ...visibleFields.map(fieldId => {
       const field = fieldMap[fieldId];
@@ -1254,74 +1242,78 @@ export default function Submissions({ user }: { user: User }) {
         onRowClick={openDetail} emptyMessage="No submissions found" emptyIcon={<Inbox size={40} />}
         filters={
           <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm">
-              <SlidersHorizontal size={14} className="text-primary" />
-              <select value={formFilter} onChange={e => { setFormFilter(e.target.value); setVisibleFields([]); }} className="text-xs bg-transparent outline-none font-bold text-slate-700 min-w-[150px] cursor-pointer">
-                <option value="">All Forms</option>
-                {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
-              </select>
-            </div>
+            {user.role !== 'teacher' && user.role !== 'functionary' && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm">
+                <SlidersHorizontal size={14} className="text-primary" />
+                <select value={formFilter} onChange={e => { setFormFilter(e.target.value); setVisibleFields([]); }} className="text-xs bg-transparent outline-none font-bold text-slate-700 min-w-[150px] cursor-pointer">
+                  <option value="">All Forms</option>
+                  {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
+                </select>
+              </div>
+            )}
 
-            <div className="relative">
-              <button
-                onClick={() => setShowLevelFilterDropdown(!showLevelFilterDropdown)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm text-xs font-bold text-slate-700 min-w-[120px] justify-between hover:border-primary transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <Layers size={14} className="text-primary" />
-                  <span>
-                    {levelFilter.length === 0
-                      ? "All Levels"
-                      : levelFilter.length === 1
-                        ? (levelFilter[0] === 0 ? "Initial" : `Level ${levelFilter[0]}`)
-                        : `${levelFilter.length} Levels`}
-                  </span>
-                </div>
-                <ChevronDown size={12} className={`transition-transform ${showLevelFilterDropdown ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showLevelFilterDropdown && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setShowLevelFilterDropdown(false)} />
-                  <div className="absolute left-0 mt-2 w-48 bg-white rounded-xl border border-slate-200 shadow-xl z-40 py-2 animate-in fade-in zoom-in-95 duration-100">
-                    <button
-                      onClick={() => {
-                        setLevelFilter([]);
-                        setShowLevelFilterDropdown(false);
-                      }}
-                      className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${levelFilter.length === 0 ? 'text-primary' : 'text-slate-600'}`}
-                    >
-                      All Levels
-                      {levelFilter.length === 0 && <CheckCircle size={12} />}
-                    </button>
-                    <div className="h-px bg-slate-100 my-1" />
-                    {[0, ...(levels || []).map((_: any, i: number) => i + 1)].map((lvl) => {
-                      const isSelected = levelFilter.includes(lvl);
-                      return (
-                        <button
-                          key={lvl}
-                          onClick={() => {
-                            setLevelFilter(prev =>
-                              isSelected
-                                ? prev.filter(l => l !== lvl)
-                                : [...prev, lvl].sort((a, b) => a - b)
-                            );
-                          }}
-                          className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${isSelected ? 'text-primary' : 'text-slate-600'}`}
-                        >
-                          {lvl === 0 ? 'Initial Pool (L0)' : `Level ${lvl}`}
-                          <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'border-slate-300'}`}>
-                            {isSelected && <CheckCircle size={10} className="text-white" />}
-                          </div>
-                        </button>
-                      );
-                    })}
+            {user.role !== 'teacher' && user.role !== 'functionary' && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowLevelFilterDropdown(!showLevelFilterDropdown)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm text-xs font-bold text-slate-700 min-w-[120px] justify-between hover:border-primary transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Layers size={14} className="text-primary" />
+                    <span>
+                      {levelFilter.length === 0
+                        ? "All Levels"
+                        : levelFilter.length === 1
+                          ? (levelFilter[0] === 0 ? "Initial" : `Level ${levelFilter[0]}`)
+                          : `${levelFilter.length} Levels`}
+                    </span>
                   </div>
-                </>
-              )}
-            </div>
+                  <ChevronDown size={12} className={`transition-transform ${showLevelFilterDropdown ? 'rotate-180' : ''}`} />
+                </button>
 
-            {formFilter && filterableFields.length > 0 && (
+                {showLevelFilterDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setShowLevelFilterDropdown(false)} />
+                    <div className="absolute left-0 mt-2 w-48 bg-white rounded-xl border border-slate-200 shadow-xl z-40 py-2 animate-in fade-in zoom-in-95 duration-100">
+                      <button
+                        onClick={() => {
+                          setLevelFilter([]);
+                          setShowLevelFilterDropdown(false);
+                        }}
+                        className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${levelFilter.length === 0 ? 'text-primary' : 'text-slate-600'}`}
+                      >
+                        All Levels
+                        {levelFilter.length === 0 && <CheckCircle size={12} />}
+                      </button>
+                      <div className="h-px bg-slate-100 my-1" />
+                      {[0, 1, 2, 3, 4, 5].map((lvl) => {
+                        const isSelected = levelFilter.includes(lvl);
+                        return (
+                          <button
+                            key={lvl}
+                            onClick={() => {
+                              setLevelFilter(prev =>
+                                isSelected
+                                  ? prev.filter(l => l !== lvl)
+                                  : [...prev, lvl].sort((a, b) => a - b)
+                              );
+                            }}
+                            className={`w-full px-4 py-2 text-left text-[11px] font-semibold hover:bg-slate-50 flex items-center justify-between ${isSelected ? 'text-primary' : 'text-slate-600'}`}
+                          >
+                            {lvl === 0 ? 'Initial Pool (L0)' : `Level ${lvl}`}
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'border-slate-300'}`}>
+                              {isSelected && <CheckCircle size={10} className="text-white" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {user.role !== 'teacher' && user.role !== 'functionary' && formFilter && filterableFields.length > 0 && (
               <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
                 <div className="h-6 w-px bg-border mx-1" />
                 <div className="relative group">
@@ -1375,13 +1367,13 @@ export default function Submissions({ user }: { user: User }) {
               <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Status</p><div className="mt-0.5"><StatusBadge status={selected.status} /></div></div>
               {canSeeScore && <div className="bg-surface rounded-xl p-3"><p className="text-[10px] text-muted uppercase font-semibold">Score</p><p className="text-sm font-bold mt-0.5 text-emerald-600">{selected.score != null ? `${Number(typeof selected.score === 'object' ? selected.score?.percentage : selected.score).toFixed(2)}%` : 'N/A'}</p></div>}
             </div>
-            {canSeeScore && <button onClick={() => { setSelected(null); navigate(`/forms/view?submission=${selected.id}`); }} className="px-4 py-2 bg-primary/10 text-primary rounded-xl text-xs font-semibold hover:bg-primary/20 flex items-center gap-1.5 w-fit"><ExternalLink size={13} /> View Full Response</button>}
+            {canSeeScore && user.role !== 'functionary' && <button onClick={() => { setSelected(null); navigate(`/forms/view?submission=${selected.id}`); }} className="px-4 py-2 bg-primary/10 text-primary rounded-xl text-xs font-semibold hover:bg-primary/20 flex items-center gap-1.5 w-fit"><ExternalLink size={13} /> View Full Response</button>}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {showNominationDetails && (
-                <div className="space-y-4">
+                <div className={`space-y-4 ${user.role === 'functionary' ? 'col-span-full' : ''}`}>
                   <h4 className="text-sm font-bold flex items-center gap-2 text-primary border-b border-primary/10 pb-2"><Inbox size={14} /> 1. School Functionary Details</h4>
                   <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 space-y-4">
-                    <div className="grid grid-cols-1 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1"><p className="text-[10px] text-muted uppercase font-bold">Nominated Name</p><p className="text-sm font-semibold">{selectedNomination.teacher_name}</p></div>
                       <div className="space-y-1"><p className="text-[10px] text-muted uppercase font-bold">Nominated Email</p><p className="text-sm font-semibold">{selectedNomination.teacher_email}</p></div>
                       <div className="space-y-1"><p className="text-[10px] text-muted uppercase font-bold">School Code</p><p className="text-sm font-semibold font-mono">{selectedNomination.school_code}</p></div>
@@ -1420,28 +1412,30 @@ export default function Submissions({ user }: { user: User }) {
                   </div>
                 </div>
               )}
-              <div className={`space-y-4 ${!showNominationDetails ? 'col-span-full' : ''}`}>
-                <h4 className="text-sm font-bold flex items-center gap-2 text-slate-700 border-b border-slate-200 pb-2"><Send size={14} /> {showNominationDetails ? '2. Teacher Form Responses' : 'Form Responses'}</h4>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 max-h-[400px] overflow-y-auto">
-                  {Object.keys(responses).length > 0 ? Object.entries(responses).map(([key, val]) => {
-                    const strVal = typeof val === 'string' ? val.trim() : '';
-                    const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(strVal) || /^\/?uploads\//i.test(strVal);
-                    const isFile = typeof val === 'string' && (
-                      fieldMap[key]?.type === 'file' ||
-                      /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) ||
-                      strVal.includes('res.cloudinary.com') ||
-                      isUploadPath
-                    );
-                    const fileUrl = isFile ? (strVal.startsWith('http') ? strVal : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(strVal)}`) : '';
-                    return (
-                      <div key={key} className="space-y-1 pb-2 border-b border-slate-200 last:border-0">
-                        <p className="text-[10px] text-muted font-bold uppercase">{fieldMap[key]?.label || key}</p>
-                        <div className="text-sm font-semibold">{isFile ? <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline"><ExternalLink size={10} /> View File</a> : String(formatResponseValue(key, val, fieldMap))}</div>
-                      </div>
-                    );
-                  }) : <p className="text-sm text-muted py-4 text-center italic">No responses found for this submission.</p>}
+              {user.role !== 'functionary' && (
+                <div className={`space-y-4 ${!showNominationDetails ? 'col-span-full' : ''}`}>
+                  <h4 className="text-sm font-bold flex items-center gap-2 text-slate-700 border-b border-slate-200 pb-2"><Send size={14} /> {showNominationDetails ? '2. Teacher Form Responses' : 'Form Responses'}</h4>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 max-h-[400px] overflow-y-auto">
+                    {Object.keys(responses).length > 0 ? Object.entries(responses).map(([key, val]) => {
+                      const strVal = typeof val === 'string' ? val.trim() : '';
+                      const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(strVal) || /^\/?uploads\//i.test(strVal);
+                      const isFile = typeof val === 'string' && (
+                        fieldMap[key]?.type === 'file' ||
+                        /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) ||
+                        strVal.includes('res.cloudinary.com') ||
+                        isUploadPath
+                      );
+                      const fileUrl = isFile ? (strVal.startsWith('http') ? strVal : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(strVal)}`) : '';
+                      return (
+                        <div key={key} className="space-y-1 pb-2 border-b border-slate-200 last:border-0">
+                          <p className="text-[10px] text-muted font-bold uppercase">{fieldMap[key]?.label || key}</p>
+                          <div className="text-sm font-semibold">{isFile ? <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline"><ExternalLink size={10} /> View File</a> : String(formatResponseValue(key, val, fieldMap))}</div>
+                        </div>
+                      );
+                    }) : <p className="text-sm text-muted py-4 text-center italic">No responses found for this submission.</p>}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}
