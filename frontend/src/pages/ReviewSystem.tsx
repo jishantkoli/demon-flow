@@ -1673,7 +1673,7 @@ export default function ReviewSystem({ user }: { user: User }) {
           );
         }
       })),
-      { key: 'highest_level', label: 'Reached', sortable: true, hidden: (user.role as string) === 'teacher' || (user.role as string) === 'functionary', render: (v: number) => v > 0 ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">L{v}</span> : <span className="text-slate-500 text-xs">—</span> },
+      { key: 'highest_level', label: 'Reached', sortable: true, hidden: (user.role as string) !== 'admin', render: (v: number) => v > 0 ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">L{v}</span> : <span className="text-slate-500 text-xs">—</span> },
       {
         key: 'status',
         label: 'Status',
@@ -2132,7 +2132,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                 searchPlaceholder="Search by name, email..."
                 onRowClick={(row: any) => openProfile(row.id)}
                 filters={
-                  (user.role as string) !== 'teacher' && (user.role as string) !== 'functionary' && (
+                  (user.role as string) === 'admin' && (
                     <div className="relative">
                       <button
                         onClick={() => setShowLevelFilterDropdown(!showLevelFilterDropdown)}
