@@ -43,6 +43,7 @@ export default function Submissions({ user }: { user: User }) {
   const [exportSubNamingStrategy, setExportSubNamingStrategy] = useState('name');
   const [includeNominationData, setIncludeNominationData] = useState(true);
   const [isBulkZipping, setIsBulkZipping] = useState(false);
+  const [isBulkPrinting, setIsBulkPrinting] = useState(false);
   const [zipSelectedFields, setZipSelectedFields] = useState<string[]>([]);
   const [visibleFields, setVisibleFields] = useState<string[]>([]);
   const [nominationFieldMap, setNominationFieldMap] = useState<Record<string, string>>({});
@@ -51,14 +52,14 @@ export default function Submissions({ user }: { user: User }) {
   const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const emailLocal = (v: any) => norm(v).split('@')[0];
   const compact = (v: any) => norm(v).replace(/[^a-z0-9]/g, '');
-  
+
   const toTitleCase = (str: string) => {
     if (!str) return '';
     return str.split(' ')
       .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(' ');
   };
-  
+
   const parseObject = (raw: any): Record<string, any> => {
     if (!raw) return {};
     if (typeof raw === 'string') {
@@ -210,12 +211,12 @@ export default function Submissions({ user }: { user: User }) {
       if (levelFilter.length > 0) url += `level=${levelFilter.join(',')}&`;
       if (schoolFilter) url += `school_code=${encodeURIComponent(schoolFilter)}&`;
       if (search) url += `search=${encodeURIComponent(search)}&`;
-      
+
       const [subs, f] = await Promise.all([
         api.get(url).catch(() => []),
         api.get('/forms').catch(() => [])
       ]);
-      
+
       const mappedSubs = (Array.isArray(subs) ? subs : []).map((s: any) => ({
         ...s,
         id: s._id || s.id,
@@ -229,7 +230,7 @@ export default function Submissions({ user }: { user: User }) {
         form_title: s.formTitle || s.form_title,
         submitted_at: s.createdAt || s.submitted_at
       }));
-      
+
       setSubmissions(mappedSubs);
       setForms(Array.isArray(f) ? f : []);
 
@@ -253,13 +254,13 @@ export default function Submissions({ user }: { user: User }) {
           const nomForms = await Promise.all(
             idsToFetch.map(id => api.get(`/forms?id=${id}`).catch(() => null))
           );
-          
+
           nomForms.forEach(rawNf => {
             const nf = Array.isArray(rawNf) ? rawNf[0] : rawNf;
             if (!nf) return;
             const formId = nf.id || nf._id;
             if (formId) newProcessed.add(String(formId));
-            
+
             const schema = nf.form_schema || nf.schema;
             if (schema) {
               const parsed = typeof schema === 'string' ? JSON.parse(schema) : schema;
@@ -296,18 +297,18 @@ export default function Submissions({ user }: { user: User }) {
           setProcessedNomFormIds(newProcessed);
         }
       }
-    } catch (err) { 
+    } catch (err) {
       console.error('Error fetching submissions:', err);
       setSubmissions([]);
       setForms([]);
-    } finally { 
-      setLoading(false); 
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => { 
+  useEffect(() => {
     const timer = setTimeout(() => {
-      fetchData(); 
+      fetchData();
     }, 300);
     return () => clearTimeout(timer);
   }, [statusFilter, formFilter, levelFilter, schoolFilter, search]);
@@ -316,7 +317,7 @@ export default function Submissions({ user }: { user: User }) {
     if (!formFilter) return [];
     const f = forms.find(x => (x.id || x._id) === formFilter);
     if (!f) return [];
-    
+
     const schemaSource = f.form_schema || f.schema;
     let schemaObj: any = null;
     if (schemaSource) {
@@ -355,11 +356,11 @@ export default function Submissions({ user }: { user: User }) {
       const getLabel = (v: any) => {
         if (v === undefined || v === null) return '';
         const vStr = String(v).trim();
-        
+
         // Find by value (exact or string match)
         const opt = field.options.find((o: any) => String(o.value) === vStr);
         if (opt) return opt.label || opt.value;
-        
+
         // If the value is a number (common in MCQs), try finding by index if values are not explicit
         const idx = parseInt(vStr);
         if (!isNaN(idx) && field.options[idx]) {
@@ -431,7 +432,7 @@ export default function Submissions({ user }: { user: User }) {
         const matched = pickBestNomination(uniqueNoms, sub, nominationIdParam);
         if (matched) {
           setSelectedNomination(matched);
-          
+
           // Load nomination schema if missing
           const nomFormId = String(matched.form_id?._id || matched.form_id?.id || matched.form_id || '');
           if (nomFormId && nomFormId !== 'undefined' && !processedNomFormIds.has(nomFormId)) {
@@ -503,9 +504,9 @@ export default function Submissions({ user }: { user: User }) {
       const byEmailNoms = Array.isArray(byEmailRaw) ? byEmailRaw : [];
       const byIdNoms = Array.isArray(byIdRaw) ? byIdRaw : [];
       const byTokenNoms = (byTokenRaw as any)?.data
-        ? [ (byTokenRaw as any).data ]
+        ? [(byTokenRaw as any).data]
         : Array.isArray((byTokenRaw as any)) ? (byTokenRaw as any) : [];
-         
+
       const nomMap = new Map<string, any>();
       [...byTokenNoms, ...byIdNoms, ...byEmailNoms].forEach((n: any) => {
         const key = String(n?.id || n?._id || `${n?.teacher_email || ''}-${n?.createdAt || ''}`);
@@ -588,17 +589,17 @@ export default function Submissions({ user }: { user: User }) {
     }));
     const seenIds = new Set<string>();
     const seenLabels = new Set<string>();
-    
+
     return [...staticFields, ...dynamicFields].filter(f => {
       if (seenIds.has(f.id)) return false;
       if (seenLabels.has(f.label)) return false; // Prevent duplicate labels
-      
+
       // Skip redundant IDs if they match static fields
       const cleanKey = f.id.replace('nom_', '');
       if (['teacher_name', 'teacher_email', 'school_code', 'nom_school_code'].includes(cleanKey)) {
-         if (f.id !== 'nom_teacher_name' && f.id !== 'nom_teacher_email' && f.id !== 'nom_nom_school_code') return false;
+        if (f.id !== 'nom_teacher_name' && f.id !== 'nom_teacher_email' && f.id !== 'nom_nom_school_code') return false;
       }
-      
+
       seenIds.add(f.id);
       seenLabels.add(f.label);
       return true;
@@ -618,7 +619,7 @@ export default function Submissions({ user }: { user: User }) {
     ];
 
     const dynamicFields = filterableFields.map(f => ({ id: f.id, label: f.label || f.id }));
-    
+
     // Extract unique nomination additional data keys
     const nominationKeys = new Set<string>();
     submissions.forEach(s => {
@@ -662,7 +663,7 @@ export default function Submissions({ user }: { user: User }) {
       { id: 'score', label: 'Score' }
     ];
     const dynamicFields = filterableFields.map(f => ({ id: f.id, label: f.label || f.id }));
-    
+
     const nominationKeys = new Set<string>();
     submissions.forEach(s => {
       const nom = s.nomination_id || s.nominationId;
@@ -678,7 +679,7 @@ export default function Submissions({ user }: { user: User }) {
 
     const allPossibleFields = [...baseFields, ...dynamicFields, ...functionaryFields, dateField];
     const activeFields = allPossibleFields.filter(f => csvSelectedFields.includes(f.id));
-    
+
     const headers = activeFields.map(f => f.label);
 
     const rows = dataToExport.map(s => {
@@ -695,7 +696,7 @@ export default function Submissions({ user }: { user: User }) {
         if (f.id === 'status') return s.status;
         if (f.id === 'score') return typeof s.score === 'object' ? s.score?.percentage ?? '' : (s.score ?? '');
         if (f.id === 'submitted_at') return formatDate(s.submitted_at || '');
-        
+
         if (f.id.startsWith('nom_')) {
           if (f.id === 'nom_teacher_name') return nom?.teacher_name || '';
           if (f.id === 'nom_teacher_email') return nom?.teacher_email || '';
@@ -732,7 +733,7 @@ export default function Submissions({ user }: { user: User }) {
       alert('Please select a form to export as ZIP');
       return;
     }
-    
+
     // Set default fields for ZIP export (similar to CSV)
     const base = ['id', 'form_title', 'user_name', 'user_email', 'school_code', 'status', 'score'];
     const dynamic = filterableFields.map(f => f.id);
@@ -746,7 +747,7 @@ export default function Submissions({ user }: { user: User }) {
     });
     const noms = buildNominationExportFields(nomKeys).map(f => f.id);
     setZipSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
-    
+
     setShowExportConfig(true);
   };
 
@@ -764,11 +765,11 @@ export default function Submissions({ user }: { user: User }) {
       if (zipSelectedFields.length > 0) {
         params.append('fields', JSON.stringify(zipSelectedFields));
       }
-      
+
       if (statusFilter) params.append('status', statusFilter);
       if (schoolFilter) params.append('school_code', schoolFilter);
       if (search) params.append('search', search);
-      
+
       const blob = await (api as any).download(`/forms/${formFilter}/export/zip?${params.toString()}`);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -782,33 +783,65 @@ export default function Submissions({ user }: { user: User }) {
     }
   };
 
-
-
-  const zipBulkProfiles = async () => {
+  const printBulkProfiles = async () => {
     if (submissions.length === 0) {
-      alert('No submissions found to ZIP.');
+      alert('No submissions found to print.');
       return;
     }
 
     if (submissions.length > 50) {
-      if (!confirm(`You are about to generate ZIP for ${submissions.length} profiles. This may take a while. Continue?`)) {
+      if (!confirm(`You are about to print ${submissions.length} profiles. This may take a while. Continue?`)) {
         return;
       }
     }
 
-    setIsBulkZipping(true);
-    const zip = new JSZip();
-
+    setIsBulkPrinting(true);
     try {
+      const printWindow = window.open('', '_blank', 'width=1100,height=850');
+      if (!printWindow) {
+        alert('Popup blocked. Please allow popups to print profiles.');
+        setIsBulkPrinting(false);
+        return;
+      }
+
+      let combinedHtml = `
+        <!doctype html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Bulk Profiles Print - Submissions</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; line-height: 1.45; }
+            .page { padding: 24px; page-break-after: always; min-height: 100vh; }
+            .page:last-child { page-break-after: auto; }
+            .header { border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+            .title { font-size: 22px; font-weight: 700; margin: 0; }
+            .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; font-size: 13px; }
+            .muted { color: #475569; font-size: 12px; }
+            .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin: 12px 0; page-break-inside: avoid; }
+            h2 { margin: 0 0 10px 0; font-size: 18px; }
+            h3 { margin: 0 0 6px 0; font-size: 15px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; vertical-align: top; font-size: 12px; }
+            th { background: #f8fafc; font-weight: 700; }
+            @media print {
+              body { margin: 0; }
+              .page { padding: 12mm; border: none; }
+            }
+          </style>
+        </head>
+        <body>
+      `;
+
       for (const sub of submissions) {
         try {
-          // Fetch full details
+          // Fetch full details (similar to openDetail)
           const formIdParam = sub.form_id || sub.formId;
           const nominationIdParamRaw = sub.nomination_id || sub.nominationId;
           const nominationIdParam = typeof nominationIdParamRaw === 'object'
             ? (nominationIdParamRaw?._id || nominationIdParamRaw?.id || '')
             : nominationIdParamRaw;
-          
+
           const [comms, formRes, nomsRes] = await Promise.all([
             api.get(`/comments?submission_id=${sub.id}`).catch(() => []),
             formIdParam ? api.get(`/forms?id=${formIdParam}`).catch(() => null) : Promise.resolve(null),
@@ -818,7 +851,7 @@ export default function Submissions({ user }: { user: User }) {
           const formObj = Array.isArray(formRes) ? formRes[0] : formRes;
           const allNoms = Array.isArray(nomsRes) ? nomsRes : (nomsRes as any)?.data ? [(nomsRes as any).data] : [nomsRes];
           const nomination = pickBestNomination(allNoms, sub, nominationIdParam);
-          
+
           const { name } = extractNameEmailFromSubmission(sub);
           const displayName = toTitleCase(isAnonymousDirectForm(sub) ? (name || 'Anonymous') : (sub.user_name || name || 'Anonymous'));
           const statusText = String(sub.status || 'N/A').replace(/_/g, ' ');
@@ -853,14 +886,141 @@ export default function Submissions({ user }: { user: User }) {
 
           const responsesHtml = Object.keys(responses).length > 0
             ? Object.entries(responses).map(([k, v], idx) => {
-                const field = currentFieldMap[k];
-                const label = field?.label || k;
-                let displayValue = '';
-                const strVal = typeof v === 'string' ? v.trim() : '';
-                const isFile = typeof v === 'string' && (field?.type === 'file' || /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) || strVal.includes('res.cloudinary.com'));
-                displayValue = isFile ? `<span style="color: #2563eb; font-weight: bold;">[File Attached]</span>` : escapeHtml(String(formatResponseValue(k, v, currentFieldMap)));
-                return `<tr><td>${idx + 1}</td><td>${escapeHtml(label)}</td><td>${displayValue}</td></tr>`;
-              }).join('')
+              const field = currentFieldMap[k];
+              const label = field?.label || k;
+              let displayValue = '';
+              const strVal = typeof v === 'string' ? v.trim() : '';
+              const isFile = typeof v === 'string' && (field?.type === 'file' || /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) || strVal.includes('res.cloudinary.com'));
+              displayValue = isFile ? '<span style="color: #2563eb; font-weight: bold;">[File Attached]</span>' : String(formatResponseValue(k, v, currentFieldMap));
+              return `<tr><td>${idx + 1}</td><td>${label}</td><td>${displayValue}</td></tr>`;
+            }).join('')
+            : '<tr><td colspan="3">No responses found.</td></tr>';
+
+          const nomData = nomination ? parseObject(nomination.additional_data) : {};
+          const nominationHtml = nomination && Object.keys(nomData).length > 0
+            ? `<section class="card"><h2>School Functionary Details</h2><div class="meta"><div><strong>Nominated Teacher:</strong> ${nomination.teacher_name}</div><div><strong>School Code:</strong> ${nomination.school_code}</div>${Object.entries(nomData).map(([key, val]) => `<div><strong>${nominationFieldMap[key] || key.replace(/_/g, ' ')}:</strong> ${String(val)}</div>`).join('')}</div></section>`
+            : '';
+
+          combinedHtml += `
+            <div class="page">
+              <section class="header">
+                <h1 class="title">${displayName}</h1>
+                <div class="muted">${sub.user_email || ''}</div>
+                <div class="meta">
+                  <div><strong>Form:</strong> ${sub.form_title || '-'}</div>
+                  <div><strong>Status:</strong> ${statusText}</div>
+                  <div><strong>Score:</strong> ${scoreVal}</div>
+                  <div><strong>Submitted:</strong> ${new Date(sub.submitted_at).toLocaleDateString()}</div>
+                </div>
+              </section>
+              ${nominationHtml}
+              <section class="card"><h2>Form Responses</h2><table><thead><tr><th>#</th><th>Field</th><th>Response</th></tr></thead><tbody>${responsesHtml}</tbody></table></section>
+            </div>
+          `;
+        } catch (e) {
+          console.error('Error adding submission to bulk print:', e);
+        }
+      }
+
+      combinedHtml += '</body></html>';
+      printWindow.document.open();
+      printWindow.document.write(combinedHtml);
+      printWindow.document.close();
+
+      setTimeout(() => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch {
+          alert('Unable to start printing automatically. Please use Ctrl+P in the print window.');
+        }
+        setIsBulkPrinting(false);
+      }, 500);
+
+    } catch (err: any) {
+      console.error('Bulk Print Error:', err);
+      alert('Failed to generate bulk print: ' + err.message);
+      setIsBulkPrinting(false);
+    }
+  };
+
+  const zipBulkProfiles = async () => {
+    if (submissions.length === 0) {
+      alert('No submissions found to ZIP.');
+      return;
+    }
+
+    if (submissions.length > 50) {
+      if (!confirm(`You are about to generate ZIP for ${submissions.length} profiles. This may take a while. Continue?`)) {
+        return;
+      }
+    }
+
+    setIsBulkZipping(true);
+    const zip = new JSZip();
+
+    try {
+      for (const sub of submissions) {
+        try {
+          // Fetch full details
+          const formIdParam = sub.form_id || sub.formId;
+          const nominationIdParamRaw = sub.nomination_id || sub.nominationId;
+          const nominationIdParam = typeof nominationIdParamRaw === 'object'
+            ? (nominationIdParamRaw?._id || nominationIdParamRaw?.id || '')
+            : nominationIdParamRaw;
+
+          const [comms, formRes, nomsRes] = await Promise.all([
+            api.get(`/comments?submission_id=${sub.id}`).catch(() => []),
+            formIdParam ? api.get(`/forms?id=${formIdParam}`).catch(() => null) : Promise.resolve(null),
+            nominationIdParam ? api.get(`/nominations?id=${nominationIdParam}`).catch(() => []) : Promise.resolve([])
+          ]);
+
+          const formObj = Array.isArray(formRes) ? formRes[0] : formRes;
+          const allNoms = Array.isArray(nomsRes) ? nomsRes : (nomsRes as any)?.data ? [(nomsRes as any).data] : [nomsRes];
+          const nomination = pickBestNomination(allNoms, sub, nominationIdParam);
+
+          const { name } = extractNameEmailFromSubmission(sub);
+          const displayName = toTitleCase(isAnonymousDirectForm(sub) ? (name || 'Anonymous') : (sub.user_name || name || 'Anonymous'));
+          const statusText = String(sub.status || 'N/A').replace(/_/g, ' ');
+          const scoreVal = sub.score != null ? `${Number(typeof sub.score === 'object' ? sub.score?.percentage : sub.score).toFixed(2)}%` : 'N/A';
+
+          // Responses
+          let responses: Record<string, any> = {};
+          if (sub.responses) {
+            try {
+              const parsed = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : sub.responses;
+              if (Array.isArray(parsed)) parsed.forEach((r: any) => { if (r.fieldId) responses[r.fieldId] = r.value; });
+              else responses = parsed || {};
+            } catch { responses = {}; }
+          }
+
+          // Field Map
+          const currentFieldMap: Record<string, any> = {};
+          const walk = (list: any[]) => {
+            if (!Array.isArray(list)) return;
+            list.forEach((f: any) => {
+              if (f?.id) currentFieldMap[f.id] = f;
+              if (f?.children) walk(f.children);
+            });
+          };
+          const schemaSource = formObj?.form_schema || formObj?.schema;
+          if (schemaSource) {
+            const parsed = typeof schemaSource === 'string' ? JSON.parse(schemaSource) : schemaSource;
+            if (Array.isArray(parsed)) walk(parsed);
+            else if (parsed?.sections) parsed.sections.forEach((s: any) => walk(s.fields || []));
+            else if (parsed?.fields) walk(parsed.fields);
+          }
+
+          const responsesHtml = Object.keys(responses).length > 0
+            ? Object.entries(responses).map(([k, v], idx) => {
+              const field = currentFieldMap[k];
+              const label = field?.label || k;
+              let displayValue = '';
+              const strVal = typeof v === 'string' ? v.trim() : '';
+              const isFile = typeof v === 'string' && (field?.type === 'file' || /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) || strVal.includes('res.cloudinary.com'));
+              displayValue = isFile ? `<span style="color: #2563eb; font-weight: bold;">[File Attached]</span>` : escapeHtml(String(formatResponseValue(k, v, currentFieldMap)));
+              return `<tr><td>${idx + 1}</td><td>${escapeHtml(label)}</td><td>${displayValue}</td></tr>`;
+            }).join('')
             : '<tr><td colspan="3">No responses found.</td></tr>';
 
           const nomData = nomination ? parseObject(nomination.additional_data) : {};
@@ -936,8 +1096,8 @@ export default function Submissions({ user }: { user: User }) {
   };
 
   let responses: Record<string, any> = {};
-  if (selected?.responses) { 
-    try { 
+  if (selected?.responses) {
+    try {
       const respSource = selected.responses;
       const parsed = typeof respSource === 'string' ? JSON.parse(respSource) : respSource;
       if (Array.isArray(parsed)) {
@@ -947,9 +1107,9 @@ export default function Submissions({ user }: { user: User }) {
       } else {
         responses = parsed || {};
       }
-    } catch { 
-      responses = {}; 
-    } 
+    } catch {
+      responses = {};
+    }
   }
 
   const nominationAdditionalData = parseObject(selectedNomination?.additional_data);
@@ -990,10 +1150,10 @@ export default function Submissions({ user }: { user: User }) {
       }
     },
     { key: 'form_title', label: 'Form', sortable: true, render: (v: string) => <span className="font-medium text-sm">{v || 'Untitled'}</span> },
-    { 
-      key: 'user_name', 
-      label: 'Submitted By', 
-      sortable: true, 
+    {
+      key: 'user_name',
+      label: 'Submitted By',
+      sortable: true,
       render: (v: string, row: any) => (
         <div className={`p-1 -m-1 rounded-lg transition-colors group ${isNominationSubmission(row) && user.role !== 'teacher' ? 'cursor-pointer hover:bg-primary/5' : ''}`}
           onClick={(e) => { if (!isNominationSubmission(row) || user.role === 'teacher') return; e.stopPropagation(); openNominationOnly(row); }}>
@@ -1011,7 +1171,7 @@ export default function Submissions({ user }: { user: User }) {
             })()}
           </p>
         </div>
-      ) 
+      )
     },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
     { key: 'currentLevel', label: 'Level', sortable: true, render: (v: any) => <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{v === 0 ? 'Initial' : `Level ${v}`}</span> },
@@ -1051,8 +1211,8 @@ export default function Submissions({ user }: { user: User }) {
         <div>
           <h1 className="text-xl font-bold font-heading">Submissions</h1>
           <p className="text-sm text-muted">
-            {user.role === 'admin' 
-              ? 'Comprehensive view of all form entries and documentation' 
+            {user.role === 'admin'
+              ? 'Comprehensive view of all form entries and documentation'
               : 'Review and manage your submitted form entries'}
           </p>
         </div>
@@ -1060,8 +1220,8 @@ export default function Submissions({ user }: { user: User }) {
           <div className="flex items-center gap-2">
             <button onClick={exportCSV} className="inline-flex items-center gap-2 px-4 py-2 bg-surface-card border border-border rounded-xl text-sm font-medium hover:bg-surface shadow-sm"><FileDown size={16} /> Export Excel (XLSX)</button>
             <button onClick={exportZIP} className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-hover shadow-sm"><Archive size={16} /> Export ZIP</button>
-            <button 
-              onClick={zipBulkProfiles} 
+            <button
+              onClick={zipBulkProfiles}
               disabled={isBulkZipping}
               className="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-xl text-sm font-medium hover:bg-slate-700 shadow-sm disabled:opacity-50 transition-all"
             >
@@ -1076,7 +1236,7 @@ export default function Submissions({ user }: { user: User }) {
         )}
       </div>
 
-      <DataTable columns={columns} data={submissions} loading={loading} 
+      <DataTable columns={columns} data={submissions} loading={loading}
         searchPlaceholder="Search anything (Name, Email, Responses...)"
         searchValue={search} onSearch={setSearch}
         onRowClick={openDetail} emptyMessage="No submissions found" emptyIcon={<Inbox size={40} />}
@@ -1091,16 +1251,16 @@ export default function Submissions({ user }: { user: User }) {
             </div>
 
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setShowLevelFilterDropdown(!showLevelFilterDropdown)}
                 className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm text-xs font-bold text-slate-700 min-w-[120px] justify-between hover:border-primary transition-colors"
               >
                 <div className="flex items-center gap-2">
                   <Layers size={14} className="text-primary" />
                   <span>
-                    {levelFilter.length === 0 
-                      ? "All Levels" 
-                      : levelFilter.length === 1 
+                    {levelFilter.length === 0
+                      ? "All Levels"
+                      : levelFilter.length === 1
                         ? (levelFilter[0] === 0 ? "Initial" : `Level ${levelFilter[0]}`)
                         : `${levelFilter.length} Levels`}
                   </span>
@@ -1129,8 +1289,8 @@ export default function Submissions({ user }: { user: User }) {
                         <button
                           key={lvl}
                           onClick={() => {
-                            setLevelFilter(prev => 
-                              isSelected 
+                            setLevelFilter(prev =>
+                              isSelected
                                 ? prev.filter(l => l !== lvl)
                                 : [...prev, lvl].sort((a, b) => a - b)
                             );
@@ -1186,8 +1346,8 @@ export default function Submissions({ user }: { user: User }) {
                   {isNominationSubmission(selected) ? 'Reference ID' : 'Submission ID'}
                 </p>
                 <p className="text-sm font-bold mt-0.5 text-primary">
-                  {isNominationSubmission(selected) 
-                    ? (selected.unique_token || selected.nomination_token || selected.nominationToken || selected.id || 'N/A') 
+                  {isNominationSubmission(selected)
+                    ? (selected.unique_token || selected.nomination_token || selected.nominationToken || selected.id || 'N/A')
                     : (selected.id || 'N/A')}
                 </p>
               </div>
@@ -1221,16 +1381,16 @@ export default function Submissions({ user }: { user: User }) {
                         const showAsLink = isHttpUrl || isUploadPath || looksLikeFile;
                         const fileUrl = showAsLink
                           ? (isHttpUrl
-                              ? rawVal
-                              : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(rawVal.replace(/^\/?uploads\//i, ''))}`)
+                            ? rawVal
+                            : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(rawVal.replace(/^\/?uploads\//i, ''))}`)
                           : '';
 
                         return (
                           <div key={key} className="space-y-1">
                             <p className="text-[10px] text-muted uppercase font-bold">
-                              {nominationFieldMap[key] || 
-                               nominationFieldMap[`cf_${key}`] || 
-                               key.replace(/_/g, ' ').replace(/^cf\s+/i, '').replace(/^cf_/i, '')}
+                              {nominationFieldMap[key] ||
+                                nominationFieldMap[`cf_${key}`] ||
+                                key.replace(/_/g, ' ').replace(/^cf\s+/i, '').replace(/^cf_/i, '')}
                             </p>
                             <div className="text-sm font-semibold">
                               {showAsLink ? (
@@ -1381,7 +1541,7 @@ export default function Submissions({ user }: { user: User }) {
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">3. Select Report Columns</h4>
                   <div className="flex gap-2">
-                    <button 
+                    <button
                       onClick={() => {
                         const base = ['id', 'form_title', 'user_name', 'user_email', 'school_code', 'status', 'score'];
                         const dynamic = filterableFields.map(f => f.id);
@@ -1418,16 +1578,18 @@ export default function Submissions({ user }: { user: User }) {
                     const nomFields = buildNominationExportFields(nomKeys);
 
                     return [
-                      { label: 'Basic Identity', fields: [
-                        { id: 'id', label: 'Reference ID' },
-                        { id: 'form_title', label: 'Form Title' },
-                        { id: 'user_name', label: 'Submitted By' },
-                        { id: 'user_email', label: 'Email Address' },
-                        { id: 'school_code', label: 'School Code' },
-                        { id: 'status', label: 'Submission Status' },
-                        { id: 'score', label: 'Evaluation Score' },
-                        { id: 'submitted_at', label: 'Timestamp' }
-                      ]},
+                      {
+                        label: 'Basic Identity', fields: [
+                          { id: 'id', label: 'Reference ID' },
+                          { id: 'form_title', label: 'Form Title' },
+                          { id: 'user_name', label: 'Submitted By' },
+                          { id: 'user_email', label: 'Email Address' },
+                          { id: 'school_code', label: 'School Code' },
+                          { id: 'status', label: 'Submission Status' },
+                          { id: 'score', label: 'Evaluation Score' },
+                          { id: 'submitted_at', label: 'Timestamp' }
+                        ]
+                      },
                       ...(nomFields.length > 0 && isNominationForm ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
                       ...(filterableFields.length > 0 ? [{ label: 'Form Response Data', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
                     ].map((section, idx) => (
@@ -1437,8 +1599,8 @@ export default function Submissions({ user }: { user: User }) {
                           {section.fields.map(field => (
                             <label key={field.id} className="flex items-center gap-3 group cursor-pointer">
                               <div className="relative flex items-center">
-                                <input 
-                                  type="checkbox" 
+                                <input
+                                  type="checkbox"
                                   className="peer appearance-none w-4.5 h-4.5 rounded border-2 border-slate-200 checked:bg-primary checked:border-primary transition-all"
                                   checked={zipSelectedFields.includes(field.id)}
                                   onChange={e => {
@@ -1463,14 +1625,14 @@ export default function Submissions({ user }: { user: User }) {
           </div>
 
           <div className="flex gap-4 pt-4 border-t border-slate-100">
-            <button 
-              onClick={() => setShowExportConfig(false)} 
+            <button
+              onClick={() => setShowExportConfig(false)}
               className="flex-1 py-3.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
-            <button 
-              onClick={handleZipDownload} 
+            <button
+              onClick={handleZipDownload}
               className="flex-[2] py-3.5 bg-primary text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/25 hover:bg-primary-hover transition-all transform active:scale-[0.98]"
             >
               <Archive size={18} />
@@ -1488,7 +1650,7 @@ export default function Submissions({ user }: { user: User }) {
               <p className="text-[11px] text-muted">Choose which fields you want in your Excel (XLSX) file</p>
             </div>
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={() => {
                   const base = ['id', 'form_title', 'user_name', 'user_email', 'school_code', 'status', 'score'];
                   const dynamic = filterableFields.map(f => f.id);
@@ -1525,16 +1687,18 @@ export default function Submissions({ user }: { user: User }) {
               const nomFields = buildNominationExportFields(nomKeys);
 
               return [
-                { label: 'Basic Info', fields: [
-                  { id: 'id', label: 'Reference ID' },
-                  { id: 'form_title', label: 'Form Title' },
-                  { id: 'user_name', label: 'Submitted By' },
-                  { id: 'user_email', label: 'Email' },
-                  { id: 'school_code', label: 'School Code' },
-                  { id: 'status', label: 'Status' },
-                  { id: 'score', label: 'Score' },
-                  { id: 'submitted_at', label: 'Submission Date' }
-                ]},
+                {
+                  label: 'Basic Info', fields: [
+                    { id: 'id', label: 'Reference ID' },
+                    { id: 'form_title', label: 'Form Title' },
+                    { id: 'user_name', label: 'Submitted By' },
+                    { id: 'user_email', label: 'Email' },
+                    { id: 'school_code', label: 'School Code' },
+                    { id: 'status', label: 'Status' },
+                    { id: 'score', label: 'Score' },
+                    { id: 'submitted_at', label: 'Submission Date' }
+                  ]
+                },
                 ...(nomFields.length > 0 && isNominationForm ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
                 ...(filterableFields.length > 0 ? [{ label: 'Form Specific Fields', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
               ].map((section, idx) => (
@@ -1544,8 +1708,8 @@ export default function Submissions({ user }: { user: User }) {
                     {section.fields.map(field => (
                       <label key={field.id} className="flex items-center gap-3 group cursor-pointer">
                         <div className="relative flex items-center">
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             className="peer appearance-none w-5 h-5 rounded-md border-2 border-slate-200 checked:bg-primary checked:border-primary transition-all"
                             checked={csvSelectedFields.includes(field.id)}
                             onChange={e => {

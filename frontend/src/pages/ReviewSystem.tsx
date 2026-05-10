@@ -32,19 +32,20 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [loading, setLoading] = useState(true);
   const [loadingSubs, setLoadingSubs] = useState(false);
   const [isBulkZipping, setIsBulkZipping] = useState(false);
+  const [isBulkPrinting, setIsBulkPrinting] = useState(false);
 
   // Shortlist creation
   const [showCreateLevel, setShowCreateLevel] = useState(false);
   const [showShortlist, setShowShortlist] = useState(false);
-  const [levelForm, setLevelForm] = useState({ 
-    name: '', 
-    level_number: 1, 
-    scoring_type: 'form_level', 
+  const [levelForm, setLevelForm] = useState({
+    name: '',
+    level_number: 1,
+    scoring_type: 'form_level',
     assignment_type: 'all', // 'all' or 'divide_sections'
     section_id: null as string | null, // NEW: Specific section filter
-    blind_review: false, 
+    blind_review: false,
     show_previous_reviews: false,
-    reviewer_ids: [] as string[] 
+    reviewer_ids: [] as string[]
   });
   const [shortlistFilter, setShortlistFilter] = useState({ filter_type: 'all', filter_value: '0', source_level_id: '', field_id: '', field_value: '' });
   const [fieldFilters, setFieldFilters] = useState<FieldFilterRow[]>([{ field_id: '', operator: 'contains', field_value: '' }]);
@@ -112,7 +113,7 @@ export default function ReviewSystem({ user }: { user: User }) {
       return Array.isArray(filteredResults) ? filteredResults : subs;
     }
     const currentStageNumber = activeFilterLevel - 1;
-    const stageSubs = subs.filter((s: any) => 
+    const stageSubs = subs.filter((s: any) =>
       (s.level_reviews || []).some((r: any) => r.level === currentStageNumber)
     );
     return Array.isArray(filteredResults) ? filteredResults : stageSubs;
@@ -155,11 +156,11 @@ export default function ReviewSystem({ user }: { user: User }) {
       const getLabel = (v: any) => {
         if (v === undefined || v === null) return '';
         const vStr = String(v).trim();
-        
+
         // Find by value (exact or string match)
         const opt = field.options.find((o: any) => String(o.value) === vStr);
         if (opt) return opt.label || opt.value;
-        
+
         // If the value is a number (common in MCQs), try finding by index if values are not explicit
         const idx = parseInt(vStr);
         if (!isNaN(idx) && field.options[idx]) {
@@ -186,10 +187,10 @@ export default function ReviewSystem({ user }: { user: User }) {
       api.get('/users?role=reviewer').catch(() => []),
       api.get('/review-levels').catch(() => [])
     ])
-      .then(([f, u, l]) => { 
-        setForms(Array.isArray(f) ? f.filter((fm: any) => fm.status === 'active' || fm.status === 'expired') : []); 
-        setReviewers(Array.isArray(u) ? u : []); 
-        setLevels(Array.isArray(l) ? l : []); 
+      .then(([f, u, l]) => {
+        setForms(Array.isArray(f) ? f.filter((fm: any) => fm.status === 'active' || fm.status === 'expired') : []);
+        setReviewers(Array.isArray(u) ? u : []);
+        setLevels(Array.isArray(l) ? l : []);
       })
       .catch(err => {
         console.error('Error initializing ReviewSystem:', err);
@@ -226,25 +227,25 @@ export default function ReviewSystem({ user }: { user: User }) {
       setSelectedFormObj(formObj);
 
       // Identify and load unique nomination forms
-    const nomFormIds = new Set<string>();
-    (data?.submissions || []).forEach((s: any) => {
-      const nom = s.nomination_id || s.nominationId;
-      if (nom && typeof nom === 'object' && nom.form_id) {
-        const fid = String(nom.form_id?._id || nom.form_id?.id || nom.form_id);
-        if (fid && fid !== 'undefined') nomFormIds.add(fid);
-      }
-    });
+      const nomFormIds = new Set<string>();
+      (data?.submissions || []).forEach((s: any) => {
+        const nom = s.nomination_id || s.nominationId;
+        if (nom && typeof nom === 'object' && nom.form_id) {
+          const fid = String(nom.form_id?._id || nom.form_id?.id || nom.form_id);
+          if (fid && fid !== 'undefined') nomFormIds.add(fid);
+        }
+      });
 
-    // Clear previous nomination field map to prevent pollution across forms
-    const newFieldMap: Record<string, string> = {};
-    setProcessedNomFormIds(new Set());
+      // Clear previous nomination field map to prevent pollution across forms
+      const newFieldMap: Record<string, string> = {};
+      setProcessedNomFormIds(new Set());
 
-    if (nomFormIds.size > 0) {
-      const nomForms = await Promise.all(
-        Array.from(nomFormIds).map(id => api.get(`/forms?id=${id}`).catch(() => null))
-      );
-      
-      nomForms.forEach(rawNf => {
+      if (nomFormIds.size > 0) {
+        const nomForms = await Promise.all(
+          Array.from(nomFormIds).map(id => api.get(`/forms?id=${id}`).catch(() => null))
+        );
+
+        nomForms.forEach(rawNf => {
           const nf = Array.isArray(rawNf) ? rawNf[0] : rawNf;
           if (!nf) return;
           const schema = nf.form_schema || nf.schema;
@@ -302,13 +303,13 @@ export default function ReviewSystem({ user }: { user: User }) {
       if (formFields.length === 0) {
         formFields = typeof selectedFormObj?.fields === 'string' ? JSON.parse(selectedFormObj.fields) : (selectedFormObj?.fields || []);
       }
-    } catch {}
+    } catch { }
     const flat: any[] = [];
     const walk = (list: any[]) => {
       if (!Array.isArray(list)) return;
-      list.forEach((f: any) => { 
-        if (f.type !== 'section') flat.push(f); 
-        if (f.children) walk(f.children); 
+      list.forEach((f: any) => {
+        if (f.type !== 'section') flat.push(f);
+        if (f.children) walk(f.children);
       });
     };
     walk(formFields);
@@ -377,7 +378,7 @@ export default function ReviewSystem({ user }: { user: User }) {
 
       // Ensure nomination schema is loaded for this profile
       let nom = data?.submission?.nominationId || data?.submission?.nomination_id;
-      
+
       // If nomination is just an ID string, fetch the full object
       if (nom && typeof nom === 'string') {
         const nomRes = await api.get(`/nominations?id=${nom}`).catch(() => null);
@@ -386,7 +387,7 @@ export default function ReviewSystem({ user }: { user: User }) {
       }
 
       const nomFormId = nom && typeof nom === 'object' ? String(nom.form_id?._id || nom.form_id?.id || nom.form_id || '') : undefined;
-      
+
       if (nomFormId && nomFormId !== 'undefined' && !processedNomFormIds.has(nomFormId)) {
         const rawNf = await api.get(`/forms?id=${nomFormId}`).catch(() => null);
         const nf = Array.isArray(rawNf) ? rawNf[0] : rawNf;
@@ -407,24 +408,24 @@ export default function ReviewSystem({ user }: { user: User }) {
               });
             };
             if (parsed.sections) parsed.sections.forEach((s: any) => walk(s.fields || []));
-                else if (parsed.fields) walk(parsed.fields);
-                else if (Array.isArray(parsed)) walk(parsed);
-              }
+            else if (parsed.fields) walk(parsed.fields);
+            else if (Array.isArray(parsed)) walk(parsed);
+          }
 
-              // Also check settings for nomination_custom_fields
-              const settings = typeof nf.settings === 'string' ? JSON.parse(nf.settings) : nf.settings;
-              if (settings?.nomination_custom_fields && Array.isArray(settings.nomination_custom_fields)) {
-                settings.nomination_custom_fields.forEach((cf: any) => {
-                  if (cf.id && cf.label) {
-                    newFieldMap[cf.id] = cf.label;
-                    const cleanId = cf.id.replace(/^cf_/i, '');
-                    if (cleanId !== cf.id) newFieldMap[cleanId] = cf.label;
-                  }
-                });
+          // Also check settings for nomination_custom_fields
+          const settings = typeof nf.settings === 'string' ? JSON.parse(nf.settings) : nf.settings;
+          if (settings?.nomination_custom_fields && Array.isArray(settings.nomination_custom_fields)) {
+            settings.nomination_custom_fields.forEach((cf: any) => {
+              if (cf.id && cf.label) {
+                newFieldMap[cf.id] = cf.label;
+                const cleanId = cf.id.replace(/^cf_/i, '');
+                if (cleanId !== cf.id) newFieldMap[cleanId] = cf.label;
               }
+            });
+          }
 
-              setNominationFieldMap(newFieldMap);
-              setProcessedNomFormIds(prev => new Set(prev).add(nomFormId));
+          setNominationFieldMap(newFieldMap);
+          setProcessedNomFormIds(prev => new Set(prev).add(nomFormId));
         }
       }
     } catch (err) { console.error(err); }
@@ -494,7 +495,7 @@ export default function ReviewSystem({ user }: { user: User }) {
         try {
           responseArray = Array.isArray(s.responses) ? s.responses : (typeof s.responses === 'string' ? JSON.parse(s.responses) : []);
         } catch { return false; }
-        
+
         return activeFieldFilters.every(f => {
           const fieldResp = responseArray.find((r: any) => String(r.fieldId) === String(f.field_id));
           const fieldValue = fieldResp ? fieldResp.value : null;
@@ -532,10 +533,10 @@ export default function ReviewSystem({ user }: { user: User }) {
   const createLevel = async () => {
     if (!selectedFormId || !levelForm.name) return alert('Fill all fields');
     await api.post('/review-levels', {
-      form_id: selectedFormId, 
-      level_number: levelForm.level_number, 
+      form_id: selectedFormId,
+      level_number: levelForm.level_number,
       name: levelForm.name,
-      scoring_type: levelForm.scoring_type, 
+      scoring_type: levelForm.scoring_type,
       assignment_type: levelForm.assignment_type,
       blind_review: levelForm.blind_review,
       reviewer_ids: levelForm.reviewer_ids
@@ -550,10 +551,10 @@ export default function ReviewSystem({ user }: { user: User }) {
     let levelId = levels.find((l: any) => l.level_number === levelForm.level_number)?.id;
     if (!levelId) {
       const newLevel = await api.post('/review-levels', {
-        form_id: selectedFormId, 
-        level_number: levelForm.level_number, 
+        form_id: selectedFormId,
+        level_number: levelForm.level_number,
         name: levelForm.name || `Level ${levelForm.level_number}`,
-        scoring_type: levelForm.scoring_type, 
+        scoring_type: levelForm.scoring_type,
         assignment_type: levelForm.assignment_type,
         section_id: levelForm.section_id, // Pass section filter
         blind_review: levelForm.blind_review,
@@ -566,21 +567,21 @@ export default function ReviewSystem({ user }: { user: User }) {
     // If we have filtered results locally, we can send their IDs directly if the backend supports it, 
     // or use the filter criteria. For now, let's stick to criteria but ensure they match what's on screen.
     const cleanedFieldFilters = fieldFilters.filter(f => f.field_id && String(f.field_value).trim() !== '');
-    
+
     // NEW: If we have filteredResults, we can pass specific submission IDs
     const submissionIds = filteredResults ? filteredResults.map(s => s.id) : null;
 
     const result = await api.post('/shortlist', {
-      action: 'create-shortlist', 
-      form_id: selectedFormId, 
+      action: 'create-shortlist',
+      form_id: selectedFormId,
       level_id: levelId,
       submission_ids: submissionIds, // Backend should handle this
-      filter_type: shortlistFilter.filter_type, 
-      filter_value: shortlistFilter.filter_value, 
-      field_id: shortlistFilter.field_id, 
+      filter_type: shortlistFilter.filter_type,
+      filter_value: shortlistFilter.filter_value,
+      field_id: shortlistFilter.field_id,
       field_value: shortlistFilter.field_value,
       field_filters: cleanedFieldFilters,
-      source_level_id: shortlistFilter.source_level_id, 
+      source_level_id: shortlistFilter.source_level_id,
       reviewer_ids: levelForm.reviewer_ids,
       show_previous_reviews: levelForm.show_previous_reviews
     });
@@ -599,7 +600,7 @@ export default function ReviewSystem({ user }: { user: User }) {
       if (res.success && res.data) {
         setSelectedSub(res.data);
       }
-      
+
       // Respect level setting: only show previous reviewer marks when explicitly enabled.
       if (review.show_previous_reviews && Number(review.level) > 1) {
         const historyRes = await api.get(`/reviews?submission_id=${review.submission_id}`);
@@ -640,7 +641,7 @@ export default function ReviewSystem({ user }: { user: User }) {
 
     await api.put('/reviews', { id: selectedReview.id, status: reviewStatus, comments: reviewComment });
     await api.put('/submissions', { id: selectedReview.submission_id, status: submissionStatus });
-    
+
     // Find the level for this review
     const levelId = levels.find((l: any) => l.level_number === selectedReview.level)?.id;
     const qsArray = buildQuestionScoresPayload();
@@ -829,7 +830,7 @@ export default function ReviewSystem({ user }: { user: User }) {
     // 1. Must be an admin
     // 2. Either the form is explicitly 'nomination' OR at least one submission has nomination data
     const hasAnyNominationData = getExportData().some((s: any) => s.nomination_id || s.nominationId);
-    
+
     if (user.role !== 'admin' || (!isNominationForm && !hasAnyNominationData)) {
       return [];
     }
@@ -851,11 +852,11 @@ export default function ReviewSystem({ user }: { user: User }) {
 
     const seenIds = new Set<string>();
     const seenLabels = new Set<string>();
-    
+
     return [...staticFields, ...dynamicFields].filter(f => {
       if (seenIds.has(f.id)) return false;
       if (seenLabels.has(f.label)) return false; // Prevent duplicate labels
-      
+
       seenIds.add(f.id);
       seenLabels.add(f.label);
       return true;
@@ -864,7 +865,7 @@ export default function ReviewSystem({ user }: { user: User }) {
 
   const exportCSV = async () => {
     if (!selectedFormId) return;
-    
+
     // Collect all possible fields
     const baseFields = [
       { id: 'id', label: 'Reference ID' },
@@ -876,7 +877,7 @@ export default function ReviewSystem({ user }: { user: User }) {
       { id: 'score', label: 'Score' }
     ];
     const dynamicFields = filterableFields.map(f => ({ id: f.id, label: f.label || f.id }));
-    
+
     const nominationKeys = new Set<string>();
     const subs = getExportData();
     subs.forEach((s: any) => {
@@ -920,7 +921,7 @@ export default function ReviewSystem({ user }: { user: User }) {
       { id: 'score', label: 'Score' }
     ];
     const dynamicFields = filterableFields.map(f => ({ id: f.id, label: f.label || f.id }));
-    
+
     const nominationKeys = new Set<string>();
     dataToExport.forEach((s: any) => {
       const nom = s.nomination_id || s.nominationId;
@@ -936,9 +937,9 @@ export default function ReviewSystem({ user }: { user: User }) {
 
     const allPossibleFields = [...baseFields, ...dynamicFields, ...functionaryFields, dateField];
     const activeFields = allPossibleFields.filter(f => csvSelectedFields.includes(f.id));
-    
+
     const headers = activeFields.map(f => f.label);
-    
+
     const rows = dataToExport.map((s: any) => {
       const resps = parseResponseRecord(s.responses);
       const nom = s.nomination_id || s.nominationId;
@@ -953,7 +954,7 @@ export default function ReviewSystem({ user }: { user: User }) {
         if (f.id === 'status') return s.status;
         if (f.id === 'score') return typeof s.score === 'object' ? s.score?.percentage ?? '' : (s.score ?? '');
         if (f.id === 'submitted_at') return formatDate(s.submitted_at || s.createdAt || '');
-        
+
         if (f.id.startsWith('nom_')) {
           if (f.id === 'nom_teacher_name') return nom?.teacher_name || '';
           if (f.id === 'nom_teacher_email') return nom?.teacher_email || '';
@@ -988,7 +989,7 @@ export default function ReviewSystem({ user }: { user: User }) {
 
   const exportZIP = async () => {
     if (!selectedFormId) return;
-    
+
     // Set default fields for ZIP export
     const base = ['id', 'form_title', 'user_name', 'user_email', 'school_code', 'status', 'score'];
     const dynamic = filterableFields.map(f => f.id);
@@ -1003,7 +1004,7 @@ export default function ReviewSystem({ user }: { user: User }) {
     });
     const noms = buildNominationExportFields(nomKeys).map(f => f.id);
     setZipSelectedFields([...base, ...dynamic, ...noms, 'submitted_at']);
-    
+
     setShowExportConfig(true);
   };
 
@@ -1021,14 +1022,14 @@ export default function ReviewSystem({ user }: { user: User }) {
       if (zipSelectedFields.length > 0) {
         params.append('fields', JSON.stringify(zipSelectedFields));
       }
-      
+
       // If we have an active stage level filter, pass it
       if (activeFilterLevel > 1) {
         params.append('level', String(activeFilterLevel - 1));
         // If "Shortlisted Only" is implicitly what we want when viewing a level
         params.append('shortlisted_only', 'true');
       }
-      
+
       const blob = await (api as any).download(`/forms/${selectedFormId}/export/zip?${params.toString()}`);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1043,7 +1044,178 @@ export default function ReviewSystem({ user }: { user: User }) {
     }
   };
 
+  const printBulkProfiles = async () => {
+    const subsToPrint = getExportData();
+    if (!subsToPrint || subsToPrint.length === 0) {
+      alert('No teachers found to print.');
+      return;
+    }
 
+    if (subsToPrint.length > 50) {
+      if (!confirm(`You are about to print ${subsToPrint.length} profiles. This may take a while and could consume significant memory. Continue?`)) {
+        return;
+      }
+    }
+
+    setIsBulkPrinting(true);
+    try {
+      const printWindow = window.open('', '_blank', 'width=1100,height=850');
+      if (!printWindow) {
+        alert('Popup blocked. Please allow popups to print profiles.');
+        setIsBulkPrinting(false);
+        return;
+      }
+
+      // Start building the HTML
+      let combinedHtml = `
+        <!doctype html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Bulk Profiles Print - ${selectedFormObj?.title || 'Teachers'}</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; line-height: 1.45; }
+            .page { padding: 24px; page-break-after: always; min-height: 100vh; }
+            .page:last-child { page-break-after: auto; }
+            .header { border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+            .title { font-size: 22px; font-weight: 700; margin: 0; }
+            .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; font-size: 13px; }
+            .muted { color: #475569; font-size: 12px; }
+            .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin: 12px 0; page-break-inside: avoid; }
+            h2 { margin: 0 0 10px 0; font-size: 18px; }
+            h3 { margin: 0 0 6px 0; font-size: 15px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; vertical-align: top; font-size: 12px; }
+            th { background: #f8fafc; font-weight: 700; }
+            .comment { border-top: 1px dashed #cbd5e1; padding-top: 8px; margin-top: 8px; white-space: pre-wrap; }
+            @media print {
+              body { margin: 0; }
+              .page { padding: 12mm; border: none; }
+            }
+          </style>
+        </head>
+        <body>
+      `;
+
+      // Fetch all profile data
+      for (let i = 0; i < subsToPrint.length; i++) {
+        const sub = subsToPrint[i];
+        let profileData;
+
+        try {
+          if (user.role === 'admin') {
+            profileData = await api.get(`/shortlist?submission_id=${sub.id}`);
+          } else {
+            const res = await api.get(`/submissions/${sub.id}`);
+            if (res.success && res.data) {
+              profileData = { submission: res.data, levels: [], highest_level: 0, total_levels: 0 };
+            }
+          }
+
+          if (!profileData) continue;
+
+          const submission = profileData.submission;
+          const name = getSubmissionDisplayName(submission, submission?.user_name);
+          const formScore = submission?.score != null
+            ? `${Number(typeof submission.score === 'object' ? submission.score?.percentage : submission.score).toFixed(2)}%`
+            : 'N/A';
+
+          const levels = Array.isArray(profileData?.levels) ? profileData.levels : [];
+          const comments = Array.isArray(profileData?.comments) ? profileData.comments : [];
+          const statusText = String(submission?.status || 'N/A').replace(/_/g, ' ');
+
+          // Form Responses
+          const formSchema = submission.formId?.form_schema || selectedFormObj?.form_schema;
+          let responseRows: { label: string, value: any }[] = [];
+          try {
+            const raw = typeof submission.responses === 'string' ? JSON.parse(submission.responses) : (submission.responses || []);
+            const responses = Array.isArray(raw) ? raw : Object.entries(raw).map(([k, v]) => ({ fieldId: k, value: v }));
+            const schemaObj = typeof formSchema === 'string' ? JSON.parse(formSchema) : formSchema;
+            const fields = (schemaObj?.sections || []).flatMap((s: any) => s.fields || []);
+            const profileFieldMap = Object.fromEntries(fields.map((f: any) => [String(f.id), f]));
+
+            responseRows = responses.map((r: any) => {
+              const field = fields.find((f: any) => String(f.id) === String(r.fieldId));
+              const displayVal = formatResponseLabelValue(String(r.fieldId), r.value, profileFieldMap);
+              return { label: field?.label || r.fieldId, value: displayVal };
+            });
+          } catch { }
+
+          const responsesHtml = responseRows.length
+            ? responseRows.map((row, idx) => {
+              const val = row.value;
+              let displayValue = '';
+              if (Array.isArray(val)) displayValue = val.join(', ');
+              else if (val == null) displayValue = '—';
+              else {
+                const sVal = String(val);
+                const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com'));
+                displayValue = isFile ? '<span style="color: #2563eb; font-weight: bold;">[File Attached]</span>' : escapeHtml(sVal);
+              }
+              return `<tr><td>${idx + 1}</td><td>${escapeHtml(row.label)}</td><td>${displayValue}</td></tr>`;
+            }).join('')
+            : '<tr><td colspan="3">No responses available.</td></tr>';
+
+          const levelsHtml = levels.length
+            ? levels.map((lvl: any) => {
+              const scoreRows = Array.isArray(lvl?.scores) ? lvl.scores : [];
+              const scoreHtml = scoreRows.length
+                ? scoreRows.map((s: any, i: number) => `<tr><td>R${i + 1}</td><td>${escapeHtml(s?.overall_score ?? 'N/A')}</td><td>${escapeHtml(String(s?.recommendation || '').replace(/_/g, ' ') || 'N/A')}</td><td>${escapeHtml(s?.comments || '-')}</td></tr>`).join('')
+                : '<tr><td colspan="4">No reviews recorded at this level.</td></tr>';
+              return `<section class="card"><h3>Level ${escapeHtml(lvl?.level_number || '-')} - ${escapeHtml(lvl?.level_name || 'Unnamed')}</h3><table><thead><tr><th>Reviewer</th><th>Score</th><th>Recommendation</th><th>Comments</th></tr></thead><tbody>${scoreHtml}</tbody></table></section>`;
+            }).join('')
+            : '';
+
+          const nom = submission.nominationId || submission.nomination_id;
+          const addData = nom ? parseObject(nom.additional_data) : {};
+          const nominationHtml = nom && Object.keys(addData).length > 0
+            ? `<section class="card"><h2>School Functionary Details</h2><div class="meta"><div><strong>Nominated Teacher:</strong> ${escapeHtml(nom.teacher_name)}</div><div><strong>School Code:</strong> ${escapeHtml(nom.school_code)}</div>${Object.entries(addData).map(([key, val]) => `<div><strong>${escapeHtml(nominationFieldMap[key] || key.replace(/_/g, ' '))}:</strong> ${escapeHtml(String(val))}</div>`).join('')}</div></section>`
+            : '';
+
+          combinedHtml += `
+            <div class="page">
+              <section class="header">
+                <h1 class="title">${escapeHtml(name)}</h1>
+                <div class="muted">${escapeHtml(submission?.user_email || '')}</div>
+                <div class="meta">
+                  <div><strong>Form:</strong> ${escapeHtml(submission?.form_title || '-')}</div>
+                  <div><strong>Status:</strong> ${escapeHtml(statusText)}</div>
+                  <div><strong>Form Score:</strong> ${escapeHtml(formScore)}</div>
+                  <div><strong>Level Progress:</strong> ${escapeHtml(`${profileData?.highest_level || 0}/${profileData?.total_levels || 0}`)}</div>
+                </div>
+              </section>
+              ${nominationHtml}
+              <section class="card"><h2>Form Responses</h2><table><thead><tr><th>#</th><th>Field</th><th>Response</th></tr></thead><tbody>${responsesHtml}</tbody></table></section>
+              ${levelsHtml}
+            </div>
+          `;
+        } catch (err) {
+          console.error(`Error fetching profile for submission ${sub.id}:`, err);
+        }
+      }
+
+      combinedHtml += '</body></html>';
+
+      printWindow.document.open();
+      printWindow.document.write(combinedHtml);
+      printWindow.document.close();
+
+      setTimeout(() => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch {
+          alert('Unable to start printing automatically. Please use Ctrl+P in the print window.');
+        }
+        setIsBulkPrinting(false);
+      }, 500);
+
+    } catch (err: any) {
+      console.error('Bulk Print Error:', err);
+      alert('Failed to generate bulk print: ' + err.message);
+      setIsBulkPrinting(false);
+    }
+  };
 
   const zipBulkProfiles = async () => {
     const subsToPrint = getExportData();
@@ -1060,12 +1232,12 @@ export default function ReviewSystem({ user }: { user: User }) {
 
     setIsBulkZipping(true);
     const zip = new JSZip();
-    
+
     try {
       for (let i = 0; i < subsToPrint.length; i++) {
         const sub = subsToPrint[i];
         let profileData;
-        
+
         try {
           if (user.role === 'admin') {
             profileData = await api.get(`/shortlist?submission_id=${sub.id}`);
@@ -1090,43 +1262,43 @@ export default function ReviewSystem({ user }: { user: User }) {
           // Form Responses
           const formSchema = submission.formId?.form_schema || selectedFormObj?.form_schema;
           let responseRows: { label: string, value: any }[] = [];
-          try { 
+          try {
             const raw = typeof submission.responses === 'string' ? JSON.parse(submission.responses) : (submission.responses || []);
             const responses = Array.isArray(raw) ? raw : Object.entries(raw).map(([k, v]) => ({ fieldId: k, value: v }));
             const schemaObj = typeof formSchema === 'string' ? JSON.parse(formSchema) : formSchema;
             const fields = (schemaObj?.sections || []).flatMap((s: any) => s.fields || []);
             const profileFieldMap = Object.fromEntries(fields.map((f: any) => [String(f.id), f]));
-            
+
             responseRows = responses.map((r: any) => {
               const field = fields.find((f: any) => String(f.id) === String(r.fieldId));
               const displayVal = formatResponseLabelValue(String(r.fieldId), r.value, profileFieldMap);
               return { label: field?.label || r.fieldId, value: displayVal };
             });
-          } catch {}
+          } catch { }
 
           const responsesHtml = responseRows.length
             ? responseRows.map((row, idx) => {
-                const val = row.value;
-                let displayValue = '';
-                if (Array.isArray(val)) displayValue = val.join(', ');
-                else if (val == null) displayValue = '—';
-                else {
-                  const sVal = String(val);
-                  const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com'));
-                  displayValue = isFile ? `<span style="color: #2563eb; font-weight: bold;">[File Attached]</span>` : escapeHtml(sVal);
-                }
-                return `<tr><td>${idx + 1}</td><td>${escapeHtml(row.label)}</td><td>${displayValue}</td></tr>`;
-              }).join('')
+              const val = row.value;
+              let displayValue = '';
+              if (Array.isArray(val)) displayValue = val.join(', ');
+              else if (val == null) displayValue = '—';
+              else {
+                const sVal = String(val);
+                const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com'));
+                displayValue = isFile ? `<span style="color: #2563eb; font-weight: bold;">[File Attached]</span>` : escapeHtml(sVal);
+              }
+              return `<tr><td>${idx + 1}</td><td>${escapeHtml(row.label)}</td><td>${displayValue}</td></tr>`;
+            }).join('')
             : '<tr><td colspan="3">No responses available.</td></tr>';
 
           const levelsHtml = levels.length
             ? levels.map((lvl: any) => {
-                const scoreRows = Array.isArray(lvl?.scores) ? lvl.scores : [];
-                const scoreHtml = scoreRows.length
-                  ? scoreRows.map((s: any, i: number) => `<tr><td>R${i + 1}</td><td>${escapeHtml(s?.overall_score ?? 'N/A')}</td><td>${escapeHtml(String(s?.recommendation || '').replace(/_/g, ' ') || 'N/A')}</td><td>${escapeHtml(s?.comments || '-')}</td></tr>`).join('')
-                  : '<tr><td colspan="4">No reviews recorded at this level.</td></tr>';
-                return `<section class="card"><h3>Level ${escapeHtml(lvl?.level_number || '-')} - ${escapeHtml(lvl?.level_name || 'Unnamed')}</h3><table><thead><tr><th>Reviewer</th><th>Score</th><th>Recommendation</th><th>Comments</th></tr></thead><tbody>${scoreHtml}</tbody></table></section>`;
-              }).join('')
+              const scoreRows = Array.isArray(lvl?.scores) ? lvl.scores : [];
+              const scoreHtml = scoreRows.length
+                ? scoreRows.map((s: any, i: number) => `<tr><td>R${i + 1}</td><td>${escapeHtml(s?.overall_score ?? 'N/A')}</td><td>${escapeHtml(String(s?.recommendation || '').replace(/_/g, ' ') || 'N/A')}</td><td>${escapeHtml(s?.comments || '-')}</td></tr>`).join('')
+                : '<tr><td colspan="4">No reviews recorded at this level.</td></tr>';
+              return `<section class="card"><h3>Level ${escapeHtml(lvl?.level_number || '-')} - ${escapeHtml(lvl?.level_name || 'Unnamed')}</h3><table><thead><tr><th>Reviewer</th><th>Score</th><th>Recommendation</th><th>Comments</th></tr></thead><tbody>${scoreHtml}</tbody></table></section>`;
+            }).join('')
             : '';
 
           const nom = submission.nominationId || submission.nomination_id;
@@ -1231,39 +1403,39 @@ export default function ReviewSystem({ user }: { user: User }) {
 
     const responsesHtml = responseRows.length
       ? responseRows.map((row, idx) => {
-          const val = row.value;
-          let displayValue = '';
-          
-          if (Array.isArray(val)) {
-            displayValue = val.join(', ');
-          } else if (val == null) {
-            displayValue = '—';
-          } else {
-            const sVal = String(val);
-            const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com'));
-            if (isFile) {
-              const fileUrl = sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
-              displayValue = `<a href="${fileUrl}" target="_blank" style="color: #2563eb; text-decoration: underline; font-weight: bold;">View File</a>`;
-            } else {
-              displayValue = escapeHtml(sVal);
-            }
-          }
+        const val = row.value;
+        let displayValue = '';
 
-          return `
+        if (Array.isArray(val)) {
+          displayValue = val.join(', ');
+        } else if (val == null) {
+          displayValue = '—';
+        } else {
+          const sVal = String(val);
+          const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com'));
+          if (isFile) {
+            const fileUrl = sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
+            displayValue = `<a href="${fileUrl}" target="_blank" style="color: #2563eb; text-decoration: underline; font-weight: bold;">View File</a>`;
+          } else {
+            displayValue = escapeHtml(sVal);
+          }
+        }
+
+        return `
             <tr>
               <td>${idx + 1}</td>
               <td>${escapeHtml(row.label)}</td>
               <td>${displayValue}</td>
             </tr>
           `;
-        }).join('')
+      }).join('')
       : '<tr><td colspan="3">No responses available.</td></tr>';
 
     const levelsHtml = levels.length
       ? levels.map((lvl: any) => {
-          const scoreRows = Array.isArray(lvl?.scores) ? lvl.scores : [];
-          const scoreHtml = scoreRows.length
-            ? scoreRows.map((s: any, i: number) => `
+        const scoreRows = Array.isArray(lvl?.scores) ? lvl.scores : [];
+        const scoreHtml = scoreRows.length
+          ? scoreRows.map((s: any, i: number) => `
                 <tr>
                   <td>R${i + 1}</td>
                   <td>${escapeHtml(s?.overall_score ?? 'N/A')}</td>
@@ -1271,9 +1443,9 @@ export default function ReviewSystem({ user }: { user: User }) {
                   <td>${escapeHtml(s?.comments || '-')}</td>
                 </tr>
               `).join('')
-            : '<tr><td colspan="4">No reviews recorded at this level.</td></tr>';
+          : '<tr><td colspan="4">No reviews recorded at this level.</td></tr>';
 
-          return `
+        return `
             <section class="card">
               <h3>Level ${escapeHtml(lvl?.level_number || '-')} - ${escapeHtml(lvl?.level_name || 'Unnamed')}</h3>
               <p class="muted">Scoring: ${escapeHtml(String(lvl?.scoring_type || '').replace(/_/g, ' '))} | Review Mode: ${lvl?.blind_review ? 'Blind' : 'Open'}</p>
@@ -1283,7 +1455,7 @@ export default function ReviewSystem({ user }: { user: User }) {
               </table>
             </section>
           `;
-        }).join('')
+      }).join('')
       : '<section class="card"><p>No level-wise review data available.</p></section>';
 
     const commentsHtml = comments.length
@@ -1311,13 +1483,13 @@ export default function ReviewSystem({ user }: { user: User }) {
             <div><strong>Nominated Teacher:</strong> ${escapeHtml(nom.teacher_name)}</div>
             <div><strong>School Code:</strong> ${escapeHtml(nom.school_code)}</div>
             ${Object.entries(addData).map(([key, val]) => {
-              const sVal = String(val);
-              const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com') || sVal.includes('/uploads/'));
-              const displayVal = isFile 
-                ? `<a href="${sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`}" target="_blank" style="color: #2563eb; text-decoration: underline; font-weight: bold;">View File</a>`
-                : escapeHtml(sVal);
-              return `<div><strong>${escapeHtml(nominationFieldMap[key] || key.replace(/_/g, ' '))}:</strong> ${displayVal}</div>`;
-            }).join('')}
+        const sVal = String(val);
+        const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com') || sVal.includes('/uploads/'));
+        const displayVal = isFile
+          ? `<a href="${sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`}" target="_blank" style="color: #2563eb; text-decoration: underline; font-weight: bold;">View File</a>`
+          : escapeHtml(sVal);
+        return `<div><strong>${escapeHtml(nominationFieldMap[key] || key.replace(/_/g, ' '))}:</strong> ${displayVal}</div>`;
+      }).join('')}
           </div>
         </section>
       `
@@ -1445,27 +1617,31 @@ export default function ReviewSystem({ user }: { user: User }) {
     const selectableLevels = !currentStageNumber
       ? formLevels
       : formLevels.filter((l: any) => l.level_number <= currentStageNumber);
-    
+
     const visibleLevelColumns = selectedLevels.length === 0
       ? selectableLevels
       : selectableLevels.filter((l: any) => selectedLevels.includes(l.level_number));
 
     const subColumns = [
-      { key: 'id', label: 'Reference ID', sortable: true, render: (_v: string, row: any) => {
-        const isNom = isNominationSubmission(row);
-        const refId = isNom ? (row.unique_token || row.nomination_token || row.id) : row.id;
-        return <span className="text-[10px] font-mono text-slate-500">{refId || '—'}</span>;
-      }},
-      { key: 'user_name', label: 'Name', sortable: true, render: (v: string, r: any) => (
-        <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">{(v||'?')[0]}</div>
-          <div><p className="text-sm font-medium">{getSubmissionDisplayName(r, v)}</p><p className="text-[10px] text-slate-500">{r.user_email}</p></div></div>) },
+      {
+        key: 'id', label: 'Reference ID', sortable: true, render: (_v: string, row: any) => {
+          const isNom = isNominationSubmission(row);
+          const refId = isNom ? (row.unique_token || row.nomination_token || row.id) : row.id;
+          return <span className="text-[10px] font-mono text-slate-500">{refId || '—'}</span>;
+        }
+      },
+      {
+        key: 'user_name', label: 'Name', sortable: true, render: (v: string, r: any) => (
+          <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">{(v || '?')[0]}</div>
+            <div><p className="text-sm font-medium">{getSubmissionDisplayName(r, v)}</p><p className="text-[10px] text-slate-500">{r.user_email}</p></div></div>)
+      },
       { key: 'score', label: 'Form Score', sortable: true, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{Number(typeof v === 'object' ? v?.percentage : v).toFixed(2)}%</span> : <span className="text-slate-500">—</span> },
       ...visibleLevelColumns.map((l: any) => ({
         key: `level_${l.level_number}`, label: `L${l.level_number}`, sortable: true,
         render: (_: any, r: any) => {
           const reviews = (r.level_reviews || []).filter((rv: any) => rv.level === l.level_number);
           if (reviews.length === 0) return <span className="text-slate-400 text-[10px]">—</span>;
-          
+
           const completedReviews = reviews.filter((rv: any) => ['approved', 'rejected', 'completed'].includes(String(rv.status)));
           const scores = completedReviews.map((rv: any) => rv.overall_score || 0);
           const avg = scores.length > 0 ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
@@ -1474,12 +1650,11 @@ export default function ReviewSystem({ user }: { user: User }) {
             <div className="flex flex-col gap-1.5">
               <div className="flex flex-wrap gap-1">
                 {reviews.map((rv: any, idx: number) => (
-                  <div key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all ${
-                    rv.status === 'pending' ? 'bg-slate-50 border-slate-200 text-slate-400 border-dashed' :
-                    rv.recommendation === 'reject' ? 'bg-red-50 border-red-200 text-red-600' :
-                    rv.recommendation === 'next_level' ? 'bg-amber-50 border-amber-200 text-amber-600' :
-                    'bg-slate-50 border-slate-200 text-slate-600'
-                  }`} title={`${rv.reviewer_name || 'Reviewer'}: ${rv.status === 'pending' ? 'Pending' : rv.recommendation}`}>
+                  <div key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all ${rv.status === 'pending' ? 'bg-slate-50 border-slate-200 text-slate-400 border-dashed' :
+                      rv.recommendation === 'reject' ? 'bg-red-50 border-red-200 text-red-600' :
+                        rv.recommendation === 'next_level' ? 'bg-amber-50 border-amber-200 text-amber-600' :
+                          'bg-slate-50 border-slate-200 text-slate-600'
+                    }`} title={`${rv.reviewer_name || 'Reviewer'}: ${rv.status === 'pending' ? 'Pending' : rv.recommendation}`}>
                     {rv.status === 'pending' ? '...' : rv.overall_score}
                   </div>
                 ))}
@@ -1522,19 +1697,19 @@ export default function ReviewSystem({ user }: { user: User }) {
           </div>
           {selectedFormId && (
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={exportCSV}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 shadow-sm transition-all"
               >
                 <FileDown size={16} /> Export Excel (XLSX)
               </button>
-              <button 
+              <button
                 onClick={exportZIP}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-hover shadow-sm transition-all"
               >
                 <Archive size={16} /> Export ZIP
               </button>
-              <button 
+              <button
                 onClick={zipBulkProfiles}
                 disabled={isBulkZipping}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-xl text-sm font-medium hover:bg-slate-800 shadow-sm transition-all disabled:opacity-50"
@@ -1558,8 +1733,8 @@ export default function ReviewSystem({ user }: { user: User }) {
               <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">1</span>
               <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Select Form</h2>
             </div>
-            <select 
-              value={selectedFormId} 
+            <select
+              value={selectedFormId}
               onChange={e => { const id = e.target.value; if (id) loadFormData(id); else { setSelectedFormId(''); setShortlistData(null); setFilteredResults(null); } }}
               className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
             >
@@ -1591,7 +1766,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                       <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">2</span>
                       <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Filter Teachers</h2>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setShowFilters(!showFilters)}
                       disabled={isCurrentStageAssigned}
                       className={`p-2 rounded-xl transition-all ${showFilters ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'} ${isCurrentStageAssigned ? 'opacity-0' : ''}`}
@@ -1599,7 +1774,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                       <Filter size={16} />
                     </button>
                   </div>
-                  
+
                   <div className="space-y-6">
                     {showFilters ? (
                       <>
@@ -1641,7 +1816,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                                 const selectedField = fields.find(f => f.id === row.field_id);
                                 const options = getFieldOptionValues(selectedField);
                                 const isNumber = selectedField?.type === 'number';
-                                
+
                                 return (
                                   <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-3 relative">
                                     <button onClick={() => setFieldFilters(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-all shadow-md">
@@ -1714,7 +1889,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                         <p className="text-xs text-slate-500 font-medium mb-4 px-4">
                           Click filter to shortlist candidates for the next stage.
                         </p>
-                        <button 
+                        <button
                           onClick={() => setShowFilters(true)}
                           className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold uppercase rounded-xl transition-all"
                         >
@@ -1742,18 +1917,18 @@ export default function ReviewSystem({ user }: { user: User }) {
                       <div className="flex items-center gap-2">
                         <span className={`w-5 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${isCurrentStageAssigned ? 'bg-slate-700 text-slate-400' : 'bg-white text-navy'}`}>{activeFilterLevel === 1 ? '3' : '2'}</span>
                         <h2 className="text-base font-bold">
-                          {isCurrentStageAssigned 
-                            ? `Stage ${activeFilterLevel === 1 ? '1' : activeFilterLevel - 1} Assignment Locked` 
-                            : activeFilterLevel === 1 
-                              ? "Assign to Review Level" 
+                          {isCurrentStageAssigned
+                            ? `Stage ${activeFilterLevel === 1 ? '1' : activeFilterLevel - 1} Assignment Locked`
+                            : activeFilterLevel === 1
+                              ? "Assign to Review Level"
                               : `Move to Stage ${activeFilterLevel - 1}`}
                         </h2>
                       </div>
                       <p className={`text-xs mt-0.5 ${isCurrentStageAssigned ? 'text-slate-500' : 'text-blue-200'}`}>
-                        {isCurrentStageAssigned 
+                        {isCurrentStageAssigned
                           ? "This stage has already been finalized and assigned."
-                          : activeFilterLevel === 1 
-                            ? `${actionCandidates.length} teachers match your filters` 
+                          : activeFilterLevel === 1
+                            ? `${actionCandidates.length} teachers match your filters`
                             : `${actionCandidates.length} recommended candidates ready for next stage`}
                       </p>
                     </div>
@@ -1763,19 +1938,19 @@ export default function ReviewSystem({ user }: { user: User }) {
                       {isCurrentStageAssigned ? 'Close' : 'Cancel'}
                     </button>
                     {!isCurrentStageAssigned && (
-                      <button onClick={() => { 
-                          if (isNextShortlistBlocked) {
-                            const lockReason = sourceLevelHasAnyReviewsForNext
-                              ? `${sourceLevelPendingFormsForNext} forms are still pending in Stage ${sourceLevelNumberForNext}.`
-                              : `No reviews have started in Stage ${sourceLevelNumberForNext} yet.`;
-                            alert(`Next level shortlisting is disabled. ${lockReason} Please wait until all reviewers complete their reviews.`);
-                            return;
-                          }
-                          // Total Pool (activeFilterLevel=1) should always feed Level 1.
-                          const nextLvlNum = activeFilterLevel === 1 ? 1 : activeFilterLevel;
-                          setLevelForm(p => ({ ...p, level_number: nextLvlNum, name: `Level ${nextLvlNum}` })); 
-                          setShowShortlist(true); 
-                        }}
+                      <button onClick={() => {
+                        if (isNextShortlistBlocked) {
+                          const lockReason = sourceLevelHasAnyReviewsForNext
+                            ? `${sourceLevelPendingFormsForNext} forms are still pending in Stage ${sourceLevelNumberForNext}.`
+                            : `No reviews have started in Stage ${sourceLevelNumberForNext} yet.`;
+                          alert(`Next level shortlisting is disabled. ${lockReason} Please wait until all reviewers complete their reviews.`);
+                          return;
+                        }
+                        // Total Pool (activeFilterLevel=1) should always feed Level 1.
+                        const nextLvlNum = activeFilterLevel === 1 ? 1 : activeFilterLevel;
+                        setLevelForm(p => ({ ...p, level_number: nextLvlNum, name: `Level ${nextLvlNum}` }));
+                        setShowShortlist(true);
+                      }}
                         disabled={isNextShortlistBlocked}
                         className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-sm font-bold shadow-lg flex items-center justify-center gap-2 transition-all ${isNextShortlistBlocked ? 'bg-slate-200 text-slate-500 cursor-not-allowed shadow-none' : 'bg-white text-navy hover:bg-blue-50 active:scale-95'}`}>
                         <Layers size={18} /> {activeFilterLevel === 1 ? "Shortlist Now" : "Confirm Assignment"}
@@ -1807,7 +1982,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                   </div>
                 ) : (
                   <div className="flex items-center gap-3 overflow-x-auto pb-6 pt-2 custom-scrollbar snap-x snap-mandatory">
-                    <button 
+                    <button
                       onClick={() => {
                         setActiveFilterLevel(1);
                         setFilteredResults(null);
@@ -1830,7 +2005,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                         <div className="flex flex-col items-center gap-1 opacity-40 flex-shrink-0">
                           <ChevronRight size={20} className="text-slate-400" />
                         </div>
-                        <button 
+                        <button
                           onClick={() => {
                             setActiveFilterLevel(idx + 2);
                             setFilteredResults(null);
@@ -1854,31 +2029,31 @@ export default function ReviewSystem({ user }: { user: User }) {
                       const canAddNextLevel = latestLevel ? isLevelFullyReviewed(latestLevelNumber) : true;
                       return (
                         <>
-                    <div className="flex flex-col items-center gap-1 opacity-20 flex-shrink-0">
-                      <ChevronRight size={20} className="text-slate-400" />
-                    </div>
-                    <button 
-                      onClick={() => {
-                        if (!canAddNextLevel) {
-                          alert(`Please complete all reviews for Stage ${latestLevelNumber} first. Then the next stage can be added.`);
-                          return;
-                        }
-                        setLevelForm(p => ({ 
-                          ...p, 
-                          level_number: formLevels.length + 1, 
-                          name: `Level ${formLevels.length + 1}`,
-                          reviewer_ids: []
-                        }));
-                        setShowShortlist(true);
-                      }}
-                      className={`flex-shrink-0 p-4 rounded-2xl border-2 border-dashed text-center min-w-[140px] transition-all group snap-end ${canAddNextLevel ? 'border-slate-200 hover:border-primary hover:bg-primary/5 hover:opacity-100 opacity-40' : 'border-slate-200 bg-slate-50 opacity-70 cursor-not-allowed'}`}
-                    >
-                      <p className="text-[10px] font-black text-slate-400 group-hover:text-primary uppercase mb-1">Stage {formLevels.length + 1}</p>
-                      <div className="flex items-center justify-center gap-1 text-slate-400 group-hover:text-primary">
-                        <Plus size={14} />
-                        <p className="text-sm font-bold">Add Level</p>
-                      </div>
-                    </button>
+                          <div className="flex flex-col items-center gap-1 opacity-20 flex-shrink-0">
+                            <ChevronRight size={20} className="text-slate-400" />
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (!canAddNextLevel) {
+                                alert(`Please complete all reviews for Stage ${latestLevelNumber} first. Then the next stage can be added.`);
+                                return;
+                              }
+                              setLevelForm(p => ({
+                                ...p,
+                                level_number: formLevels.length + 1,
+                                name: `Level ${formLevels.length + 1}`,
+                                reviewer_ids: []
+                              }));
+                              setShowShortlist(true);
+                            }}
+                            className={`flex-shrink-0 p-4 rounded-2xl border-2 border-dashed text-center min-w-[140px] transition-all group snap-end ${canAddNextLevel ? 'border-slate-200 hover:border-primary hover:bg-primary/5 hover:opacity-100 opacity-40' : 'border-slate-200 bg-slate-50 opacity-70 cursor-not-allowed'}`}
+                          >
+                            <p className="text-[10px] font-black text-slate-400 group-hover:text-primary uppercase mb-1">Stage {formLevels.length + 1}</p>
+                            <div className="flex items-center justify-center gap-1 text-slate-400 group-hover:text-primary">
+                              <Plus size={14} />
+                              <p className="text-sm font-bold">Add Level</p>
+                            </div>
+                          </button>
                         </>
                       );
                     })()}
@@ -1889,8 +2064,8 @@ export default function ReviewSystem({ user }: { user: User }) {
               {/* Submissions table */}
               <DataTable
                 title={filteredResults !== null ? "Filtered Teachers" : (currentStageNumber ? `Stage ${currentStageNumber} Submissions` : "All Submissions")}
-                subtitle={filteredResults !== null 
-                  ? `${filteredResults.length} teachers selected for shortlisting` 
+                subtitle={filteredResults !== null
+                  ? `${filteredResults.length} teachers selected for shortlisting`
                   : (currentStageNumber ? `Showing teachers currently in Stage ${currentStageNumber}` : "Use the filters on the left to shortlist teachers for review")}
                 headerActions={selectableLevels.length > 0 ? (
                   <div className="flex items-center gap-2 relative">
@@ -1901,10 +2076,10 @@ export default function ReviewSystem({ user }: { user: User }) {
                         className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold outline-none hover:border-primary transition-all min-w-[100px] justify-between"
                       >
                         <span>
-                          {selectedLevels.length === 0 
-                            ? "All Stages" 
-                            : selectedLevels.length === 1 
-                              ? `Stage ${selectedLevels[0]}` 
+                          {selectedLevels.length === 0
+                            ? "All Stages"
+                            : selectedLevels.length === 1
+                              ? `Stage ${selectedLevels[0]}`
                               : `${selectedLevels.length} Stages`}
                         </span>
                         <ChevronDown size={12} className={`transition-transform ${showLevelDropdown ? 'rotate-180' : ''}`} />
@@ -1931,8 +2106,8 @@ export default function ReviewSystem({ user }: { user: User }) {
                                 <button
                                   key={l.id}
                                   onClick={() => {
-                                    setSelectedLevels(prev => 
-                                      isSelected 
+                                    setSelectedLevels(prev =>
+                                      isSelected
                                         ? prev.filter(ln => ln !== l.level_number)
                                         : [...prev, l.level_number].sort((a, b) => a - b)
                                     );
@@ -1956,16 +2131,16 @@ export default function ReviewSystem({ user }: { user: User }) {
                 onRowClick={(row: any) => openProfile(row.id)}
                 filters={
                   <div className="relative">
-                    <button 
+                    <button
                       onClick={() => setShowLevelFilterDropdown(!showLevelFilterDropdown)}
                       className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm text-xs font-bold text-slate-700 min-w-[140px] justify-between hover:border-primary transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <Layers size={14} className="text-primary" />
                         <span>
-                          {levelFilter.length === 0 
-                            ? "Filter by Level" 
-                            : levelFilter.length === 1 
+                          {levelFilter.length === 0
+                            ? "Filter by Level"
+                            : levelFilter.length === 1
                               ? (levelFilter[0] === 0 ? "Initial (L0)" : `Level ${levelFilter[0]}`)
                               : `${levelFilter.length} Levels`}
                         </span>
@@ -1994,8 +2169,8 @@ export default function ReviewSystem({ user }: { user: User }) {
                               <button
                                 key={lvl}
                                 onClick={() => {
-                                  setLevelFilter(prev => 
-                                    isSelected 
+                                  setLevelFilter(prev =>
+                                    isSelected
                                       ? prev.filter(l => l !== lvl)
                                       : [...prev, lvl].sort((a, b) => a - b)
                                   );
@@ -2047,9 +2222,9 @@ export default function ReviewSystem({ user }: { user: User }) {
                     </div>
                     <div>
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wider">Specific Form Section (Optional)</label>
-                      <select 
-                        value={levelForm.section_id || ''} 
-                        onChange={e => setLevelForm(p => ({ ...p, section_id: e.target.value }))} 
+                      <select
+                        value={levelForm.section_id || ''}
+                        onChange={e => setLevelForm(p => ({ ...p, section_id: e.target.value }))}
                         className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold outline-none focus:border-primary"
                       >
                         <option value="">Full Form (All Sections)</option>
@@ -2077,8 +2252,8 @@ export default function ReviewSystem({ user }: { user: User }) {
                     </div>
                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                       <p className="text-[10px] text-slate-500 leading-relaxed italic">
-                        {levelForm.assignment_type === 'all' 
-                          ? "Every reviewer will see every teacher's full form." 
+                        {levelForm.assignment_type === 'all'
+                          ? "Every reviewer will see every teacher's full form."
                           : "Teachers will be split equally among the assigned reviewers."}
                       </p>
                     </div>
@@ -2141,7 +2316,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                 <div>
                   <p className="text-sm font-bold text-emerald-800">Process Completed Successfully!</p>
                   <p className="text-xs text-emerald-700 mt-1">
-                    {shortlistResult.shortlisted} teachers have been assigned to <span className="font-bold">{levelForm.name}</span>. 
+                    {shortlistResult.shortlisted} teachers have been assigned to <span className="font-bold">{levelForm.name}</span>.
                     {shortlistResult.reviews_created} review tasks generated for {shortlistResult.reviewers} reviewers.
                   </p>
                 </div>
@@ -2163,208 +2338,208 @@ export default function ReviewSystem({ user }: { user: User }) {
         {/* Profile Detail Modal */}
         <Modal open={showProfile} onClose={() => { setShowProfile(false); setProfileData(null); }} title="Submission Profile" size="2xl">
           {profileLoading ? <div className="flex justify-center py-12"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div> :
-          profileData && (() => {
-            const sub = profileData.submission;
-            const displayName = getSubmissionDisplayName(sub, sub.user_name);
-            const formSchema = sub.formId?.form_schema || selectedFormObj?.form_schema;
-            let responseList: { label: string, value: any }[] = [];
-            
-            try { 
-              const raw = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : (sub.responses || []);
-              const responses = Array.isArray(raw) ? raw : Object.entries(raw).map(([k, v]) => ({ fieldId: k, value: v }));
-              
-              const schemaObj = typeof formSchema === 'string' ? JSON.parse(formSchema) : formSchema;
-              const fields = (schemaObj?.sections || []).flatMap((s: any) => s.fields || []);
-              const profileFieldMap = Object.fromEntries(fields.map((f: any) => [String(f.id), f]));
-              
-              responseList = responses.map((r: any) => {
-                const field = fields.find((f: any) => String(f.id) === String(r.fieldId));
-                // Format MCQ/Select values to their labels
-                const displayVal = formatResponseLabelValue(String(r.fieldId), r.value, profileFieldMap);
-                return { label: field?.label || r.fieldId, value: displayVal };
-              });
-            } catch {}
+            profileData && (() => {
+              const sub = profileData.submission;
+              const displayName = getSubmissionDisplayName(sub, sub.user_name);
+              const formSchema = sub.formId?.form_schema || selectedFormObj?.form_schema;
+              let responseList: { label: string, value: any }[] = [];
 
-            const renderValue = (val: any) => {
-              if (Array.isArray(val)) return val.join(', ');
-              if (val == null) return '—';
-              
-              const sVal = String(val);
-              const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com'));
-              
-              if (isFile) {
-                const fileUrl = sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
-                return (
-                  <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1.5 font-bold">
-                    <ExternalLink size={14} /> View File
-                  </a>
-                );
-              }
-              
-              return sVal;
-            };
+              try {
+                const raw = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : (sub.responses || []);
+                const responses = Array.isArray(raw) ? raw : Object.entries(raw).map(([k, v]) => ({ fieldId: k, value: v }));
 
-            return (
-              <div className="space-y-5">
-                {/* Header */}
-                <div className="bg-gradient-to-r from-navy to-navy-light rounded-xl p-5 text-white">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-xl font-bold">{displayName[0]}</div>
-                    <div>
-                      <h2 className="text-lg font-bold">{displayName}</h2>
-                      <p className="text-sm text-blue-200">{sub.user_email}</p>
-                      <div className="flex items-center gap-3 mt-1 text-[11px]">
-                        <span className="bg-white/15 px-2 py-0.5 rounded-full">{sub.form_title}</span>
-                        <StatusBadge status={sub.status} size="xs" />
-                        {sub.score != null && <span className="bg-emerald-500/30 px-2 py-0.5 rounded-full">Form Score: {Number(typeof sub.score === 'object' ? sub.score?.percentage : sub.score).toFixed(2)}%</span>}
-                        <span className="bg-white/15 px-2 py-0.5 rounded-full">Level {profileData.highest_level}/{profileData.total_levels}</span>
+                const schemaObj = typeof formSchema === 'string' ? JSON.parse(formSchema) : formSchema;
+                const fields = (schemaObj?.sections || []).flatMap((s: any) => s.fields || []);
+                const profileFieldMap = Object.fromEntries(fields.map((f: any) => [String(f.id), f]));
+
+                responseList = responses.map((r: any) => {
+                  const field = fields.find((f: any) => String(f.id) === String(r.fieldId));
+                  // Format MCQ/Select values to their labels
+                  const displayVal = formatResponseLabelValue(String(r.fieldId), r.value, profileFieldMap);
+                  return { label: field?.label || r.fieldId, value: displayVal };
+                });
+              } catch { }
+
+              const renderValue = (val: any) => {
+                if (Array.isArray(val)) return val.join(', ');
+                if (val == null) return '—';
+
+                const sVal = String(val);
+                const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com'));
+
+                if (isFile) {
+                  const fileUrl = sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
+                  return (
+                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1.5 font-bold">
+                      <ExternalLink size={14} /> View File
+                    </a>
+                  );
+                }
+
+                return sVal;
+              };
+
+              return (
+                <div className="space-y-5">
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-navy to-navy-light rounded-xl p-5 text-white">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-xl font-bold">{displayName[0]}</div>
+                      <div>
+                        <h2 className="text-lg font-bold">{displayName}</h2>
+                        <p className="text-sm text-blue-200">{sub.user_email}</p>
+                        <div className="flex items-center gap-3 mt-1 text-[11px]">
+                          <span className="bg-white/15 px-2 py-0.5 rounded-full">{sub.form_title}</span>
+                          <StatusBadge status={sub.status} size="xs" />
+                          {sub.score != null && <span className="bg-emerald-500/30 px-2 py-0.5 rounded-full">Form Score: {Number(typeof sub.score === 'object' ? sub.score?.percentage : sub.score).toFixed(2)}%</span>}
+                          <span className="bg-white/15 px-2 py-0.5 rounded-full">Level {profileData.highest_level}/{profileData.total_levels}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Level-wise scores */}
-                <div>
-                  <h3 className="text-sm font-bold font-heading mb-3 flex items-center gap-2"><BarChart3 size={15} className="text-primary" /> Level-wise Review Scores</h3>
-                  {profileData.levels.length === 0 ? <p className="text-sm text-slate-500">No review levels configured yet.</p> : (
-                    <div className="space-y-3">
-                      {profileData.levels.map((lvl: any) => (
-                        <div key={lvl.level_id} className={`p-4 rounded-xl border ${lvl.total_reviewers > 0 ? 'border-primary/30 bg-primary/[0.02]' : 'border-slate-200 bg-slate-100'}`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">L{lvl.level_number}</span>
-                              <span className="text-sm font-bold">{lvl.level_name}</span>
-                              <span className="text-[9px] text-slate-500">{lvl.scoring_type?.replace('_', ' ')} · {lvl.blind_review ? 'Blind' : 'Open'}</span>
+                  {/* Level-wise scores */}
+                  <div>
+                    <h3 className="text-sm font-bold font-heading mb-3 flex items-center gap-2"><BarChart3 size={15} className="text-primary" /> Level-wise Review Scores</h3>
+                    {profileData.levels.length === 0 ? <p className="text-sm text-slate-500">No review levels configured yet.</p> : (
+                      <div className="space-y-3">
+                        {profileData.levels.map((lvl: any) => (
+                          <div key={lvl.level_id} className={`p-4 rounded-xl border ${lvl.total_reviewers > 0 ? 'border-primary/30 bg-primary/[0.02]' : 'border-slate-200 bg-slate-100'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">L{lvl.level_number}</span>
+                                <span className="text-sm font-bold">{lvl.level_name}</span>
+                                <span className="text-[9px] text-slate-500">{lvl.scoring_type?.replace('_', ' ')} · {lvl.blind_review ? 'Blind' : 'Open'}</span>
+                              </div>
                             </div>
-                          </div>
-                          {lvl.total_reviewers > 0 ? (
-                            <div className="space-y-2">
-                              {lvl.scores.map((s: any, i: number) => (
-                                <div key={i} className="flex items-center gap-3 p-2 bg-slate-100 rounded-lg border border-slate-200">
-                                  <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold">R{i+1}</div>
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-bold">{s.overall_score}</span>
-                                      {s.grade && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white border border-slate-200 font-bold">{s.grade}</span>}
-                                      {s.recommendation && <span className="text-[10px] text-slate-500 capitalize">{s.recommendation?.replace('_', ' ')}</span>}
+                            {lvl.total_reviewers > 0 ? (
+                              <div className="space-y-2">
+                                {lvl.scores.map((s: any, i: number) => (
+                                  <div key={i} className="flex items-center gap-3 p-2 bg-slate-100 rounded-lg border border-slate-200">
+                                    <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold">R{i + 1}</div>
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-bold">{s.overall_score}</span>
+                                        {s.grade && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white border border-slate-200 font-bold">{s.grade}</span>}
+                                        {s.recommendation && <span className="text-[10px] text-slate-500 capitalize">{s.recommendation?.replace('_', ' ')}</span>}
+                                      </div>
+                                      {s.comments && <p className="text-xs text-slate-500 mt-0.5">{s.comments}</p>}
                                     </div>
-                                    {s.comments && <p className="text-xs text-slate-500 mt-0.5">{s.comments}</p>}
+                                    <span className="text-[9px] text-slate-500">{new Date(s.created_at).toLocaleDateString()}</span>
                                   </div>
-                                  <span className="text-[9px] text-slate-500">{new Date(s.created_at).toLocaleDateString()}</span>
-                                </div>
-                              ))}
+                                ))}
+                              </div>
+                            ) : <p className="text-xs text-slate-500">Not yet reviewed at this level</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Nomination Details */}
+                  {(() => {
+                    const nom = sub.nominationId || sub.nomination_id;
+                    if (!nom) return null;
+                    const addData = parseObject(nom.additional_data);
+                    if (Object.keys(addData).length === 0) return null;
+
+                    return (
+                      <div className="animate-in fade-in slide-in-from-bottom-2">
+                        <h3 className="text-sm font-bold font-heading mb-3 flex items-center gap-2 text-primary"><School size={15} /> School Functionary Details</h3>
+                        <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                            <div className="space-y-1">
+                              <p className="text-[10px] text-muted font-bold uppercase">Nominated Teacher</p>
+                              <p className="text-sm font-semibold">{nom.teacher_name}</p>
                             </div>
-                          ) : <p className="text-xs text-slate-500">Not yet reviewed at this level</p>}
+                            <div className="space-y-1">
+                              <p className="text-[10px] text-muted font-bold uppercase">School Code</p>
+                              <p className="text-sm font-semibold font-mono">{nom.school_code}</p>
+                            </div>
+                            {Object.entries(addData).map(([key, val]) => {
+                              const strVal = typeof val === 'string' ? val.trim() : '';
+                              const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(strVal) || /^\/?uploads\//i.test(strVal);
+                              const isFile = typeof val === 'string' && (
+                                /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) ||
+                                strVal.includes('res.cloudinary.com') ||
+                                isUploadPath
+                              );
+                              const fileUrl = isFile
+                                ? (strVal.startsWith('http')
+                                  ? strVal
+                                  : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(strVal)}`)
+                                : '';
+
+                              return (
+                                <div key={key} className="space-y-1 border-t border-primary/5 pt-2 sm:border-t-0 sm:pt-0">
+                                  <p className="text-[10px] text-muted font-bold uppercase">
+                                    {nominationFieldMap[key] ||
+                                      nominationFieldMap[`cf_${key}`] ||
+                                      key.replace(/_/g, ' ').replace(/^cf\s+/i, '').replace(/^cf_/i, '')}
+                                  </p>
+                                  {isFile ? (
+                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 text-sm font-semibold">
+                                      <ExternalLink size={12} /> View File
+                                    </a>
+                                  ) : (
+                                    <p className="text-sm font-semibold">{String(val)}</p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                      ))}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Responses */}
+                  <div>
+                    <h3 className="text-sm font-bold font-heading mb-3">Form Responses</h3>
+                    <div className="bg-slate-100 rounded-xl p-4 space-y-2">
+                      {responseList.length === 0 ? <p className="text-sm text-slate-500">No responses</p> :
+                        responseList.map((res, idx) => (
+                          <div key={idx} className="flex flex-col sm:flex-row gap-1 py-1.5 border-b border-slate-200 last:border-0">
+                            <span className="text-xs font-semibold text-slate-500 min-w-[150px]">{res.label}:</span>
+                            <span className="text-sm font-medium">{renderValue(res.value)}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* Comments timeline */}
+                  {profileData.comments.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-bold font-heading mb-3">Comments Timeline</h3>
+                      <div className="space-y-2">
+                        {profileData.comments.map((c: any) => (
+                          <div key={c.id} className="p-3 bg-slate-100 rounded-xl border border-slate-200">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-bold">{c.user_name}</span>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white border border-slate-200 capitalize">{c.user_role}</span>
+                              <span className="text-[10px] text-slate-500 ml-auto">{new Date(c.created_at).toLocaleString()}</span>
+                            </div>
+                            <p className="text-sm">{c.content}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
-                </div>
 
-                {/* Nomination Details */}
-                {(() => {
-                  const nom = sub.nominationId || sub.nomination_id;
-                  if (!nom) return null;
-                  const addData = parseObject(nom.additional_data);
-                  if (Object.keys(addData).length === 0) return null;
-
-                  return (
-                    <div className="animate-in fade-in slide-in-from-bottom-2">
-                      <h3 className="text-sm font-bold font-heading mb-3 flex items-center gap-2 text-primary"><School size={15} /> School Functionary Details</h3>
-                      <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                          <div className="space-y-1">
-                            <p className="text-[10px] text-muted font-bold uppercase">Nominated Teacher</p>
-                            <p className="text-sm font-semibold">{nom.teacher_name}</p>
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-[10px] text-muted font-bold uppercase">School Code</p>
-                            <p className="text-sm font-semibold font-mono">{nom.school_code}</p>
-                          </div>
-                          {Object.entries(addData).map(([key, val]) => {
-                            const strVal = typeof val === 'string' ? val.trim() : '';
-                            const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(strVal) || /^\/?uploads\//i.test(strVal);
-                            const isFile = typeof val === 'string' && (
-                              /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) ||
-                              strVal.includes('res.cloudinary.com') ||
-                              isUploadPath
-                            );
-                            const fileUrl = isFile
-                              ? (strVal.startsWith('http')
-                                ? strVal
-                                : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(strVal)}`)
-                              : '';
-
-                            return (
-                              <div key={key} className="space-y-1 border-t border-primary/5 pt-2 sm:border-t-0 sm:pt-0">
-                                <p className="text-[10px] text-muted font-bold uppercase">
-                                  {nominationFieldMap[key] || 
-                                   nominationFieldMap[`cf_${key}`] || 
-                                   key.replace(/_/g, ' ').replace(/^cf\s+/i, '').replace(/^cf_/i, '')}
-                                </p>
-                                {isFile ? (
-                                  <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 text-sm font-semibold">
-                                    <ExternalLink size={12} /> View File
-                                  </a>
-                                ) : (
-                                  <p className="text-sm font-semibold">{String(val)}</p>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Responses */}
-                <div>
-                  <h3 className="text-sm font-bold font-heading mb-3">Form Responses</h3>
-                  <div className="bg-slate-100 rounded-xl p-4 space-y-2">
-                    {responseList.length === 0 ? <p className="text-sm text-slate-500">No responses</p> :
-                      responseList.map((res, idx) => (
-                        <div key={idx} className="flex flex-col sm:flex-row gap-1 py-1.5 border-b border-slate-200 last:border-0">
-                          <span className="text-xs font-semibold text-slate-500 min-w-[150px]">{res.label}:</span>
-                          <span className="text-sm font-medium">{renderValue(res.value)}</span>
-                        </div>
-                      ))}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      onClick={() => printSubmissionProfile({ profile: profileData, submission: sub, responseRows: responseList })}
+                      className="py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50 flex items-center justify-center gap-2"
+                    >
+                      <Printer size={14} /> Print Profile
+                    </button>
+                    <button onClick={() => navigate(`/forms/view?submission=${sub.id}`)} className="py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold hover:bg-white flex items-center justify-center gap-2">
+                      <Eye size={14} /> View Full Form Response
+                    </button>
                   </div>
                 </div>
-
-                {/* Comments timeline */}
-                {profileData.comments.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-bold font-heading mb-3">Comments Timeline</h3>
-                    <div className="space-y-2">
-                      {profileData.comments.map((c: any) => (
-                        <div key={c.id} className="p-3 bg-slate-100 rounded-xl border border-slate-200">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-bold">{c.user_name}</span>
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white border border-slate-200 capitalize">{c.user_role}</span>
-                            <span className="text-[10px] text-slate-500 ml-auto">{new Date(c.created_at).toLocaleString()}</span>
-                          </div>
-                          <p className="text-sm">{c.content}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    onClick={() => printSubmissionProfile({ profile: profileData, submission: sub, responseRows: responseList })}
-                    className="py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50 flex items-center justify-center gap-2"
-                  >
-                    <Printer size={14} /> Print Profile
-                  </button>
-                  <button onClick={() => navigate(`/forms/view?submission=${sub.id}`)} className="py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold hover:bg-white flex items-center justify-center gap-2">
-                    <Eye size={14} /> View Full Form Response
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
+              );
+            })()}
         </Modal>
 
         {/* Export Modals */}
@@ -2376,7 +2551,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                 <p className="text-[11px] text-muted">Choose which fields you want in your Excel (XLSX) file</p>
               </div>
               <div className="flex gap-2">
-                <button 
+                <button
                   onClick={() => {
                     const base = ['id', 'form_title', 'user_name', 'user_email', 'school_code', 'status', 'score'];
                     const dynamic = filterableFields.map(f => f.id);
@@ -2415,16 +2590,18 @@ export default function ReviewSystem({ user }: { user: User }) {
                 const nomFields = buildNominationExportFields(nomKeys);
 
                 return [
-                  { label: 'Basic Info', fields: [
-                    { id: 'id', label: 'Reference ID' },
-                    { id: 'form_title', label: 'Form Title' },
-                    { id: 'user_name', label: 'Submitted By' },
-                    { id: 'user_email', label: 'Email' },
-                    { id: 'school_code', label: 'School Code' },
-                    { id: 'status', label: 'Status' },
-                    { id: 'score', label: 'Score' },
-                    { id: 'submitted_at', label: 'Submission Date' }
-                  ]},
+                  {
+                    label: 'Basic Info', fields: [
+                      { id: 'id', label: 'Reference ID' },
+                      { id: 'form_title', label: 'Form Title' },
+                      { id: 'user_name', label: 'Submitted By' },
+                      { id: 'user_email', label: 'Email' },
+                      { id: 'school_code', label: 'School Code' },
+                      { id: 'status', label: 'Status' },
+                      { id: 'score', label: 'Score' },
+                      { id: 'submitted_at', label: 'Submission Date' }
+                    ]
+                  },
                   ...(nomFields.length > 0 && isNominationForm ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
                   ...(filterableFields.length > 0 ? [{ label: 'Form Specific Fields', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
                 ].map((section, idx) => (
@@ -2434,8 +2611,8 @@ export default function ReviewSystem({ user }: { user: User }) {
                       {section.fields.map(field => (
                         <label key={field.id} className="flex items-center gap-3 group cursor-pointer">
                           <div className="relative flex items-center">
-                            <input 
-                              type="checkbox" 
+                            <input
+                              type="checkbox"
                               className="peer appearance-none w-5 h-5 rounded-md border-2 border-slate-200 checked:bg-primary checked:border-primary transition-all"
                               checked={csvSelectedFields.includes(field.id)}
                               onChange={e => {
@@ -2608,16 +2785,18 @@ export default function ReviewSystem({ user }: { user: User }) {
                       const nomFields = buildNominationExportFields(nomKeys);
 
                       return [
-                        { label: 'Basic Identity', fields: [
-                          { id: 'id', label: 'Reference ID' },
-                          { id: 'form_title', label: 'Form Title' },
-                          { id: 'user_name', label: 'Submitted By' },
-                          { id: 'user_email', label: 'Email Address' },
-                          { id: 'school_code', label: 'School Code' },
-                          { id: 'status', label: 'Submission Status' },
-                          { id: 'score', label: 'Evaluation Score' },
-                          { id: 'submitted_at', label: 'Timestamp' }
-                        ]},
+                        {
+                          label: 'Basic Identity', fields: [
+                            { id: 'id', label: 'Reference ID' },
+                            { id: 'form_title', label: 'Form Title' },
+                            { id: 'user_name', label: 'Submitted By' },
+                            { id: 'user_email', label: 'Email Address' },
+                            { id: 'school_code', label: 'School Code' },
+                            { id: 'status', label: 'Submission Status' },
+                            { id: 'score', label: 'Evaluation Score' },
+                            { id: 'submitted_at', label: 'Timestamp' }
+                          ]
+                        },
                         ...(nomFields.length > 0 && isNominationForm ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
                         ...(filterableFields.length > 0 ? [{ label: 'Form Response Data', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
                       ].map((section, idx) => (
@@ -2667,12 +2846,12 @@ export default function ReviewSystem({ user }: { user: User }) {
   // ═══════════ REVIEWER VIEW ═══════════
   const myPending = reviews.filter(r => r.status === 'pending');
   const myCompleted = reviews.filter(r => r.status !== 'pending');
-  
+
   // NEW: Filter reviews by selected form if one is chosen
-  const filteredMyReviews = selectedFormId 
+  const filteredMyReviews = selectedFormId
     ? reviews.filter(r => r.form_id === selectedFormId || r.formId === selectedFormId)
     : reviews;
-    
+
   const myPendingFiltered = filteredMyReviews.filter(r => r.status === 'pending');
   const myCompletedFiltered = filteredMyReviews.filter(r => r.status !== 'pending');
   const displayed = reviewTab === 'pending' ? myPendingFiltered : myCompletedFiltered;
@@ -2703,7 +2882,7 @@ export default function ReviewSystem({ user }: { user: User }) {
             <div key={r.id} onClick={() => r.status === 'pending' ? openReview(r) : openProfile(r.submission_id)}
               className="group bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl hover:border-primary/30 transition-all cursor-pointer relative overflow-hidden flex flex-col gap-4">
               <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-12 -mt-12 transition-all group-hover:bg-primary/10 group-hover:scale-110" />
-              
+
               <div className="flex items-start justify-between relative z-10">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold text-lg shadow-inner">
@@ -2877,18 +3056,18 @@ export default function ReviewSystem({ user }: { user: User }) {
                   {selectedReview.scoring_type === 'question_level' ? 'Total Calculated Score' : 'Overall Score (0-100)'}
                 </label>
                 <div className="relative">
-                  <input 
-                    type="number" 
-                    min={0} 
+                  <input
+                    type="number"
+                    min={0}
                     max={100}
-                    value={overallScore} 
+                    value={overallScore}
                     onChange={e => {
                       if (selectedReview.scoring_type === 'question_level') return;
                       const val = parseInt(e.target.value) || 0;
                       setOverallScore(Math.min(100, Math.max(0, val)));
-                    }} 
+                    }}
                     readOnly={selectedReview.scoring_type === 'question_level'}
-                    className={`w-full px-4 py-2.5 rounded-xl border font-bold text-lg outline-none transition-all ${selectedReview.scoring_type === 'question_level' ? 'bg-primary/5 border-primary/20 text-primary cursor-default' : 'bg-white border-slate-300 text-primary focus:border-primary focus:ring-2 focus:ring-primary/10'}`} 
+                    className={`w-full px-4 py-2.5 rounded-xl border font-bold text-lg outline-none transition-all ${selectedReview.scoring_type === 'question_level' ? 'bg-primary/5 border-primary/20 text-primary cursor-default' : 'bg-white border-slate-300 text-primary focus:border-primary focus:ring-2 focus:ring-primary/10'}`}
                   />
                   <div className={`absolute right-3 top-1/2 -translate-y-1/2 ${selectedReview.scoring_type === 'question_level' ? 'text-primary' : 'text-slate-400'}`}>
                     {selectedReview.scoring_type === 'question_level' ? <Zap size={18} /> : <Star size={18} />}
@@ -2910,11 +3089,11 @@ export default function ReviewSystem({ user }: { user: User }) {
 
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block text-center md:text-left">Reviewer Comments & Feedback</label>
-              <textarea 
-                value={reviewComment} 
-                onChange={e => setReviewComment(e.target.value)} 
+              <textarea
+                value={reviewComment}
+                onChange={e => setReviewComment(e.target.value)}
                 placeholder="Enter detailed feedback here..."
-                className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 h-32 resize-none transition-all" 
+                className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 h-32 resize-none transition-all"
               />
             </div>
 
@@ -2933,16 +3112,16 @@ export default function ReviewSystem({ user }: { user: User }) {
       {/* Profile from reviewer */}
       <Modal open={showProfile} onClose={() => { setShowProfile(false); setProfileData(null); }} title="Submission Profile" size="2xl">
         {profileLoading ? <div className="flex justify-center py-12"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div> :
-        profileData && (() => {
-          const sub = profileData.submission;
-          const displayName = getSubmissionDisplayName(sub, sub.user_name);
-          const profileFieldMap = getSchemaFieldMap(sub?.formId?.form_schema || sub?.formId?.schema || selectedFormObj?.form_schema || selectedFormObj?.schema);
-          
-          // Calculate responses for this specific profile view
-          let profileResponses: Record<string, any> = {};
-          if (sub?.responses) {
-            const raw = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : sub.responses;
-            if (Array.isArray(raw)) {
+          profileData && (() => {
+            const sub = profileData.submission;
+            const displayName = getSubmissionDisplayName(sub, sub.user_name);
+            const profileFieldMap = getSchemaFieldMap(sub?.formId?.form_schema || sub?.formId?.schema || selectedFormObj?.form_schema || selectedFormObj?.schema);
+
+            // Calculate responses for this specific profile view
+            let profileResponses: Record<string, any> = {};
+            if (sub?.responses) {
+              const raw = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : sub.responses;
+              if (Array.isArray(raw)) {
                 raw.forEach((r: any) => {
                   const fieldMeta = profileFieldMap[String(r.fieldId)] || filterableFieldMap[String(r.fieldId)];
                   const label = fieldMeta?.label || fieldMeta?.title || fieldMeta?.name || r.fieldId;
@@ -2956,114 +3135,114 @@ export default function ReviewSystem({ user }: { user: User }) {
                   ])
                 );
               }
-          }
-          const responseRows = Object.entries(profileResponses).map(([label, value]) => ({ label, value }));
+            }
+            const responseRows = Object.entries(profileResponses).map(([label, value]) => ({ label, value }));
 
-          return (
-            <div className="space-y-6">
-              <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xl">
-                    {displayName[0]}
+            return (
+              <div className="space-y-6">
+                <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xl">
+                      {displayName[0]}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg text-slate-900">{displayName}</h3>
+                      <p className="text-xs text-slate-500 font-medium">{sub.user_email} · {sub.form_title}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-slate-900">{displayName}</h3>
-                    <p className="text-xs text-slate-500 font-medium">{sub.user_email} · {sub.form_title}</p>
+                  <div className="flex items-center gap-3">
+                    <StatusBadge status={sub.status} />
+                    <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
+                      Level {profileData.highest_level || 0} / {profileData.total_levels || 0}
+                    </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <StatusBadge status={sub.status} />
-                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
-                    Level {profileData.highest_level || 0} / {profileData.total_levels || 0}
-                  </span>
-                </div>
-              </div>
 
-              {/* Form Responses Section */}
-              {Object.keys(profileResponses).length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-bold flex items-center gap-2 px-1">
-                    <FileText size={16} className="text-primary" /> 
-                    Teacher's Responses
-                  </h4>
-                  <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                    <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
-                      {Object.entries(profileResponses).map(([k, v], idx) => (
-                        <div key={k} className={`p-4 ${idx !== Object.keys(profileResponses).length - 1 ? 'border-b border-slate-50' : ''}`}>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Question {idx + 1}</p>
-                          <p className="text-xs font-bold text-slate-700 mb-2">{k}</p>
-                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-sm text-slate-900">
-                            {(() => {
-                              const sVal = String(v || '');
-                              const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com') || sVal.includes('/uploads/'));
-                              if (isFile && v) {
-                                const isUrl = sVal.startsWith('http');
-                                const displayFilename = sVal.split('?')[0].split('/').pop() || sVal;
-                                const fileUrl = isUrl ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
-                                return (
-                                  <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary font-bold hover:underline flex items-center gap-2">
-                                    <FileText size={14} />
-                                    <span className="truncate max-w-xs">{displayFilename}</span>
-                                    <ExternalLink size={12} />
-                                  </a>
-                                );
-                              }
-                              return Array.isArray(v) ? (v as any[]).join(', ') : String(v || 'No answer');
-                            })()}
+                {/* Form Responses Section */}
+                {Object.keys(profileResponses).length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-bold flex items-center gap-2 px-1">
+                      <FileText size={16} className="text-primary" />
+                      Teacher's Responses
+                    </h4>
+                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                      <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+                        {Object.entries(profileResponses).map(([k, v], idx) => (
+                          <div key={k} className={`p-4 ${idx !== Object.keys(profileResponses).length - 1 ? 'border-b border-slate-50' : ''}`}>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Question {idx + 1}</p>
+                            <p className="text-xs font-bold text-slate-700 mb-2">{k}</p>
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-sm text-slate-900">
+                              {(() => {
+                                const sVal = String(v || '');
+                                const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com') || sVal.includes('/uploads/'));
+                                if (isFile && v) {
+                                  const isUrl = sVal.startsWith('http');
+                                  const displayFilename = sVal.split('?')[0].split('/').pop() || sVal;
+                                  const fileUrl = isUrl ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
+                                  return (
+                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary font-bold hover:underline flex items-center gap-2">
+                                      <FileText size={14} />
+                                      <span className="truncate max-w-xs">{displayFilename}</span>
+                                      <ExternalLink size={12} />
+                                    </a>
+                                  );
+                                }
+                                return Array.isArray(v) ? (v as any[]).join(', ') : String(v || 'No answer');
+                              })()}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Review History */}
+                {profileData.levels && profileData.levels.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-bold flex items-center gap-2 px-1">
+                      <Star size={16} className="text-amber-500" />
+                      Review History
+                    </h4>
+                    <div className="space-y-4">
+                      {profileData.levels.map((lvl: any) => (
+                        <div key={lvl.level_id} className="p-4 rounded-2xl border border-slate-200 bg-white">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-sm font-bold text-slate-800">L{lvl.level_number}: {lvl.level_name}</span>
+                            {lvl.average_score != null && (
+                              <div className="flex flex-col items-end">
+                                <span className="text-lg font-bold text-primary">{lvl.average_score}</span>
+                                <span className="text-[10px] text-slate-400 font-bold uppercase">Avg Score</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            {(lvl.scores || []).map((s: any, i: number) => (
+                              <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-slate-600">Score: {s.overall_score}</span>
+                                  {s.grade && <span className="text-[10px] font-bold bg-white border border-slate-200 px-2 py-0.5 rounded-full text-primary uppercase">{s.grade}</span>}
+                                </div>
+                                {s.comments && <p className="text-xs text-slate-500 italic">"{s.comments}"</p>}
+                              </div>
+                            ))}
+                            {lvl.total_reviewers === 0 && <p className="text-xs text-slate-400 text-center py-2 bg-slate-50 rounded-xl border border-dashed border-slate-200">Not reviewed yet at this level</p>}
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Review History */}
-              {profileData.levels && profileData.levels.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-bold flex items-center gap-2 px-1">
-                    <Star size={16} className="text-amber-500" /> 
-                    Review History
-                  </h4>
-                  <div className="space-y-4">
-                    {profileData.levels.map((lvl: any) => (
-                      <div key={lvl.level_id} className="p-4 rounded-2xl border border-slate-200 bg-white">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-bold text-slate-800">L{lvl.level_number}: {lvl.level_name}</span>
-                          {lvl.average_score != null && (
-                            <div className="flex flex-col items-end">
-                              <span className="text-lg font-bold text-primary">{lvl.average_score}</span>
-                              <span className="text-[10px] text-slate-400 font-bold uppercase">Avg Score</span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          {(lvl.scores || []).map((s: any, i: number) => (
-                            <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-slate-600">Score: {s.overall_score}</span>
-                                {s.grade && <span className="text-[10px] font-bold bg-white border border-slate-200 px-2 py-0.5 rounded-full text-primary uppercase">{s.grade}</span>}
-                              </div>
-                              {s.comments && <p className="text-xs text-slate-500 italic">"{s.comments}"</p>}
-                            </div>
-                          ))}
-                          {lvl.total_reviewers === 0 && <p className="text-xs text-slate-400 text-center py-2 bg-slate-50 rounded-xl border border-dashed border-slate-200">Not reviewed yet at this level</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={() => printSubmissionProfile({ profile: profileData, submission: sub, responseRows })}
-                className="w-full py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50 flex items-center justify-center gap-2"
-              >
-                <Printer size={14} /> Print Profile
-              </button>
-            </div>
-          );
-        })()}
+                <button
+                  onClick={() => printSubmissionProfile({ profile: profileData, submission: sub, responseRows })}
+                  className="w-full py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50 flex items-center justify-center gap-2"
+                >
+                  <Printer size={14} /> Print Profile
+                </button>
+              </div>
+            );
+          })()}
       </Modal>
 
       {/* Excel (XLSX) Export Configuration Modal */}
@@ -3075,7 +3254,7 @@ export default function ReviewSystem({ user }: { user: User }) {
               <p className="text-[11px] text-muted">Choose which fields you want in your Excel (XLSX) file</p>
             </div>
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={() => {
                   const base = ['id', 'form_title', 'user_name', 'user_email', 'school_code', 'status', 'score'];
                   const dynamic = filterableFields.map(f => f.id);
@@ -3112,16 +3291,18 @@ export default function ReviewSystem({ user }: { user: User }) {
               const nomFields = buildNominationExportFields(nomKeys);
 
               return [
-                { label: 'Basic Info', fields: [
-                  { id: 'id', label: 'Reference ID' },
-                  { id: 'form_title', label: 'Form Title' },
-                  { id: 'user_name', label: 'Submitted By' },
-                  { id: 'user_email', label: 'Email' },
-                  { id: 'school_code', label: 'School Code' },
-                  { id: 'status', label: 'Status' },
-                  { id: 'score', label: 'Score' },
-                  { id: 'submitted_at', label: 'Submission Date' }
-                ]},
+                {
+                  label: 'Basic Info', fields: [
+                    { id: 'id', label: 'Reference ID' },
+                    { id: 'form_title', label: 'Form Title' },
+                    { id: 'user_name', label: 'Submitted By' },
+                    { id: 'user_email', label: 'Email' },
+                    { id: 'school_code', label: 'School Code' },
+                    { id: 'status', label: 'Status' },
+                    { id: 'score', label: 'Score' },
+                    { id: 'submitted_at', label: 'Submission Date' }
+                  ]
+                },
                 ...(nomFields.length > 0 && isNominationForm ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
                 ...(filterableFields.length > 0 ? [{ label: 'Form Specific Fields', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
               ].map((section, idx) => (
@@ -3131,8 +3312,8 @@ export default function ReviewSystem({ user }: { user: User }) {
                     {section.fields.map(field => (
                       <label key={field.id} className="flex items-center gap-3 group cursor-pointer">
                         <div className="relative flex items-center">
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             className="peer appearance-none w-5 h-5 rounded-md border-2 border-slate-200 checked:bg-primary checked:border-primary transition-all"
                             checked={csvSelectedFields.includes(field.id)}
                             onChange={e => {
@@ -3269,7 +3450,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">3. Select Report Columns</h4>
                   <div className="flex gap-2">
-                    <button 
+                    <button
                       onClick={() => {
                         const base = ['id', 'form_title', 'user_name', 'user_email', 'school_code', 'status', 'score'];
                         const dynamic = filterableFields.map(f => f.id);
@@ -3306,16 +3487,18 @@ export default function ReviewSystem({ user }: { user: User }) {
                     const nomFields = buildNominationExportFields(nomKeys);
 
                     return [
-                      { label: 'Basic Identity', fields: [
-                        { id: 'id', label: 'Reference ID' },
-                        { id: 'form_title', label: 'Form Title' },
-                        { id: 'user_name', label: 'Submitted By' },
-                        { id: 'user_email', label: 'Email Address' },
-                        { id: 'school_code', label: 'School Code' },
-                        { id: 'status', label: 'Submission Status' },
-                        { id: 'score', label: 'Evaluation Score' },
-                        { id: 'submitted_at', label: 'Timestamp' }
-                      ]},
+                      {
+                        label: 'Basic Identity', fields: [
+                          { id: 'id', label: 'Reference ID' },
+                          { id: 'form_title', label: 'Form Title' },
+                          { id: 'user_name', label: 'Submitted By' },
+                          { id: 'user_email', label: 'Email Address' },
+                          { id: 'school_code', label: 'School Code' },
+                          { id: 'status', label: 'Submission Status' },
+                          { id: 'score', label: 'Evaluation Score' },
+                          { id: 'submitted_at', label: 'Timestamp' }
+                        ]
+                      },
                       ...(nomFields.length > 0 && isNominationForm ? [{ label: 'School Functionary Data', fields: nomFields }] : []),
                       ...(filterableFields.length > 0 ? [{ label: 'Form Response Data', fields: filterableFields.map(f => ({ id: f.id, label: f.label || f.id })) }] : [])
                     ].map((section, idx) => (
@@ -3325,8 +3508,8 @@ export default function ReviewSystem({ user }: { user: User }) {
                           {section.fields.map(field => (
                             <label key={field.id} className="flex items-center gap-3 group cursor-pointer">
                               <div className="relative flex items-center">
-                                <input 
-                                  type="checkbox" 
+                                <input
+                                  type="checkbox"
                                   className="peer appearance-none w-4.5 h-4.5 rounded border-2 border-slate-200 checked:bg-primary checked:border-primary transition-all"
                                   checked={zipSelectedFields.includes(field.id)}
                                   onChange={e => {
@@ -3351,14 +3534,14 @@ export default function ReviewSystem({ user }: { user: User }) {
           </div>
 
           <div className="flex gap-4 pt-4 border-t border-slate-100">
-            <button 
-              onClick={() => setShowExportConfig(false)} 
+            <button
+              onClick={() => setShowExportConfig(false)}
               className="flex-1 py-3.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
-            <button 
-              onClick={handleZipDownload} 
+            <button
+              onClick={handleZipDownload}
               className="flex-[2] py-3.5 bg-primary text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/25 hover:bg-primary-hover transition-all transform active:scale-[0.98]"
             >
               <Archive size={18} />
