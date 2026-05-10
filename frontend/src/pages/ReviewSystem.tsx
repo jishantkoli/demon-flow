@@ -1673,7 +1673,7 @@ export default function ReviewSystem({ user }: { user: User }) {
           );
         }
       })),
-      { key: 'highest_level', label: 'Reached', sortable: true, hidden: user.role === 'teacher' || user.role === 'functionary', render: (v: number) => v > 0 ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">L{v}</span> : <span className="text-slate-500 text-xs">—</span> },
+      { key: 'highest_level', label: 'Reached', sortable: true, hidden: (user.role as string) === 'teacher' || (user.role as string) === 'functionary', render: (v: number) => v > 0 ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">L{v}</span> : <span className="text-slate-500 text-xs">—</span> },
       {
         key: 'status',
         label: 'Status',
@@ -2132,7 +2132,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                 searchPlaceholder="Search by name, email..."
                 onRowClick={(row: any) => openProfile(row.id)}
                 filters={
-                  user.role !== 'teacher' && user.role !== 'functionary' && (
+                  (user.role as string) !== 'teacher' && (user.role as string) !== 'functionary' && (
                     <div className="relative">
                       <button
                         onClick={() => setShowLevelFilterDropdown(!showLevelFilterDropdown)}
@@ -2498,7 +2498,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                   })()}
 
                   {/* Responses */}
-                  {user.role !== 'functionary' && (
+                  {(user.role as string) !== 'functionary' && (
                     <div>
                       <h3 className="text-sm font-bold font-heading mb-3">Form Responses</h3>
                       <div className="bg-slate-100 rounded-xl p-4 space-y-2">
@@ -2539,7 +2539,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                     >
                       <Printer size={14} /> Print Profile
                     </button>
-                    {user.role !== 'functionary' && (
+                    {(user.role as string) !== 'functionary' && (
                       <button onClick={() => navigate(`/forms/view?submission=${sub.id}`)} className="py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold hover:bg-white flex items-center justify-center gap-2">
                         <Eye size={14} /> View Full Form Response
                       </button>

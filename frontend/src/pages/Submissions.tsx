@@ -1175,7 +1175,7 @@ export default function Submissions({ user }: { user: User }) {
       )
     },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
-    { key: 'currentLevel', label: 'Level', sortable: true, hidden: user.role === 'teacher' || user.role === 'functionary', render: (v: any) => <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{v === 0 ? 'Initial' : `Level ${v}`}</span> },
+    { key: 'currentLevel', label: 'Level', sortable: true, hidden: (user.role as string) === 'teacher' || (user.role as string) === 'functionary', render: (v: any) => <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{v === 0 ? 'Initial' : `Level ${v}`}</span> },
     { key: 'score', label: 'Score', sortable: true, hidden: !canSeeScore, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{Number(typeof v === 'object' ? v?.percentage : v).toFixed(2)}%</span> : <span className="text-muted">—</span> },
     ...visibleFields.map(fieldId => {
       const field = fieldMap[fieldId];
@@ -1231,7 +1231,7 @@ export default function Submissions({ user }: { user: User }) {
         onRowClick={openDetail} emptyMessage="No submissions found" emptyIcon={<Inbox size={40} />}
         filters={
           <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
-            {user.role !== 'teacher' && user.role !== 'functionary' && (
+            {(user.role as string) !== 'teacher' && (user.role as string) !== 'functionary' && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm">
                 <SlidersHorizontal size={14} className="text-primary" />
                 <select value={formFilter} onChange={e => { setFormFilter(e.target.value); setVisibleFields([]); }} className="text-xs bg-transparent outline-none font-bold text-slate-700 min-w-[150px] cursor-pointer">
@@ -1241,7 +1241,7 @@ export default function Submissions({ user }: { user: User }) {
               </div>
             )}
 
-            {user.role !== 'teacher' && user.role !== 'functionary' && (
+            {(user.role as string) !== 'teacher' && (user.role as string) !== 'functionary' && (
               <div className="relative">
                 <button
                   onClick={() => setShowLevelFilterDropdown(!showLevelFilterDropdown)}
@@ -1302,7 +1302,7 @@ export default function Submissions({ user }: { user: User }) {
               </div>
             )}
 
-            {user.role !== 'teacher' && user.role !== 'functionary' && formFilter && filterableFields.length > 0 && (
+            {(user.role as string) !== 'teacher' && (user.role as string) !== 'functionary' && formFilter && filterableFields.length > 0 && (
               <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
                 <div className="h-6 w-px bg-border mx-1" />
                 <div className="relative group">
