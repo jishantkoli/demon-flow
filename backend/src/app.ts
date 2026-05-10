@@ -91,6 +91,24 @@ const dbStateLabel = (readyState: number): string => {
   if (readyState === 3) return 'disconnecting';
   return 'unknown';
 };
+// Root route for health check
+app.get('/', (req, res) => {
+    res.json({ status: 'ok', message: 'Demon Flow API is running' });
+});
+
+// Routes
+app.use('/api/v1/uploads', uploadRoutes);
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/forms', formRoutes);
+app.use('/api/v1/submissions', submissionRoutes);
+app.use('/api/v1/stats', statsRoutes);
+app.use('/api/v1/audit-logs', auditRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/nominations', nominationRoutes);
+app.use('/api/v1', reviewRoutes);
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/settings', settingsRoutes);
+app.use('/api/v1/comments', commentRoutes);
 
 app.get('/health', (req, res) => {
   const readyState = mongoose.connection.readyState;
