@@ -1220,18 +1220,6 @@ export default function Submissions({ user }: { user: User }) {
           <div className="flex items-center gap-2">
             <button onClick={exportCSV} className="inline-flex items-center gap-2 px-4 py-2 bg-surface-card border border-border rounded-xl text-sm font-medium hover:bg-surface shadow-sm"><FileDown size={16} /> Export Excel (XLSX)</button>
             <button onClick={exportZIP} className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-hover shadow-sm"><Archive size={16} /> Export ZIP</button>
-            <button
-              onClick={zipBulkProfiles}
-              disabled={isBulkZipping}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-xl text-sm font-medium hover:bg-slate-700 shadow-sm disabled:opacity-50 transition-all"
-            >
-              {isBulkZipping ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Download size={16} />
-              )}
-              <span>{isBulkZipping ? 'Preparing ZIP...' : 'ZIP Profiles'}</span>
-            </button>
           </div>
         )}
       </div>
