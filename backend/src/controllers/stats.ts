@@ -3,6 +3,7 @@ import { User } from '../models/User.js';
 import { Form } from '../models/Form.js';
 import { Submission } from '../models/Submission.js';
 import { Nomination } from '../models/Nomination.js';
+import { Review } from '../models/Review.js';
 import { AuthRequest } from '../middleware/auth.js';
 
 export const getStats = async (req: AuthRequest, res: Response) => {
@@ -71,6 +72,18 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Review stats
+    let pendingReviews = 0;
+    let completedReviews = 0;
+
+    if (role === 'admin') {
+      pendingReviews = await Review.countDocuments({ status: 'pending' });
+      completedReviews = await Review.countDocuments({ status: { $ne: 'pending' } });
+    } else if (role === 'reviewer') {
+      pendingReviews = await Review.countDocuments({ reviewer_id: userId, status: 'pending' });
+      completedReviews = await Review.countDocuments({ reviewer_id: userId, status: { $ne: 'pending' } });
+    }
+
     res.status(200).json({
       totalUsers,
       activeForms,
@@ -81,7 +94,9 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       usersByRole,
       totalNominations,
       nominationsByStatus,
-      completionRate
+      completionRate,
+      pendingReviews,
+      completedReviews
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

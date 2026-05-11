@@ -331,10 +331,16 @@ export default function FormRenderer({ fields, formType, settings, initialValues
                   if (dis) return;
                   const input = document.createElement('input');
                   input.type = 'file';
-                  if (f.allowedFormats) input.accept = f.allowedFormats.map(fmt => `.${fmt.toLowerCase()}`).join(',');
+                  input.accept = '.pdf,.jpg,.jpeg,.png';
                   input.onchange = async (e: any) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
+                    
+                    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+                    if (!allowedTypes.includes(file.type)) {
+                      alert('Only PDF, JPG, JPEG, and PNG files are allowed!');
+                      return;
+                    }
                     
                     const formData = new FormData();
                     formData.append('file', file);

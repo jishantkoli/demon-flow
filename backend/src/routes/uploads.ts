@@ -12,6 +12,17 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    
+    if (allowedExtensions.includes(ext) && allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF, JPG, JPEG, and PNG files are allowed!'));
+    }
+  }
 });
 
 function bufferToStream(buffer: Buffer): Readable {

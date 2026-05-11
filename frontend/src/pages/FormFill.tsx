@@ -351,6 +351,11 @@ export default function FormFill({ user }: { user: User }) {
 
   const handleFileUpload = async (field: Field, file: File) => {
     setError('');
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Only PDF, JPG, and PNG files are allowed');
+      return;
+    }
     setUploadingFields(prev => ({ ...prev, [field.id]: true }));
     try {
       const data: any = await api.upload('/uploads', file);
@@ -923,12 +928,21 @@ function FieldRenderer({
                   ) : 'Click or drop file to upload')}
                 </div>
                 <div className="text-xs text-muted mt-1">{f.fileTypes ? `Types: ${f.fileTypes}` : ''} {f.maxSizeMB ? `· Max ${f.maxSizeMB}MB` : ''}</div>
-                <input type="file" className="hidden" accept={f.fileTypes ? f.fileTypes.split(',').map(x => `.${x.trim()}`).join(',') : undefined}
+                <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png"
                   onChange={async e => {
                     const file = e.target.files?.[0];
-                    if (!file) return;
-                    if (onUpload) await onUpload(f, file);
-                    else onChange(file.name);
+                    if (file) {
+                      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+                      if (!allowedTypes.includes(file.type)) {
+                        // Validation is handled in handleFileUpload which is passed as onUpload
+                        if (onUpload) {
+                          await onUpload(f, file);
+                        }
+                        return;
+                      }
+                      if (onUpload) await onUpload(f, file);
+                      else onChange(file.name);
+                    }
                   }} />
               </label>
             );

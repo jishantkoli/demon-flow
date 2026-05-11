@@ -264,7 +264,7 @@ export const seedData = async (shouldExit = true, clearFirst = true) => {
       createdAt: new Date()
     });
 
-    await Submission.create({
+    const submissionForReview = await Submission.create({
       formId: forms[1]._id,
       nominationId: nomination._id,
       nominationToken: 'test-token-123',
@@ -280,6 +280,20 @@ export const seedData = async (shouldExit = true, clearFirst = true) => {
       ],
       createdAt: new Date(Date.now() - 86400000) // 1 day ago
     });
+
+    // Seed a Review
+    const reviewer = await User.findOne({ role: 'reviewer' });
+    if (reviewer) {
+      await Review.create({
+        submission_id: submissionForReview._id,
+        reviewer_id: reviewer._id,
+        level: 1,
+        level_id: new mongoose.Types.ObjectId(), // Dummy level ID
+        status: 'pending',
+        createdAt: new Date()
+      });
+      console.log('✅ Review seeded');
+    }
 
     console.log('✅ Submissions seeded');
 
