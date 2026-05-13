@@ -31,6 +31,7 @@ export default function Forms({ user }: { user: User }) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [tab, setTab] = useState<'active' | 'draft' | 'expired'>('active');
+  const [recentSubs, setRecentSubs] = useState<any[]>([]);
 
   // Modals
   const [showCreate, setShowCreate] = useState(false);
@@ -50,7 +51,18 @@ export default function Forms({ user }: { user: User }) {
   });
 
   const fetchForms = async () => {
-    try { setForms(await api.get('/forms')); } catch (err) { console.error(err); } finally { setLoading(false); }
+    try { 
+      const [f, subs] = await Promise.all([
+        api.get('/forms'),
+        api.get('/submissions').catch(() => [])
+      ]);
+      setForms(f); 
+      setRecentSubs(subs);
+    } catch (err) { 
+      console.error(err); 
+    } finally { 
+      setLoading(false); 
+    }
   };
   useEffect(() => { fetchForms(); }, []);
 
@@ -268,11 +280,13 @@ export default function Forms({ user }: { user: User }) {
               <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search forms..."
                 className="bg-transparent text-sm outline-none w-full placeholder-muted text-slate-900" />
             </div>
-            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-              className="text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 outline-none">
-              <option value="">All Types</option>
-              {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
+            {user.role === 'admin' && (
+              <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+                className="text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 outline-none">
+                <option value="">All Types</option>
+                {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            )}
           </div>
         </div>
       )}
@@ -330,7 +344,21 @@ export default function Forms({ user }: { user: User }) {
                       <Icon size={13} /> {typeLabels[row.form_type]}
                     </div>
                     <div className="flex items-center gap-1">
-                      <StatusBadge status={isExpired ? 'expired' : row.status} size="xs" />
+                      {user.role === 'teacher' ? (
+                        recentSubs.some(s => s.form_id === row.id) ? (
+                          <span className="inline-flex items-center rounded-full font-semibold capitalize ring-1 ring-inset px-1.5 py-0.5 text-[9px] bg-emerald-50 text-emerald-700 ring-emerald-500/20">
+                            Submitted
+                          </span>
+                        ) : teacherNominationLinks[row.id] ? (
+                          <span className="inline-flex items-center rounded-full font-semibold capitalize ring-1 ring-inset px-1.5 py-0.5 text-[9px] bg-amber-50 text-amber-700 ring-amber-500/20">
+                            Pending
+                          </span>
+                        ) : (
+                          <StatusBadge status={isExpired ? 'expired' : row.status} size="xs" />
+                        )
+                      ) : (
+                        <StatusBadge status={isExpired ? 'expired' : row.status} size="xs" />
+                      )}
                       {isAdmin && (
                         <div className="relative">
                           <button onClick={e => { e.stopPropagation(); setOpenMenu(openMenu === row.id ? null : row.id); }}

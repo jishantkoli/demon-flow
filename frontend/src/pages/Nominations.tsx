@@ -191,7 +191,14 @@ export default function Nominations({ user }: { user: User }) {
     { key: 'teacher_name', label: 'Teacher', sortable: true, render: (v: string, row: any) => (
       <div><p className="font-medium text-sm">{v}</p><p className="text-[10px] text-slate-500">{row.teacher_email}</p></div>) },
     { key: 'school_code', label: 'School', render: (v: string) => <span className="text-xs font-mono font-bold text-primary">{v}</span> },
-    { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
+    { 
+      key: 'status', 
+      label: 'Status', 
+      render: (v: string) => {
+        const displayStatus = v === 'under_review' ? 'submitted' : v;
+        return <StatusBadge status={displayStatus} />;
+      } 
+    },
     { key: 'link_type', label: 'Access', render: (v: string) => <span className="text-xs capitalize px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">{v}</span> },
     { key: 'reminder_count', label: 'Reminders', render: (v: number) => <span className="text-xs text-slate-500">{v || 0} sent</span> },
     { key: 'invited_at', label: 'Invited', sortable: true, render: (v: string) => v ? <span className="text-xs text-slate-500">{new Date(v).toLocaleDateString()}</span> : '—' },

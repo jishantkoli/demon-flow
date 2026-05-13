@@ -98,7 +98,7 @@ export default function FormView({ user }: { user: User }) {
           <div className="flex flex-wrap gap-3 mt-3 text-[11px]">
             <span className="bg-white/15 px-2.5 py-0.5 rounded-full flex items-center gap-1"><UserIcon size={10} /> {submission.user_name || 'Anonymous'}</span>
             <span className="bg-white/15 px-2.5 py-0.5 rounded-full flex items-center gap-1"><Calendar size={10} /> {new Date(submission.submitted_at).toLocaleString()}</span>
-            <StatusBadge status={submission.status} size="xs" />
+            <StatusBadge status={user.role === 'teacher' && (submission.status === 'under_review' || submission.status === 'approved' || submission.status === 'rejected') ? 'submitted' : submission.status} size="xs" />
             {/* Score: only admin and reviewer see it */}
             {submission.score != null && viewMode !== 'user' && (
               <span className="bg-emerald-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1">

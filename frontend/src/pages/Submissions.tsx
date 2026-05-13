@@ -1174,7 +1174,14 @@ export default function Submissions({ user }: { user: User }) {
         </div>
       )
     },
-    { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
+    { 
+      key: 'status', 
+      label: 'Status', 
+      render: (v: string) => {
+        const displayStatus = user.role === 'teacher' && (v === 'under_review' || v === 'approved' || v === 'rejected') ? 'submitted' : v;
+        return <StatusBadge status={displayStatus} />;
+      } 
+    },
     { key: 'score', label: 'Score', sortable: true, hidden: !canSeeScore, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{Number(typeof v === 'object' ? v?.percentage : v).toFixed(2)}%</span> : <span className="text-muted">—</span> },
     ...visibleFields.map(fieldId => {
       const field = fieldMap[fieldId];
