@@ -207,7 +207,11 @@ export default function Submissions({ user }: { user: User }) {
     try {
       let url = '/submissions?';
       if (user.role === 'teacher') url += `user_id=${user.id}&`;
-      if (statusFilter) url += `status=${statusFilter}&`;
+      
+      // If "reviewed" is selected, we fetch all and filter in frontend or handle special status
+      // For now, let's fetch based on status if it's NOT "reviewed"
+      if (statusFilter && statusFilter !== 'reviewed') url += `status=${statusFilter}&`;
+      
       if (formFilter) url += `form_id=${formFilter}&`;
       if (levelFilter.length > 0) url += `level=${levelFilter.join(',')}&`;
       if (schoolFilter) url += `school_code=${encodeURIComponent(schoolFilter)}&`;
@@ -218,7 +222,7 @@ export default function Submissions({ user }: { user: User }) {
         api.get('/forms').catch(() => [])
       ]);
 
-      const mappedSubs = (Array.isArray(subs) ? subs : []).map((s: any) => ({
+      let mappedSubs = (Array.isArray(subs) ? subs : []).map((s: any) => ({
         ...s,
         id: s._id || s.id,
         form_id: s.formId || s.form_id,
@@ -231,6 +235,14 @@ export default function Submissions({ user }: { user: User }) {
         form_title: s.formTitle || s.form_title,
         submitted_at: s.createdAt || s.submitted_at
       }));
+
+      // Frontend filtering for "reviewed" status
+      if (statusFilter === 'reviewed') {
+        mappedSubs = mappedSubs.filter((s: any) => 
+          ['approved', 'rejected', 'under_review'].includes(s.status) || 
+          (Array.isArray(s.level_reviews) && s.level_reviews.length > 0)
+        );
+      }
 
       setSubmissions(mappedSubs);
       setForms(Array.isArray(f) ? f : []);
@@ -1237,6 +1249,20 @@ export default function Submissions({ user }: { user: User }) {
         onRowClick={openDetail} emptyMessage="No submissions found" emptyIcon={<Inbox size={40} />}
         filters={
           <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+            {(user.role as string) === 'admin' && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm">
+                <Filter size={14} className="text-primary" />
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="text-xs bg-transparent outline-none font-bold text-slate-700 min-w-[120px] cursor-pointer">
+                  <option value="">All Status</option>
+                  <option value="reviewed">Reviewed</option>
+                  <option value="submitted">Submitted</option>
+                  <option value="under_review">Under Review</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+            )}
+
             {(user.role as string) === 'admin' && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border rounded-xl shadow-sm">
                 <SlidersHorizontal size={14} className="text-primary" />
