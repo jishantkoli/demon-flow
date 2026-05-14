@@ -373,6 +373,11 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
         const myNominations = await Nomination.find({ functionary_id: req.user._id });
         const teacherEmails = myNominations.map(n => n.teacher_email);
         query.userEmail = { $in: teacherEmails.map(email => new RegExp(`^${email}$`, 'i')) };
+      } else if (req.user.role === 'reviewer' && req.query.reviewed_by_me === 'true') {
+        // Reviewers can filter for only submissions they have personally reviewed
+        const myReviews = await Review.find({ reviewer_id: req.user._id });
+        const mySubmissionIds = myReviews.map(r => r.submission_id);
+        query._id = { $in: mySubmissionIds };
       }
     } else {
       // For truly anonymous requests (before OTP), we can only filter by email if provided
@@ -394,6 +399,11 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
       const obj = s.toObject();
       const subReviews = allReviews.filter(r => r.submission_id.toString() === obj._id.toString());
       
+      // Extract the specific review by the current user if they are a reviewer
+      const myReview = (req.user?.role === 'reviewer')
+        ? subReviews.find(r => r.reviewer_id.toString() === req.user?._id.toString())
+        : null;
+      
       return {
         ...obj,
         id: obj._id,
@@ -412,8 +422,17 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
           overall_score: r.overall_score,
           grade: r.grade,
           recommendation: r.recommendation,
-          comments: r.comments
-        }))
+          comments: r.comments,
+          reviewer_id: r.reviewer_id
+        })),
+        my_review: myReview ? {
+          overall_score: myReview.overall_score,
+          grade: myReview.grade,
+          comments: myReview.comments,
+          level: myReview.level,
+          recommendation: myReview.recommendation,
+          reviewed_at: myReview.reviewed_at
+        } : null
       };
     });
       

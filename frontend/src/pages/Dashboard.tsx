@@ -104,7 +104,7 @@ export default function Dashboard({ user }: { user: User }) {
           <StatCard label="Pending Reviews" value={s.pendingReviews || 0} icon={CheckSquare} color="amber" onClick={() => navigate('/reviews')} ctaText="Open my pending reviews" />
           <StatCard label="Completed" value={s.completedReviews || 0} icon={TrendingUp} color="green" onClick={() => navigate('/reviews')} ctaText="Open completed reviews" />
           <StatCard label="Avg Score Given" value={s.avgScore || 0} icon={BarChart3} color="blue" subtitle="Across all reviews" onClick={() => navigate('/reviews')} ctaText="Open review insights" />
-          <StatCard label="Total Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" onClick={() => navigate('/submissions')} ctaText="Open submissions" />
+          <StatCard label="Assigned Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" onClick={() => navigate('/submissions')} ctaText="Open submissions" />
         </>}
         {user.role === 'functionary' && <>
           <StatCard label="Active Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} ctaText="Open forms" />
@@ -119,6 +119,59 @@ export default function Dashboard({ user }: { user: User }) {
           <StatCard label="Under Review" value={s.submissionsByStatus?.under_review || 0} icon={Clock} color="amber" onClick={() => navigate('/submissions')} ctaText="Open under review entries" />
         </>}
       </motion.div>
+
+      {user.role === 'reviewer' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <motion.div {...anim(1)} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <h3 className="font-semibold font-heading text-lg mb-4 flex items-center gap-2">
+              <Award size={20} className="text-primary" /> Your Review Progress
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-slate-600">Overall Completion</span>
+                  <span className="font-bold text-primary">
+                    {s.pendingReviews + s.completedReviews > 0 
+                      ? Math.round((s.completedReviews / (s.pendingReviews + s.completedReviews)) * 100) 
+                      : 0}%
+                  </span>
+                </div>
+                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ width: 0 }} 
+                    animate={{ width: `${(s.completedReviews / (Math.max(s.pendingReviews + s.completedReviews, 1))) * 100}%` }} 
+                    className="h-full bg-primary rounded-full"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-6">
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
+                  <p className="text-2xl font-bold text-slate-900">{s.pendingReviews || 0}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Pending Task</p>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
+                  <p className="text-2xl font-bold text-slate-900">{s.completedReviews || 0}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Finalized</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div {...anim(2)} className="bg-gradient-to-br from-primary to-primary/80 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex flex-col justify-center">
+            <div className="relative z-10">
+              <h3 className="text-2xl font-bold mb-2">Ready to start?</h3>
+              <p className="text-white/80 text-sm mb-6 max-w-[280px]">You have {s.pendingReviews || 0} submissions waiting for your expert evaluation. Every review helps us find the best talent.</p>
+              <button 
+                onClick={() => navigate('/reviews')}
+                className="bg-white text-primary px-8 py-3 rounded-xl font-bold text-sm hover:bg-slate-100 transition-colors shadow-sm"
+              >
+                Go to Review Queue
+              </button>
+            </div>
+            <CheckSquare className="absolute -right-6 -bottom-6 text-white/10 w-48 h-48 -rotate-12" />
+          </motion.div>
+        </div>
+      )}
 
       {user.role === 'teacher' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -280,112 +333,6 @@ export default function Dashboard({ user }: { user: User }) {
                 </div>
               ))}
             </div>
-          </motion.div>
-        </div>
-      )}
-
-      {user.role === 'reviewer' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <motion.div {...anim(1)} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h3 className="font-semibold font-heading text-lg mb-4 flex items-center gap-2">
-              <Award size={20} className="text-primary" /> Your Review Progress
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-slate-600">Overall Completion</span>
-                  <span className="font-bold text-primary">
-                    {s.pendingReviews + s.completedReviews > 0 
-                      ? Math.round((s.completedReviews / (s.pendingReviews + s.completedReviews)) * 100) 
-                      : 0}%
-                  </span>
-                </div>
-                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }} 
-                    animate={{ width: `${(s.completedReviews / (Math.max(s.pendingReviews + s.completedReviews, 1))) * 100}%` }} 
-                    className="h-full bg-primary rounded-full"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 mt-6">
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-                  <p className="text-2xl font-bold text-slate-900">{s.pendingReviews || 0}</p>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Pending Task</p>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-                  <p className="text-2xl font-bold text-slate-900">{s.completedReviews || 0}</p>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Finalized</p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div {...anim(2)} className="bg-gradient-to-br from-primary to-primary/80 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex flex-col justify-center">
-            <div className="relative z-10">
-              <h3 className="text-2xl font-bold mb-2">Ready to start?</h3>
-              <p className="text-white/80 text-sm mb-6 max-w-[280px]">You have {s.pendingReviews || 0} submissions waiting for your expert evaluation. Every review helps us find the best talent.</p>
-              <button 
-                onClick={() => navigate('/reviews')}
-                className="bg-white text-primary px-8 py-3 rounded-xl font-bold text-sm hover:bg-slate-100 transition-colors shadow-sm"
-              >
-                Go to Review Queue
-              </button>
-            </div>
-            <CheckSquare className="absolute -right-6 -bottom-6 text-white/10 w-48 h-48 -rotate-12" />
-          </motion.div>
-        </div>
-      )}
-
-      {user.role === 'reviewer' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <motion.div {...anim(1)} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h3 className="font-semibold font-heading text-lg mb-4 flex items-center gap-2">
-              <Award size={20} className="text-primary" /> Your Review Progress
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-slate-600">Overall Completion</span>
-                  <span className="font-bold text-primary">
-                    {s.pendingReviews + s.completedReviews > 0 
-                      ? Math.round((s.completedReviews / (s.pendingReviews + s.completedReviews)) * 100) 
-                      : 0}%
-                  </span>
-                </div>
-                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }} 
-                    animate={{ width: `${(s.completedReviews / (Math.max(s.pendingReviews + s.completedReviews, 1))) * 100}%` }} 
-                    className="h-full bg-primary rounded-full"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 mt-6">
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-                  <p className="text-2xl font-bold text-slate-900">{s.pendingReviews || 0}</p>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Pending Task</p>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-                  <p className="text-2xl font-bold text-slate-900">{s.completedReviews || 0}</p>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Finalized</p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div {...anim(2)} className="bg-gradient-to-br from-primary to-primary/80 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex flex-col justify-center">
-            <div className="relative z-10">
-              <h3 className="text-2xl font-bold mb-2">Ready to start?</h3>
-              <p className="text-white/80 text-sm mb-6 max-w-[280px]">You have {s.pendingReviews || 0} submissions waiting for your expert evaluation. Every review helps us find the best talent.</p>
-              <button 
-                onClick={() => navigate('/reviews')}
-                className="bg-white text-primary px-8 py-3 rounded-xl font-bold text-sm hover:bg-slate-100 transition-colors shadow-sm"
-              >
-                Go to Review Queue
-              </button>
-            </div>
-            <CheckSquare className="absolute -right-6 -bottom-6 text-white/10 w-48 h-48 -rotate-12" />
           </motion.div>
         </div>
       )}

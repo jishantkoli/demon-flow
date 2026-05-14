@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User } from '../lib/auth';
 import { api } from '../lib/api';
@@ -2754,36 +2754,82 @@ export default function ReviewSystem({ user }: { user: User }) {
   }
 
   // ═══════════ REVIEWER VIEW ═══════════
-  const myPending = reviews.filter(r => r.status === 'pending');
-  const myCompleted = reviews.filter(r => r.status !== 'pending');
+  // Get forms that have reviews for this reviewer
+  const reviewerForms = useMemo(() => {
+    const formMap = new Map();
+    reviews.forEach(r => {
+      const fid = String(r.form_id || r.formId || '');
+      if (fid && !formMap.has(fid)) {
+        // Try to find title from current forms state or the review object itself
+        const existingForm = forms.find(f => String(f.id || f._id) === fid);
+        formMap.set(fid, {
+          id: fid,
+          title: existingForm?.title || r.form_title || `Form #${fid.slice(-6)}`
+        });
+      }
+    });
+    return Array.from(formMap.values());
+  }, [reviews, forms]);
 
   // NEW: Filter reviews by selected form if one is chosen
   const filteredMyReviews = selectedFormId
-    ? reviews.filter(r => r.form_id === selectedFormId || r.formId === selectedFormId)
+    ? reviews.filter(r => String(r.form_id || r.formId) === String(selectedFormId))
     : reviews;
 
   const myPendingFiltered = filteredMyReviews.filter(r => r.status === 'pending');
   const myCompletedFiltered = filteredMyReviews.filter(r => r.status !== 'pending');
+  
   const displayed = reviewTab === 'pending' ? myPendingFiltered : myCompletedFiltered;
 
   return (
     <div className="space-y-6">
-      <div><h1 className="text-xl font-bold font-heading">My Reviews</h1>
-        <p className="text-sm text-slate-500">Score submissions assigned to you</p></div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold font-heading">My Reviews</h1>
+          <p className="text-sm text-slate-500">Score submissions assigned to you</p>
+        </div>
+        
+        <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl shadow-sm min-w-[200px]">
+          <Filter size={14} className="text-primary shrink-0" />
+          <select 
+            value={selectedFormId} 
+            onChange={e => setSelectedFormId(e.target.value)}
+            className="text-xs bg-transparent outline-none font-bold text-slate-700 w-full cursor-pointer"
+          >
+            <option value="">All Assigned Forms</option>
+            {reviewerForms.map(f => (
+              <option key={f.id || f._id} value={f.id || f._id}>{f.title}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-amber-50 rounded-xl p-4 text-center border border-amber-100">
-          <Clock size={20} className="mx-auto text-amber-500 mb-1" /><p className="text-xl font-bold">{myPendingFiltered.length}</p><p className="text-xs text-amber-600">Pending</p></div>
+          <Clock size={20} className="mx-auto text-amber-500 mb-1" />
+          <p className="text-xl font-bold">{myPendingFiltered.length}</p>
+          <p className="text-xs text-amber-600">Pending</p>
+        </div>
         <div className="bg-emerald-50 rounded-xl p-4 text-center border border-emerald-100">
-          <CheckCircle size={20} className="mx-auto text-emerald-500 mb-1" /><p className="text-xl font-bold">{myCompletedFiltered.length}</p><p className="text-xs text-emerald-600">Completed</p></div>
+          <CheckCircle size={20} className="mx-auto text-emerald-500 mb-1" />
+          <p className="text-xl font-bold">{myCompletedFiltered.length}</p>
+          <p className="text-xs text-emerald-600">Completed</p>
+        </div>
       </div>
 
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
-        {(['pending', 'completed'] as const).map(t => (
-          <button key={t} onClick={() => setReviewTab(t)} className={`px-4 py-1.5 rounded-lg text-xs font-semibold capitalize ${reviewTab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
-            {t} ({t === 'pending' ? myPendingFiltered.length : myCompletedFiltered.length})
-          </button>
-        ))}
+        {(['pending', 'completed'] as const).map(t => {
+          const count = t === 'pending' ? myPendingFiltered.length : myCompletedFiltered.length;
+          return (
+            <button 
+              key={t} 
+              onClick={() => setReviewTab(t)} 
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold capitalize ${reviewTab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+            >
+              {t} ({count})
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

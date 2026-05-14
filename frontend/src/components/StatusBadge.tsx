@@ -10,6 +10,7 @@ const styles: Record<string, string> = {
   under_review: 'bg-sky-50 text-sky-700 ring-sky-500/20',
   draft: 'bg-slate-100 text-slate-500 ring-slate-400/20',
   rejected: 'bg-rose-50 text-rose-700 ring-rose-500/20',
+  next_level: 'bg-purple-50 text-purple-700 ring-purple-500/20',
   expired: 'bg-slate-100 text-slate-400 ring-slate-300/20',
   inactive: 'bg-slate-100 text-slate-400 ring-slate-300/20',
   invited: 'bg-indigo-50 text-indigo-700 ring-indigo-500/20',

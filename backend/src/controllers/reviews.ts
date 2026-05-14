@@ -388,6 +388,11 @@ export const getReviews = async (req: AuthRequest, res: Response) => {
     const reviews = await Review.find(query)
       .populate('level_id', 'scoringType showPreviousReviews')
       .populate('reviewer_id', 'name')
+      .populate({
+        path: 'submission_id',
+        select: 'formId',
+        populate: { path: 'formId', select: 'title' }
+      })
       .sort({ createdAt: -1 });
 
     res.status(200).json(reviews.map(r => {
@@ -395,7 +400,9 @@ export const getReviews = async (req: AuthRequest, res: Response) => {
       return {
         ...obj,
         id: obj._id,
-        submission_id: obj.submission_id,
+        submission_id: (obj.submission_id as any)?._id || obj.submission_id,
+        form_id: (obj.submission_id as any)?.formId?._id || (obj.submission_id as any)?.formId,
+        form_title: (obj.submission_id as any)?.formId?.title || 'Untitled Form',
         reviewer_name: (obj.reviewer_id as any)?.name || 'Reviewer',
         scoring_type: (obj.level_id as any)?.scoringType || 'form_level',
         show_previous_reviews: (obj.level_id as any)?.showPreviousReviews || false

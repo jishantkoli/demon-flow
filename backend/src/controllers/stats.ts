@@ -31,6 +31,9 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     } else if (role === 'reviewer') {
       formQuery.status = 'active';
       // Reviewers see submissions they need to review
+      const myReviews = await Review.find({ reviewer_id: userId });
+      const mySubmissionIds = myReviews.map(r => r.submission_id);
+      subQuery._id = { $in: mySubmissionIds };
     }
 
     const totalUsers = await User.countDocuments();
@@ -75,13 +78,19 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     // Review stats
     let pendingReviews = 0;
     let completedReviews = 0;
+    let avgScore = 0;
 
     if (role === 'admin') {
       pendingReviews = await Review.countDocuments({ status: 'pending' });
       completedReviews = await Review.countDocuments({ status: { $ne: 'pending' } });
     } else if (role === 'reviewer') {
       pendingReviews = await Review.countDocuments({ reviewer_id: userId, status: 'pending' });
-      completedReviews = await Review.countDocuments({ reviewer_id: userId, status: { $ne: 'pending' } });
+      const completed = await Review.find({ reviewer_id: userId, status: { $ne: 'pending' } });
+      completedReviews = completed.length;
+      if (completedReviews > 0) {
+        const total = completed.reduce((acc, r) => acc + (Number(r.overall_score) || 0), 0);
+        avgScore = Math.round(total / completedReviews);
+      }
     }
 
     res.status(200).json({
@@ -96,7 +105,8 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       nominationsByStatus,
       completionRate,
       pendingReviews,
-      completedReviews
+      completedReviews,
+      avgScore
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
