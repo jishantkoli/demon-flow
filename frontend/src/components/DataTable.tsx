@@ -164,11 +164,30 @@ export default function DataTable({
           <span className="text-muted">Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, filtered.length)} of {filtered.length}</span>
           <div className="flex items-center gap-1">
             <button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="p-1.5 rounded-lg hover:bg-surface disabled:opacity-30" aria-label="Previous"><ChevronLeft size={15} /></button>
-            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-              const pg = totalPages <= 5 ? i : page < 3 ? i : Math.min(page + i - 2, totalPages - 1);
-              if (pg < 0 || pg >= totalPages) return null;
-              return <button key={pg} onClick={() => setPage(pg)} className={`w-7 h-7 rounded-lg text-xs font-semibold ${pg === page ? 'bg-primary text-white' : 'hover:bg-surface'}`}>{pg + 1}</button>;
-            })}
+            {(() => {
+              // Calculate range of pages to show (max 5 pages)
+              let start = Math.max(0, page - 2);
+              let end = Math.min(totalPages - 1, start + 4);
+              
+              // Adjust start if end is at totalPages - 1
+              if (end === totalPages - 1) {
+                start = Math.max(0, end - 4);
+              }
+
+              const pageButtons = [];
+              for (let p = start; p <= end; p++) {
+                pageButtons.push(
+                  <button 
+                    key={p} 
+                    onClick={() => setPage(p)} 
+                    className={`w-7 h-7 rounded-lg text-xs font-semibold transition-all ${p === page ? 'bg-primary text-white shadow-sm' : 'hover:bg-surface text-slate-600'}`}
+                  >
+                    {p + 1}
+                  </button>
+                );
+              }
+              return pageButtons;
+            })()}
             <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} className="p-1.5 rounded-lg hover:bg-surface disabled:opacity-30" aria-label="Next"><ChevronRight size={15} /></button>
           </div>
         </div>
