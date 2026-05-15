@@ -24,8 +24,18 @@ export const createUser = async (req: AuthRequest, res: Response) => {
     const { action, users } = req.body;
 
     if (action === 'bulk-import' && Array.isArray(users)) {
-      const usersToCreate = users.map((u: any) => {
-        return {
+      const emails = users.map(u => u.email).filter(Boolean);
+      const existingUsers = await User.find({ email: { $in: emails } }).select('email');
+      const existingEmails = new Set(existingUsers.map(u => u.email));
+
+      const usersToCreate = [];
+      const seenInList = new Set();
+
+      for (const u of users) {
+        if (!u.email || existingEmails.has(u.email) || seenInList.has(u.email)) continue;
+        
+        seenInList.add(u.email);
+        usersToCreate.push({
           email: u.email,
           role: 'functionary', // Force role to functionary
           profile: {
@@ -37,8 +47,13 @@ export const createUser = async (req: AuthRequest, res: Response) => {
           isActive: true,
           createdBy: req.user?._id
           // No passwordHash is set here, making them "invisible" in the management list
-        };
-      });
+        });
+      }
+
+      if (usersToCreate.length === 0) {
+        return res.status(200).json({ success: true, count: 0, message: 'No new users to import' });
+      }
+
       const created = await User.insertMany(usersToCreate);
       return res.status(201).json({ success: true, count: created.length });
     }
