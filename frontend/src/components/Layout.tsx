@@ -35,9 +35,19 @@ const teacherNav = [
   { label: 'Available Forms', icon: FileText, path: '/forms' },
   { label: 'My Submissions', icon: Inbox, path: '/submissions' },
 ];
+const formCreatorNav = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'Form Builder', icon: FileText, path: '/forms' },
+];
 
 function getNav(role: string) {
-  switch (role) { case 'admin': return adminNav; case 'reviewer': return reviewerNav; case 'functionary': return functionaryNav; default: return teacherNav; }
+  switch (role) { 
+    case 'admin': return adminNav; 
+    case 'reviewer': return reviewerNav; 
+    case 'functionary': return functionaryNav; 
+    case 'form_creator': return formCreatorNav;
+    default: return teacherNav; 
+  }
 }
 
 export default function Layout({ user, onLogout, children }: { user: User; onLogout: () => void; children: React.ReactNode }) {

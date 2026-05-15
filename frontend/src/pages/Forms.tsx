@@ -90,7 +90,7 @@ export default function Forms({ user }: { user: User }) {
     loadTeacherNominationLinks();
   }, [user.role, user.email]);
 
-  const isAdmin = user.role === 'admin';
+  const isAdmin = user.role === 'admin' || user.role === 'form_creator';
 
   // Filter
   const filtered = forms.filter(f => {

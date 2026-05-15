@@ -95,8 +95,8 @@ function AppContent() {
         <Route path="/" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
         {user?.role === 'admin' && <Route path="/users" element={<UserManagement />} />}
         <Route path="/forms" element={user ? <Forms user={user} /> : <Navigate to="/login" />} />
-        {user?.role === 'admin' && <Route path="/forms/new" element={<FormBuilder />} />}
-        {user?.role === 'admin' && <Route path="/forms/:id/builder" element={<FormBuilder />} />}
+        {(user?.role === 'admin' || user?.role === 'form_creator') && <Route path="/forms/new" element={<FormBuilder />} />}
+        {(user?.role === 'admin' || user?.role === 'form_creator') && <Route path="/forms/:id/builder" element={<FormBuilder />} />}
         <Route path="/fill/:id" element={<FormFill user={user || { id: 'anon', name: 'Anonymous', role: 'teacher', email: '' }} />} />
         <Route path="/forms/view" element={user ? <FormView user={user} /> : <Navigate to="/login" />} />
         <Route path="/submissions" element={user ? <Submissions user={user} /> : <Navigate to="/login" />} />

@@ -89,7 +89,7 @@ export default function Dashboard({ user }: { user: User }) {
   return (
     <div className="space-y-6">
       <div><h1 className="text-2xl font-bold font-heading">Welcome back, {user.name?.split(' ')[0]}</h1>
-        <p className="text-sm text-slate-500 mt-1">{user.role === 'admin' ? 'System overview and real-time analytics' : user.role === 'functionary' ? `Managing nominations for school ${user.school_code || ''}` : 'Your portal overview'}</p>
+        <p className="text-sm text-slate-500 mt-1">{user.role === 'admin' ? 'System overview and real-time analytics' : user.role === 'functionary' ? `Managing nominations for school ${user.school_code || ''}` : user.role === 'form_creator' ? 'Form management and creation' : 'Your portal overview'}</p>
         <p className="text-[11px] text-slate-400 mt-1">Tip: Click on dashboard cards or list items to navigate directly to detail pages.</p>
       </div>
 
@@ -117,6 +117,10 @@ export default function Dashboard({ user }: { user: User }) {
           <StatCard label="My Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="green" onClick={() => navigate('/submissions')} ctaText="Open my submissions" />
           <StatCard label="Approved" value={s.submissionsByStatus?.approved || 0} icon={CheckSquare} color="purple" onClick={() => navigate('/submissions')} ctaText="Open approved entries" />
           <StatCard label="Under Review" value={s.submissionsByStatus?.under_review || 0} icon={Clock} color="amber" onClick={() => navigate('/submissions')} ctaText="Open under review entries" />
+        </>}
+        {user.role === 'form_creator' && <>
+          <StatCard label="Active Forms" value={s.activeForms || 0} icon={FileText} color="green" subtitle={`${s.draftForms || 0} drafts, ${s.expiredForms || 0} expired`} onClick={() => navigate('/forms')} ctaText="Open forms list" />
+          <StatCard label="Total Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" onClick={() => navigate('/forms')} ctaText="View all forms" />
         </>}
       </motion.div>
 
