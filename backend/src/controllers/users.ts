@@ -6,7 +6,7 @@ import { AuthRequest } from '../middleware/auth.js';
 export const getUsers = async (req: AuthRequest, res: Response) => {
   try {
     const { role } = req.query;
-    const query: any = {};
+    const query: any = { passwordHash: { $exists: true, $ne: null } };
     if (role) query.role = role;
     
     const users = await User.find(query).sort({ createdAt: -1 });
@@ -24,24 +24,21 @@ export const createUser = async (req: AuthRequest, res: Response) => {
     const { action, users } = req.body;
 
     if (action === 'bulk-import' && Array.isArray(users)) {
-      const usersToCreate = await Promise.all(users.map(async (u: any) => {
-        const password = u.password_hash || Math.random().toString(36).slice(-8);
-        const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash(password, salt);
-        
+      const usersToCreate = users.map((u: any) => {
         return {
           email: u.email,
-          passwordHash,
-          role: u.role || 'teacher',
+          role: 'functionary', // Force role to functionary
           profile: {
             fullName: u.name || 'User',
             phone: u.phone || '',
             schoolName: u.school_name || '',
             district: u.district || ''
           },
-          isActive: true
+          isActive: true,
+          createdBy: req.user?._id
+          // No passwordHash is set here, making them "invisible" in the management list
         };
-      }));
+      });
       const created = await User.insertMany(usersToCreate);
       return res.status(201).json({ success: true, count: created.length });
     }
@@ -65,7 +62,8 @@ export const createUser = async (req: AuthRequest, res: Response) => {
       email,
       passwordHash,
       role,
-      isActive: status !== 'inactive'
+      isActive: status !== 'inactive',
+      createdBy: req.user?._id
     });
 
     res.status(201).json({ ...user.toObject(), id: user._id });

@@ -6,22 +6,28 @@ export const getAuditLogs = async (req: AuthRequest, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 50;
     const logs = await AuditLog.find()
-      .populate('userId', 'email role profile.fullName')
+      .populate('userId', 'email role profile.fullName passwordHash createdBy')
       .sort({ createdAt: -1 })
       .limit(limit);
-    const mapped = logs.map((l: any) => {
-      const obj = l.toObject();
-      const user = obj.userId && typeof obj.userId === 'object' ? obj.userId : null;
-      return {
-        ...obj,
-        id: obj._id,
-        created_at: obj.createdAt,
-        user_id: user?._id || obj.userId || null,
-        user_name: user?.profile?.fullName || null,
-        user_email: user?.email || null,
-        user_role: user?.role || null
-      };
-    });
+
+    const mapped = logs
+      .map((l: any) => {
+        const obj = l.toObject();
+        const user = obj.userId && typeof obj.userId === 'object' ? obj.userId : null;
+        return {
+          ...obj,
+          id: obj._id,
+          created_at: obj.createdAt,
+          user_id: user?._id || obj.userId || null,
+          user_name: user?.profile?.fullName || null,
+          user_email: user?.email || null,
+          user_role: user?.role || null,
+          has_password: !!user?.passwordHash,
+          created_by: user?.createdBy || null
+        };
+      })
+      .filter((log: any) => log.has_password); // Only show logs for users with a password (created by admin)
+
     res.status(200).json(mapped);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

@@ -309,7 +309,7 @@ export default function Dashboard({ user }: { user: User }) {
 
           <motion.div {...anim(2)} className="bg-white rounded-2xl border border-slate-200 shadow-sm">
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h3 className="font-semibold font-heading text-sm flex items-center gap-2"><Activity size={14} className="text-accent-green" /> Activity Timeline</h3>
+              <h3 className="font-semibold font-heading text-sm flex items-center gap-2"><Activity size={14} className="text-accent-green" /> Login Activity</h3>
               <button
                 className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full hover:bg-primary/20"
                 onClick={() => navigate('/audit-logs')}

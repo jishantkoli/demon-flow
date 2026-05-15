@@ -280,13 +280,6 @@ export default function Forms({ user }: { user: User }) {
               <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search forms..."
                 className="bg-transparent text-sm outline-none w-full placeholder-muted text-slate-900" />
             </div>
-            {user.role === 'admin' && (
-              <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-                className="text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 outline-none">
-                <option value="">All Types</option>
-                {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            )}
           </div>
         </div>
       )}

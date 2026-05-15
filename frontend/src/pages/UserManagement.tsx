@@ -57,7 +57,8 @@ export default function UserManagement() {
       const lines = importText.trim().split('\n').filter(l => l.trim());
       const userList = lines.map(line => {
         const parts = line.split(',').map(p => p.trim());
-        return { name: parts[0], email: parts[1], phone: parts[2] || '', role: parts[3] || 'functionary', school_name: parts[4] || '', district: parts[5] || '' };
+        // Force role to 'functionary' as requested
+        return { name: parts[0], email: parts[1], phone: parts[2] || '', role: 'functionary', school_name: parts[3] || '', district: parts[4] || '' };
       });
       await api.post('/users', { action: 'bulk-import', users: userList });
       setShowImport(false); setImportText(''); fetchUsers();
@@ -130,9 +131,11 @@ export default function UserManagement() {
           <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Role</label>
             <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
               <option value="admin">Admin</option><option value="reviewer">Reviewer</option><option value="functionary">Functionary</option><option value="teacher">Teacher</option></select></div>
-          <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Status</label>
-            <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
-              <option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+          {editUser && (
+            <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Status</label>
+              <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
+                <option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+          )}
         </div>
         <div className="flex justify-end gap-3 mt-6">
           <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm rounded-xl border border-slate-200 hover:bg-slate-100">Cancel</button>
@@ -140,11 +143,12 @@ export default function UserManagement() {
         </div>
       </Modal>
 
-      <Modal open={showImport} onClose={() => setShowImport(false)} title="Bulk Import Users" size="lg">
+      <Modal open={showImport} onClose={() => setShowImport(false)} title="Import School Functionaries" size="lg">
         <div className="space-y-4">
           <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
-            <p className="text-xs text-blue-700 font-medium">CSV Format: Name, Email, Phone, Role, School Name, District</p>
-            <p className="text-[10px] text-blue-600 mt-1">Example: Sunita Devi, head.kv001@cbss.school.org, +919876543213, functionary, Kendriya Vidyalaya No. 1, New Delhi</p>
+            <p className="text-xs text-blue-700 font-medium">CSV Format: Name, Email, Phone, School Name, District</p>
+            <p className="text-[10px] text-blue-600 mt-1">Example: Sunita Devi, head.kv001@cbss.school.org, +919876543213, Kendriya Vidyalaya No. 1, New Delhi</p>
+            <p className="text-[10px] text-amber-600 font-bold mt-2">Note: These users will be added to the database but will not be visible in the user management list.</p>
           </div>
           <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={8} placeholder="Paste CSV data here..." className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none font-mono resize-none" />
           <div className="flex justify-end gap-3">
