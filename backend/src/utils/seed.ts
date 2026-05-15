@@ -6,6 +6,7 @@ import { User } from '../models/User.js';
 import { Form } from '../models/Form.js';
 import { Submission } from '../models/Submission.js';
 import { Nomination } from '../models/Nomination.js';
+import { Review } from '../models/Review.js';
 import { connectDB } from '../config/db.js';
 
 export const seedData = async (shouldExit = true, clearFirst = true) => {

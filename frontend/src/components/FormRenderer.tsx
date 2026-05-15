@@ -22,6 +22,7 @@ export interface FormField {
   points?: number;
   marks?: number;
   section_type?: 'normal' | 'branching' | 'quiz';
+  negative?: number;
 }
 
 interface Props {
