@@ -510,8 +510,8 @@ export default function FormFill({ user }: { user: User }) {
 
       if (String(ansText).trim() === String(corrText).trim()) {
         score += qMarks;
-      } else if (form.settings?.negative_marking) {
-        score -= f.negative || 0;
+      } else if (f.negative && f.negative < 0) {
+        score += Number(f.negative);
       }
     });
     return { score: Math.max(0, score), max };

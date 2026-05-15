@@ -131,8 +131,8 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
 
               if (String(ansText).trim() === String(corrText).trim()) {
                 earnedPoints += qMarks;
-              } else if (form.settings?.negative_marking) {
-                earnedPoints -= field.negative || 0;
+              } else if (field.negative && field.negative < 0) {
+                earnedPoints += Number(field.negative);
               }
             }
           }

@@ -10,10 +10,58 @@ import fs from 'fs';
 import path from 'path';
 import * as XLSX from 'xlsx';
 
+const sanitizeFormSchema = (form: any, isAdmin: boolean) => {
+  if (isAdmin) return form.toObject ? form.toObject() : form;
+
+  const formObj = form.toObject ? form.toObject() : { ...form };
+  
+  const stripCorrect = (fields: any[]) => {
+    if (!Array.isArray(fields)) return;
+    fields.forEach(f => {
+      if (f.type === 'mcq') {
+        delete f.correct;
+      }
+      if (f.children) stripCorrect(f.children);
+    });
+  };
+
+  if (formObj.form_schema) {
+    if (formObj.form_schema.sections) {
+      formObj.form_schema.sections.forEach((s: any) => {
+        if (s.fields) stripCorrect(s.fields);
+      });
+    } else if (formObj.form_schema.fields) {
+      stripCorrect(formObj.form_schema.fields);
+    } else if (Array.isArray(formObj.form_schema)) {
+      stripCorrect(formObj.form_schema);
+    }
+  }
+
+  // Also handle legacy 'fields' property if it exists
+  if (formObj.fields) {
+    let fields = formObj.fields;
+    if (typeof fields === 'string') {
+      try {
+        fields = JSON.parse(fields);
+        stripCorrect(fields);
+        formObj.fields = JSON.stringify(fields);
+      } catch (e) {}
+    } else if (Array.isArray(fields)) {
+      stripCorrect(fields);
+    }
+  }
+
+  return formObj;
+};
+
 export const getForms = async (req: AuthRequest, res: Response) => {
   try {
     const { status, id } = req.query;
     const query: any = {};
+    const isAdmin = req.user?.role === 'admin';
+    const isReviewer = req.user?.role === 'reviewer' || req.user?.role === 'functionary';
+    const canSeeAnswers = isAdmin || isReviewer;
+
     if (id) {
       let form;
       if (id.toString().match(/^[0-9a-fA-F]{24}$/)) {
@@ -35,13 +83,14 @@ export const getForms = async (req: AuthRequest, res: Response) => {
         }
       }
 
-      return res.status(200).json({ ...form.toObject(), id: form._id });
+      const sanitized = sanitizeFormSchema(form, canSeeAnswers);
+      return res.status(200).json({ ...sanitized, id: form._id });
     }
 
     if (status) query.status = status;
     
     // Admins see all, others see active by default
-    if (req.user?.role !== 'admin') {
+    if (!isAdmin) {
       query.status = 'active';
     }
 
@@ -56,13 +105,16 @@ export const getForms = async (req: AuthRequest, res: Response) => {
     }
 
     const forms = await Form.find(query).sort({ createdAt: -1 });
-    const mapped = forms.map(f => ({ 
-      ...f.toObject(), 
-      id: f._id,
-      form_type: f.formType,
-      shareable_link: f.shareableLink,
-      expires_at: f.expiresAt
-    }));
+    const mapped = forms.map(f => {
+      const sanitized = sanitizeFormSchema(f, canSeeAnswers);
+      return { 
+        ...sanitized, 
+        id: f._id,
+        form_type: f.formType,
+        shareable_link: f.shareableLink,
+        expires_at: f.expiresAt
+      };
+    });
     res.status(200).json(mapped);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -80,8 +132,13 @@ export const getFormByLink = async (req: Request, res: Response) => {
     // Check expiration
     const isExpired = form.expiresAt && new Date() > form.expiresAt;
 
+    // Check if user is admin (getFormByLink is public, but user might be logged in)
+    // Actually, Request here is not AuthRequest, so we might not have req.user
+    // But since this is a public link, we should always sanitize unless we have proof of admin
+    const sanitized = sanitizeFormSchema(form, false);
+
     res.status(200).json({ 
-      ...form.toObject(), 
+      ...sanitized, 
       id: form._id, 
       form_type: form.formType,
       shareable_link: form.shareableLink,

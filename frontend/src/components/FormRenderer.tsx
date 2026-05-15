@@ -151,8 +151,12 @@ export default function FormRenderer({ fields, formType, settings, initialValues
       if (f.type === 'mcq' && f.correct != null && qPoints > 0) {
         total += qPoints;
         const ans = valuesRef.current[f.id];
-        if (isMcqCorrect(f, ans)) score += qPoints;
-        else if (settings?.negative_marking && ans) score -= Math.round(qPoints * 0.25);
+        if (isMcqCorrect(f, ans)) {
+          score += qPoints;
+        } else if (ans && f.negative && f.negative < 0) {
+          // Add the negative value (it's already negative)
+          score += Number(f.negative);
+        }
       }
       if (f.children) walk(f.children);
     });
@@ -392,7 +396,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
 
       case 'mcq': {
         const opts = shuffledOpts[f.id] || f.options || [];
-        const showCorrect = viewMode === 'admin'; // ONLY admin sees correct answers
+        const showCorrect = viewMode === 'admin' || viewMode === 'reviewer'; // Admin & Reviewer see correct answers
         const selectedText = toOptionText(val, Array.isArray(f.options) ? f.options : []);
         const correctText = toOptionText(f.correct, Array.isArray(f.options) ? f.options : []);
         return wrap(
@@ -532,7 +536,11 @@ export default function FormRenderer({ fields, formType, settings, initialValues
                   {(() => { let c = 0; const w = (l: FormField[]) => l.forEach(f => { if (f.type === 'mcq' && isMcqCorrect(f, values[f.id])) c++; if (f.children) w(f.children); }); w(fields); return c; })()}/{quizQCount} correct answers
                 </p>
               )}
-              {viewMode === 'reviewer' && <p className="text-slate-600">Score calculated automatically by system</p>}
+              {viewMode === 'reviewer' && (
+                <p className="text-slate-700 font-medium">
+                  {(() => { let c = 0; const w = (l: FormField[]) => l.forEach(f => { if (f.type === 'mcq' && isMcqCorrect(f, values[f.id])) c++; if (f.children) w(f.children); }); w(fields); return c; })()}/{quizQCount} correct answers
+                </p>
+              )}
               {settings?.passing_score && (
                 <p className={`font-bold text-sm mt-1 ${calcScore() >= settings.passing_score ? 'text-emerald-600' : 'text-red-600'}`}>
                   {calcScore() >= settings.passing_score ? '✓ PASSED' : '✗ FAILED'}
@@ -540,7 +548,6 @@ export default function FormRenderer({ fields, formType, settings, initialValues
               )}
             </div>
           </div>
-          {viewMode === 'reviewer' && <p className="text-[11px] text-slate-500 mt-3">Note: Correct answers are hidden from reviewers. Only admin can see the answer key.</p>}
         </div>
       )}
 

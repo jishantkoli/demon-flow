@@ -161,7 +161,39 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
                   <label className="text-xs"><span className="text-muted">Marks</span>
                     <input type="number" className="input !py-1.5 mt-1" value={f.marks || 1} onChange={e => updateField(activeSection, f.id, { marks: +e.target.value })} /></label>
                   <label className="text-xs"><span className="text-muted">Negative</span>
-                    <input type="number" step="0.25" className="input !py-1.5 mt-1" value={f.negative || 0} onChange={e => updateField(activeSection, f.id, { negative: +e.target.value })} /></label>
+                    <input type="number" step="0.25" max={0} className="input !py-1.5 mt-1" value={f.negative || 0} onChange={e => updateField(activeSection, f.id, { negative: +e.target.value })} /></label>
+                </div>
+              )}
+              {f.type === 'radio' && (
+                <div className="pt-2 border-t border-border/30 mt-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Auto-Scoring (Quiz Mode)</span>
+                      <p className="text-[10px] text-muted">Enable to set a correct answer and marks</p>
+                    </div>
+                    <Toggle 
+                      checked={false} 
+                      onChange={v => {
+                        if (v) updateField(activeSection, f.id, { type: 'mcq' as FieldType, marks: 1, correct: 0 });
+                      }} 
+                    />
+                  </div>
+                </div>
+              )}
+              {f.type === 'mcq' && (
+                <div className="pt-2 border-t border-border/30 mt-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Auto-Scoring (Quiz Mode)</span>
+                      <p className="text-[10px] text-muted">Field is currently in Quiz mode</p>
+                    </div>
+                    <Toggle 
+                      checked={true} 
+                      onChange={v => {
+                        if (!v) updateField(activeSection, f.id, { type: 'radio' as FieldType });
+                      }} 
+                    />
+                  </div>
                 </div>
               )}
               <div className="pt-2 border-t border-border/30 mt-2">
@@ -392,7 +424,6 @@ export default function FormBuilder() {
     { type: 'radio', label: 'Radio' },
     { type: 'checkbox', label: 'Checkbox' },
     { type: 'file', label: 'File upload' },
-    { type: 'mcq', label: 'MCQ (auto-score)' },
   ];
 
   const publicUrl = `${location.origin}/fill/${id || 'unsaved'}`;
@@ -534,8 +565,9 @@ export default function FormBuilder() {
                 <div className="text-xs font-semibold text-ink">Quiz Settings</div>
                 <label className="text-xs"><span className="text-muted">Time limit (minutes)</span>
                   <input type="number" className="input !py-1.5 mt-1" value={(form.settings.time_limit_min as number) || 30} onChange={e => patchSettings({ time_limit_min: +e.target.value })} /></label>
-                <div className="flex items-center justify-between"><span className="text-sm">Negative marking</span><Toggle checked={!!form.settings.negative_marking} onChange={v => patchSettings({ negative_marking: v })} /></div>
-                <div className="flex items-center justify-between"><span className="text-sm">Shuffle options</span><Toggle checked={!!form.settings.shuffle} onChange={v => patchSettings({ shuffle: v })} /></div>
+                {form.schema.sections.some(s => s.fields.some(f => f.type === 'mcq')) && (
+                  <div className="flex items-center justify-between"><span className="text-sm">Shuffle options</span><Toggle checked={!!form.settings.shuffle} onChange={v => patchSettings({ shuffle: v })} /></div>
+                )}
               </div>
             )}
 
