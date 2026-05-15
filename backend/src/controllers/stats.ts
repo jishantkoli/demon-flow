@@ -36,7 +36,9 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       subQuery._id = { $in: mySubmissionIds };
     }
 
-    const totalUsers = await User.countDocuments();
+    const visibleUserQuery = { passwordHash: { $exists: true, $ne: null } };
+
+    const totalUsers = await User.countDocuments(visibleUserQuery);
     const activeForms = await Form.countDocuments({ ...formQuery, status: 'active' });
     const draftForms = await Form.countDocuments({ ...formQuery, status: 'draft' });
     const expiredForms = await Form.countDocuments({ ...formQuery, status: 'expired' });
@@ -50,12 +52,13 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       rejected: await Submission.countDocuments({ ...subQuery, status: 'rejected' }),
     };
 
-    // Users by role
+    // Users by role (only visible users)
     const usersByRole = {
-      admin: await User.countDocuments({ role: 'admin' }),
-      reviewer: await User.countDocuments({ role: 'reviewer' }),
-      functionary: await User.countDocuments({ role: 'functionary' }),
-      teacher: await User.countDocuments({ role: 'teacher' }),
+      admin: await User.countDocuments({ ...visibleUserQuery, role: 'admin' }),
+      reviewer: await User.countDocuments({ ...visibleUserQuery, role: 'reviewer' }),
+      functionary: await User.countDocuments({ ...visibleUserQuery, role: 'functionary' }),
+      teacher: await User.countDocuments({ ...visibleUserQuery, role: 'teacher' }),
+      form_creator: await User.countDocuments({ ...visibleUserQuery, role: 'form_creator' }),
     };
 
     // Functionary specific stats

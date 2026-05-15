@@ -363,7 +363,8 @@ export default function Dashboard({ user }: { user: User }) {
               {[{ role: 'Admin', count: s.usersByRole?.admin || 0, color: 'from-accent-blue/80 to-accent-blue', plural: 'Admins' },
                 { role: 'Reviewer', count: s.usersByRole?.reviewer || 0, color: 'from-accent-purple/80 to-accent-purple', plural: 'Reviewers' },
                 { role: 'Functionary', count: s.usersByRole?.functionary || 0, color: 'from-success/80 to-success', plural: 'Functionaries' },
-                { role: 'Teacher', count: s.usersByRole?.teacher || 0, color: 'from-accent-orange/80 to-accent-orange', plural: 'Teachers' }]
+                { role: 'Teacher', count: s.usersByRole?.teacher || 0, color: 'from-accent-orange/80 to-accent-orange', plural: 'Teachers' },
+                { role: 'Form Creator', count: s.usersByRole?.form_creator || 0, color: 'from-emerald-500/80 to-emerald-500', plural: 'Form Creators' }]
                 .map(r => <div key={r.role} className={`bg-gradient-to-br ${r.color} text-white rounded-xl p-4 text-center shadow-md`}><p className="text-2xl font-bold">{r.count}</p><p className="text-xs opacity-80">{r.plural}</p></div>)}
             </div>
           </div>
