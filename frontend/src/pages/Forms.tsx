@@ -432,6 +432,16 @@ export default function Forms({ user }: { user: User }) {
                           className="flex-1 min-w-[100px] py-2.5 px-4 bg-primary/10 text-primary rounded-xl text-sm font-bold hover:bg-primary/20 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
                           <Pencil size={14} /> Edit
                         </button>
+                        <button onClick={(e) => { 
+                          e.stopPropagation(); 
+                          const link = `${window.location.origin}/fill/${row.id}`;
+                          navigator.clipboard.writeText(link);
+                          alert('Form link copied to clipboard!');
+                        }}
+                          className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors flex items-center justify-center min-h-[44px] border border-blue-100"
+                          title="Copy Form Link">
+                          <Copy size={16} />
+                        </button>
                         <button onClick={(e) => { e.stopPropagation(); handleDelete(row._id || row.id); }}
                           className="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center min-h-[44px] border border-red-100"
                           title="Delete Form">
