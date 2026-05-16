@@ -508,7 +508,7 @@ export default function Forms({ user }: { user: User }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-slate-500 mb-1 block">Login Type</label>
-                <select value={form.settings.login_type || 'otp'} onChange={e => setForm(p => ({ ...p, settings: { ...p.settings, login_type: e.target.value } }))}
+                <select value={form.settings.login_type || 'direct'} onChange={e => setForm(p => ({ ...p, settings: { ...p.settings, login_type: e.target.value } }))}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm outline-none text-slate-900">
                   <option value="otp">OTP Required</option><option value="direct">Direct Link (no login)</option>
                 </select>

@@ -215,6 +215,8 @@ export default function FormFill({ user }: { user: User }) {
       setForm(res);
       if (nomination) setNomination(nomination);
 
+      const isNominationForm = res.form_type === 'nomination';
+
       // Resolve login mode with precedence:
       // nomination.link_type (teacher-specific override) > form teacher_login > legacy keys.
       const resolvedLoginMode = String(
@@ -222,12 +224,11 @@ export default function FormFill({ user }: { user: User }) {
         res.settings?.teacher_login ||
         res.settings?.login_type ||
         res.settings?.auth_mode ||
-        'otp'
+        (isNominationForm ? 'otp' : 'direct')
       ).toLowerCase();
       const requiresOtp = resolvedLoginMode === 'otp';
       setOtpRequired(requiresOtp);
 
-      const isNominationForm = res.form_type === 'nomination';
       const hasToken = !!token;
 
       // ─── STRICT ACCESS LOGIC ───
