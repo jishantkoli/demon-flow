@@ -12,7 +12,7 @@ export default function UserManagement() {
   const [showImport, setShowImport] = useState(false);
   const [editUser, setEditUser] = useState<any>(null);
   const [roleFilter, setRoleFilter] = useState('');
-  const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'teacher', school_name: '', district: '', password_hash: '', status: 'active' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'reviewer', school_name: '', district: '', password_hash: '', status: 'active' });
   const [importText, setImportText] = useState('');
 
   const fetchUsers = async () => {
@@ -39,7 +39,7 @@ export default function UserManagement() {
   };
   useEffect(() => { fetchUsers(); }, [roleFilter]);
 
-  const openCreate = () => { setEditUser(null); setForm({ name: '', email: '', phone: '', role: 'teacher', school_name: '', district: '', password_hash: '', status: 'active' }); setShowModal(true); };
+  const openCreate = () => { setEditUser(null); setForm({ name: '', email: '', phone: '', role: 'reviewer', school_name: '', district: '', password_hash: '', status: 'active' }); setShowModal(true); };
   const openEdit = (u: any) => { setEditUser(u); setForm({ name: u.name || '', email: u.email || '', phone: u.phone || '', role: u.role, school_name: u.school_name || '', district: u.district || '', password_hash: '', status: u.status || 'active' }); setShowModal(true); };
 
   const handleSave = async () => {
@@ -86,7 +86,6 @@ export default function UserManagement() {
       <div className="flex items-center gap-2.5"><div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{(v || '?').charAt(0)}</div>
         <div><p className="font-medium text-sm">{v}</p><p className="text-[10px] text-slate-500">{row.email}</p></div></div>) },
     { key: 'role', label: 'Role', sortable: true, render: (v: string) => <span className="capitalize text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100">{v}</span> },
-    { key: 'school_name', label: 'School', sortable: true, render: (v: string) => <span className="text-sm">{v || '—'}</span> },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v || 'active'} /> },
     { key: 'created_at', label: 'Account Created', sortable: true, render: (v: string) => v ? (
       <div className="flex flex-col">
@@ -107,11 +106,11 @@ export default function UserManagement() {
         </div>
       </div>
 
-      <DataTable columns={columns} data={users} loading={loading} searchPlaceholder="Search users by name, email, school..."
+      <DataTable columns={columns} data={users} loading={loading} searchPlaceholder="Search users by name, email..."
         onRowClick={openEdit} emptyMessage="No users found" emptyIcon={<Users size={40} />}
         filters={<div className="flex items-center gap-2"><Filter size={14} className="text-slate-500" />
           <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 outline-none text-slate-900" aria-label="Filter by role">
-            <option value="">All Roles</option><option value="admin">Admin</option><option value="reviewer">Reviewer</option><option value="functionary">Functionary</option><option value="teacher">Teacher</option><option value="form_creator">Form Creator</option>
+            <option value="">All Roles</option><option value="admin">Admin</option><option value="reviewer">Reviewer</option><option value="form_creator">Form Creator</option>
           </select></div>}
         actions={(row: any) => (
           <div className="flex items-center gap-1">
@@ -130,7 +129,7 @@ export default function UserManagement() {
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none focus:border-primary" /></div>))}
           <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Role</label>
             <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
-              <option value="admin">Admin</option><option value="reviewer">Reviewer</option><option value="functionary">Functionary</option><option value="teacher">Teacher</option><option value="form_creator">Form Creator</option></select></div>
+              <option value="admin">Admin</option><option value="reviewer">Reviewer</option><option value="form_creator">Form Creator</option></select></div>
           {editUser && (
             <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Status</label>
               <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
