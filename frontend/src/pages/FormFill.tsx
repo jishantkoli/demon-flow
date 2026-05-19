@@ -352,9 +352,9 @@ export default function FormFill({ user }: { user: User }) {
 
   const handleFileUpload = async (field: Field, file: File) => {
     setError('');
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
     if (!allowedTypes.includes(file.type)) {
-      setError('Only PDF, JPG, and PNG files are allowed');
+      setError('Only PDF, JPG, JPEG, and PNG files are allowed');
       return;
     }
     setUploadingFields(prev => ({ ...prev, [field.id]: true }));

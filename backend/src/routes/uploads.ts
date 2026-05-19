@@ -15,9 +15,9 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
     const ext = path.extname(file.originalname).toLowerCase();
-    const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
     
-    if (allowedExtensions.includes(ext) && allowedMimeTypes.includes(file.mimetype)) {
+    if (allowedExtensions.includes(ext) || allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
       cb(new Error('Only PDF, JPG, JPEG, and PNG files are allowed!'));
@@ -113,6 +113,7 @@ router.post('/', optionalAuthenticate, (req, res, next) => {
           resource_type: 'auto', // handles PDFs, images, etc.
           use_filename: true,
           unique_filename: true,
+          flags: 'attachment:false', // ensure it doesn't force download
         },
         (error, result) => {
           if (error) {

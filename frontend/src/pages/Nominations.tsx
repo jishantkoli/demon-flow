@@ -25,9 +25,9 @@ export default function Nominations({ user }: { user: User }) {
 
   const handleFileUpload = async (fieldId: string, file: File) => {
     try {
-      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
       if (!allowedTypes.includes(file.type)) {
-        alert('Only PDF, JPG, and PNG files are allowed');
+        alert('Only PDF, JPG, JPEG, and PNG files are allowed');
         return;
       }
       console.log('Starting upload for', fieldId, file.name);

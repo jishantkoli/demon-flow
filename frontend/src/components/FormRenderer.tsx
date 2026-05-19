@@ -341,7 +341,7 @@ export default function FormRenderer({ fields, formType, settings, initialValues
                     const file = e.target.files?.[0];
                     if (!file) return;
                     
-                    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+                    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
                     if (!allowedTypes.includes(file.type)) {
                       alert('Only PDF, JPG, JPEG, and PNG files are allowed!');
                       return;
