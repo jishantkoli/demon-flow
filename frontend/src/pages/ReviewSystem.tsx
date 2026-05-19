@@ -2274,22 +2274,40 @@ export default function ReviewSystem({ user }: { user: User }) {
               } catch { }
 
               const renderValue = (val: any) => {
-                if (Array.isArray(val)) return val.join(', ');
                 if (val == null) return '—';
 
-                const sVal = String(val);
-                const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(sVal) || sVal.includes('res.cloudinary.com'));
+                const renderSingle = (v: any) => {
+                  const sVal = String(v || '').trim();
+                  if (!sVal) return '';
 
-                if (isFile) {
-                  const fileUrl = sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
+                  const isCloudinary = sVal.includes('res.cloudinary.com');
+                  const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(sVal) || /^\/?uploads\//i.test(sVal);
+                  const hasFileExt = /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp|csv|zip)$/i.test(sVal.split('?')[0]);
+                  
+                  const isFile = isCloudinary || isUploadPath || hasFileExt;
+
+                  if (isFile && (sVal.startsWith('http') || sVal.includes('/uploads/'))) {
+                    const fileUrl = sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
+                    return (
+                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 bg-primary/5 text-primary rounded-md font-bold hover:bg-primary/10 transition-colors border border-primary/10 group text-xs">
+                        <FileText size={12} className="group-hover:scale-110 transition-transform" />
+                        <span>View File</span>
+                        <ExternalLink size={10} className="opacity-50" />
+                      </a>
+                    );
+                  }
+                  return sVal;
+                };
+
+                if (Array.isArray(val)) {
                   return (
-                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1.5 font-bold">
-                      <ExternalLink size={14} /> {getCleanFileName(sVal)}
-                    </a>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {val.map((item, i) => <div key={i}>{renderSingle(item)}</div>)}
+                    </div>
                   );
                 }
 
-                return sVal;
+                return renderSingle(val);
               };
 
               return (
@@ -2370,17 +2388,19 @@ export default function ReviewSystem({ user }: { user: User }) {
                               <p className="text-sm font-semibold font-mono">{nom.school_code}</p>
                             </div>
                             {Object.entries(addData).map(([key, val]) => {
-                              const strVal = typeof val === 'string' ? val.trim() : '';
-                              const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(strVal) || /^\/?uploads\//i.test(strVal);
-                              const isFile = typeof val === 'string' && (
-                                /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp)$/i.test(strVal) ||
-                                strVal.includes('res.cloudinary.com') ||
-                                isUploadPath
-                              );
-                              const fileUrl = isFile
-                                ? (strVal.startsWith('http')
-                                  ? strVal
-                                  : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(strVal)}`)
+                              const sVal = String(val || '').trim();
+                              if (!sVal) return null;
+
+                              const isCloudinary = sVal.includes('res.cloudinary.com');
+                              const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(sVal) || /^\/?uploads\//i.test(sVal);
+                              const hasFileExt = /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp|csv|zip)$/i.test(sVal.split('?')[0]);
+                              
+                              const isFile = isCloudinary || isUploadPath || hasFileExt;
+
+                              const fileUrl = isFile && (sVal.startsWith('http') || sVal.includes('/uploads/'))
+                                ? (sVal.startsWith('http')
+                                  ? sVal
+                                  : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`)
                                 : '';
 
                               return (
@@ -2390,12 +2410,14 @@ export default function ReviewSystem({ user }: { user: User }) {
                                       nominationFieldMap[`cf_${key}`] ||
                                       key.replace(/_/g, ' ').replace(/^cf\s+/i, '').replace(/^cf_/i, '')}
                                   </p>
-                                  {isFile ? (
-                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 text-sm font-semibold">
-                                      <ExternalLink size={12} /> {getCleanFileName(strVal)}
+                                  {fileUrl ? (
+                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 bg-primary/5 text-primary rounded-md font-bold hover:bg-primary/10 transition-colors border border-primary/10 group text-xs">
+                                      <FileText size={12} className="group-hover:scale-110 transition-transform" />
+                                      <span>View File</span>
+                                      <ExternalLink size={10} className="opacity-50" />
                                     </a>
                                   ) : (
-                                    <p className="text-sm font-semibold">{String(val)}</p>
+                                    <p className="text-sm font-semibold">{sVal}</p>
                                   )}
                                 </div>
                               );
@@ -2929,21 +2951,22 @@ export default function ReviewSystem({ user }: { user: User }) {
                                 if (!val) return 'No answer';
 
                                 const renderItem = (v: any) => {
-                                  const sVal = String(v || '');
-                                  const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(sVal) || /^\/?uploads\//i.test(sVal);
-                                  const isFile = typeof v === 'string' && (
-                                    /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp|csv)$/i.test(sVal) ||
-                                    sVal.includes('res.cloudinary.com') ||
-                                    isUploadPath
-                                  );
+                                  const sVal = String(v || '').trim();
+                                  if (!sVal) return '';
 
-                                  if (isFile) {
+                                  const isCloudinary = sVal.includes('res.cloudinary.com');
+                                  const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(sVal) || /^\/?uploads\//i.test(sVal);
+                                  const hasFileExt = /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp|csv|zip)$/i.test(sVal.split('?')[0]);
+                                  
+                                  const isFile = isCloudinary || isUploadPath || hasFileExt;
+
+                                  if (isFile && (sVal.startsWith('http') || sVal.includes('/uploads/'))) {
                                     const fileUrl = sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
                                     return (
-                                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary font-bold hover:underline flex items-center gap-2">
-                                        <FileText size={14} />
+                                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/5 text-primary rounded-lg font-bold hover:bg-primary/10 transition-colors border border-primary/10 group">
+                                        <FileText size={14} className="group-hover:scale-110 transition-transform" />
                                         <span>View File</span>
-                                        <ExternalLink size={12} />
+                                        <ExternalLink size={12} className="opacity-50" />
                                       </a>
                                     );
                                   }
@@ -2952,7 +2975,7 @@ export default function ReviewSystem({ user }: { user: User }) {
 
                                 if (Array.isArray(val)) {
                                   return (
-                                    <div className="space-y-1">
+                                    <div className="flex flex-wrap gap-2">
                                       {val.map((item, i) => <div key={i}>{renderItem(item)}</div>)}
                                     </div>
                                   );
