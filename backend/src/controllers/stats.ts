@@ -8,43 +8,38 @@ import { AuthRequest } from '../middleware/auth.js';
 
 export const getStats = async (req: AuthRequest, res: Response) => {
   try {
+    const { form_id } = req.query;
     const role = req.user?.role;
     const userId = req.user?._id;
     const email = req.user?.email;
 
-    let formQuery: any = {};
     let subQuery: any = {};
+    let nominationQuery: any = {};
+
+    if (form_id) {
+      subQuery.formId = form_id;
+      nominationQuery.form_id = form_id;
+    }
 
     if (role === 'admin') {
       // Admin sees everything
     } else if (role === 'teacher') {
-      const nominations = await Nomination.find({ 
-        teacher_email: { $regex: new RegExp(`^${email}$`, 'i') } 
-      });
-      const assignedFormIds = nominations.map(n => n.form_id);
-      formQuery._id = { $in: assignedFormIds };
-      formQuery.status = 'active';
-      subQuery.userId = userId;
+      subQuery.userEmail = { $regex: new RegExp(`^${email}$`, 'i') };
+      nominationQuery.teacher_email = { $regex: new RegExp(`^${email}$`, 'i') };
     } else if (role === 'functionary') {
-      formQuery.status = 'active';
-      subQuery.schoolCode = req.user.school_code;
+      subQuery.schoolCode = req.user.profile?.schoolCode;
+      nominationQuery.school_code = req.user.profile?.schoolCode;
     } else if (role === 'reviewer') {
-      formQuery.status = 'active';
-      // Reviewers see submissions they need to review
       const myReviews = await Review.find({ reviewer_id: userId });
-      const mySubmissionIds = myReviews.map(r => r.submission_id);
-      subQuery._id = { $in: mySubmissionIds };
+      subQuery._id = { $in: myReviews.map(r => r.submission_id) };
     }
 
-    const visibleUserQuery = { passwordHash: { $exists: true, $ne: null } };
-
-    const totalUsers = await User.countDocuments(visibleUserQuery);
-    const activeForms = await Form.countDocuments({ ...formQuery, status: 'active' });
-    const draftForms = await Form.countDocuments({ ...formQuery, status: 'draft' });
-    const expiredForms = await Form.countDocuments({ ...formQuery, status: 'expired' });
+    // 1. KPI Stats
+    const totalUsers = await User.countDocuments({ passwordHash: { $exists: true, $ne: null } });
+    const activeForms = await Form.countDocuments({ status: 'active' });
     const totalSubmissions = await Submission.countDocuments(subQuery);
     
-    // Submissions by status
+    // 2. Submissions by Status
     const submissionsByStatus = {
       submitted: await Submission.countDocuments({ ...subQuery, status: 'submitted' }),
       under_review: await Submission.countDocuments({ ...subQuery, status: 'under_review' }),
@@ -52,64 +47,80 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       rejected: await Submission.countDocuments({ ...subQuery, status: 'rejected' }),
     };
 
-    // Users by role (only visible users)
-    const usersByRole = {
-      admin: await User.countDocuments({ ...visibleUserQuery, role: 'admin' }),
-      reviewer: await User.countDocuments({ ...visibleUserQuery, role: 'reviewer' }),
-      functionary: await User.countDocuments({ ...visibleUserQuery, role: 'functionary' }),
-      teacher: await User.countDocuments({ ...visibleUserQuery, role: 'teacher' }),
-      form_creator: await User.countDocuments({ ...visibleUserQuery, role: 'form_creator' }),
+    // 3. Nominations Stats
+    const nominationsByStatus = {
+      invited: await Nomination.countDocuments({ ...nominationQuery, status: 'invited' }),
+      in_progress: await Nomination.countDocuments({ ...nominationQuery, status: 'in_progress' }),
+      completed: await Nomination.countDocuments({ ...nominationQuery, status: 'completed' }),
+    };
+    const totalNominations = nominationsByStatus.invited + nominationsByStatus.in_progress + nominationsByStatus.completed;
+    const completionRate = totalNominations > 0 
+      ? Math.round((nominationsByStatus.completed / totalNominations) * 100) 
+      : (totalSubmissions > 0 ? 100 : 0);
+
+    // 4. Scores & Performance
+    const submissionsWithScore = await Submission.find({ 
+      ...subQuery, 
+      'score.percentage': { $exists: true, $ne: null } 
+    });
+    
+    let avgScore = 0;
+    const scoreDistribution: Record<string, number> = {
+      '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0
     };
 
-    // Functionary specific stats
-    let totalNominations = 0;
-    let nominationsByStatus: any = {};
-    let completionRate = 0;
+    if (submissionsWithScore.length > 0) {
+      const sum = submissionsWithScore.reduce((acc, s) => acc + (s.score?.percentage || 0), 0);
+      avgScore = Math.round(sum / submissionsWithScore.length);
 
-    if (role === 'functionary') {
-      totalNominations = await Nomination.countDocuments({ functionary_id: userId });
-      nominationsByStatus = {
-        pending: await Nomination.countDocuments({ functionary_id: userId, status: 'pending' }),
-        invited: await Nomination.countDocuments({ functionary_id: userId, status: 'invited' }),
-        completed: await Nomination.countDocuments({ functionary_id: userId, status: 'completed' }),
-      };
-      if (totalNominations > 0) {
-        completionRate = Math.round((nominationsByStatus.completed / totalNominations) * 100);
-      }
+      submissionsWithScore.forEach(s => {
+        const p = s.score?.percentage || 0;
+        if (p <= 20) scoreDistribution['0-20']++;
+        else if (p <= 40) scoreDistribution['21-40']++;
+        else if (p <= 60) scoreDistribution['41-60']++;
+        else if (p <= 80) scoreDistribution['61-80']++;
+        else scoreDistribution['81-100']++;
+      });
     }
 
-    // Review stats
-    let pendingReviews = 0;
-    let completedReviews = 0;
-    let avgScore = 0;
+    // 5. Timeline (Last 14 days)
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    
+    const timelineData = await Submission.aggregate([
+      { $match: { ...subQuery, createdAt: { $gte: fourteenDaysAgo } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { "_id": 1 } }
+    ]);
 
-    if (role === 'admin') {
-      pendingReviews = await Review.countDocuments({ status: 'pending' });
-      completedReviews = await Review.countDocuments({ status: { $ne: 'pending' } });
-    } else if (role === 'reviewer') {
-      pendingReviews = await Review.countDocuments({ reviewer_id: userId, status: 'pending' });
-      const completed = await Review.find({ reviewer_id: userId, status: { $ne: 'pending' } });
-      completedReviews = completed.length;
-      if (completedReviews > 0) {
-        const total = completed.reduce((acc, r) => acc + (Number(r.overall_score) || 0), 0);
-        avgScore = Math.round(total / completedReviews);
-      }
+    const submissionTimeline = Object.fromEntries(timelineData.map(d => [d._id, d.count]));
+
+    // 6. Form List for Filter
+    const forms = await Form.find({ status: { $ne: 'draft' } }, 'title status').sort({ createdAt: -1 });
+
+    // 7. Active School Codes (for Admin/Global view)
+    let schoolCodes: string[] = [];
+    if (!form_id && role === 'admin') {
+      schoolCodes = await Submission.distinct('schoolCode', subQuery);
     }
 
     res.status(200).json({
       totalUsers,
       activeForms,
-      draftForms,
-      expiredForms,
       totalSubmissions,
       submissionsByStatus,
-      usersByRole,
-      totalNominations,
       nominationsByStatus,
       completionRate,
-      pendingReviews,
-      completedReviews,
-      avgScore
+      avgScore,
+      scoreDistribution,
+      submissionTimeline,
+      forms: forms.map(f => ({ id: f._id, title: f.title, status: f.status })),
+      schoolCodes: schoolCodes.filter(Boolean).slice(0, 10)
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
