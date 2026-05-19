@@ -16,8 +16,6 @@ const adminNav = [
   { label: 'Review System', icon: CheckSquare, path: '/reviews' },
   { label: 'Analytics', icon: BarChart3, path: '/analytics' },
   { label: 'Email Center', icon: Mail, path: '/email-center' },
-  { label: 'Audit Logs', icon: Shield, path: '/audit-logs' },
-  { label: 'Exports', icon: Download, path: '/exports' },
 ];
 const reviewerNav = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },

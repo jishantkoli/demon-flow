@@ -15,8 +15,6 @@ import ReviewSystem from './pages/ReviewSystem';
 import Nominations from './pages/Nominations';
 import Analytics from './pages/Analytics';
 import EmailCenter from './pages/EmailCenter';
-import AuditLogs from './pages/AuditLogs';
-import Exports from './pages/Exports';
 import Profile from './pages/Profile';
 
 initTheme();
@@ -104,8 +102,6 @@ function AppContent() {
         {user?.role === 'functionary' && <Route path="/nominations" element={<Nominations user={user} />} />}
         {user?.role === 'admin' && <Route path="/analytics" element={<Analytics />} />}
         {user?.role === 'admin' && <Route path="/email-center" element={<EmailCenter user={user} />} />}
-        {user?.role === 'admin' && <Route path="/audit-logs" element={<AuditLogs />} />}
-        {user?.role === 'admin' && <Route path="/exports" element={<Exports />} />}
         <Route path="/profile" element={user ? <Profile user={user} /> : <Navigate to="/login" />} />
         <Route path="/login" element={user ? <Navigate to={searchParams.get('redirect') || "/"} replace /> : <Login onLogin={refreshUser} />} />
         <Route path="*" element={<Navigate to={user || isPublicFill ? "/" : "/login"} replace />} />
