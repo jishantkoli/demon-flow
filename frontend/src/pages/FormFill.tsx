@@ -519,7 +519,7 @@ export default function FormFill({ user }: { user: User }) {
   };
 
   const saveDraft = async () => {
-    if (!form || !online) return;
+    if (!form || !online || saving) return;
     setSaving(true);
     try {
       const effectiveToken = nominationToken || nomination?.unique_token || urlToken;
@@ -546,7 +546,7 @@ export default function FormFill({ user }: { user: User }) {
   };
 
   const submit = async () => {
-    if (!form) return;
+    if (!form || saving) return;
     for (const s of visibleSections) {
       for (const f of s.fields) {
         if (!fieldVisible(f)) continue;

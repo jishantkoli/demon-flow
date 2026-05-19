@@ -60,7 +60,7 @@ export default function UserManagement() {
         // Force role to 'functionary' as requested
         return { name: parts[0], email: parts[1], phone: parts[2] || '', role: 'functionary', school_name: parts[3] || '', district: parts[4] || '' };
       });
-      await api.post('/users', { action: 'bulk-import', users: userList });
+      await api.post('/users', { action: 'bulk-import', users });
       setShowImport(false); setImportText(''); fetchUsers();
     } catch (err: any) { alert(err.message); }
   };

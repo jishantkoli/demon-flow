@@ -29,7 +29,7 @@ type Section = {
 type FormCategory = 'normal' | 'nomination' | 'branching' | 'quiz' | 'multi';
 
 type FormState = {
-  id: string; title: string; description: string;
+  id: string; _id?: string; title: string; description: string;
   form_type: FormCategory; slug: string;
   schema: { sections: Section[] };
   settings: Record<string, unknown>;
@@ -385,11 +385,22 @@ export default function FormBuilder() {
         form_schema: form.schema,  // backend uses form_schema
         settings: JSON.stringify(sanitizeSettingsForSave(form.settings)),
       };
-      if (isNew) {
-        await api.post('/forms', payload);
+      const isActuallyNew = isNew && !form.id && !form._id;
+      if (isActuallyNew) {
+        const res: any = await api.post('/forms', payload);
+        const savedForm = res.data;
+        if (savedForm && (savedForm.id || savedForm._id)) {
+          const newId = savedForm.id || savedForm._id;
+          setForm(prev => ({ ...prev, ...savedForm, id: newId, schema: savedForm.schema || prev.schema }));
+          // If we're staying on the page, update URL so subsequent saves are PUTs
+          if (!shouldNavigate) {
+            nav(`/forms/${newId}/builder`, { replace: true });
+          }
+        }
       } else {
+        const targetId = id || form.id || form._id;
         const { id: _formId, ...formWithoutId } = form;
-        await api.put('/forms', { id, ...formWithoutId, form_schema: form.schema, settings: JSON.stringify(sanitizeSettingsForSave(form.settings)) });
+        await api.put('/forms', { id: targetId, ...formWithoutId, form_schema: form.schema, settings: JSON.stringify(sanitizeSettingsForSave(form.settings)) });
       }
       if (isManual) {
         alert('Changes saved successfully.');
@@ -590,7 +601,7 @@ export default function FormBuilder() {
               <div className="mt-3 pt-3 border-t border-border space-y-2">
                 <div className="text-xs font-semibold text-ink">Quiz Settings</div>
                 <label className="text-xs"><span className="text-muted">Time limit (minutes)</span>
-                  <input type="number" className="input !py-1.5 mt-1" value={form.settings.time_limit_min ?? ''} onChange={e => patchSettings({ time_limit_min: e.target.value === '' ? undefined : (+e.target.value || 30) })} placeholder="30" /></label>
+                  <input type="number" className="input !py-1.5 mt-1" value={(form.settings.time_limit_min as string | number | undefined) ?? ''} onChange={e => patchSettings({ time_limit_min: e.target.value === '' ? undefined : (+e.target.value || 30) })} placeholder="30" /></label>
                 {form.schema.sections.some(s => s.fields.some(f => f.type === 'mcq')) && (
                   <div className="flex items-center justify-between"><span className="text-sm">Shuffle options</span><Toggle checked={!!form.settings.shuffle} onChange={v => patchSettings({ shuffle: v })} /></div>
                 )}
@@ -632,7 +643,7 @@ export default function FormBuilder() {
                     <input 
                       type="number" 
                       className="input !py-1.5 mt-1" 
-                      value={form.settings.nomination_limit ?? ''} 
+                      value={(form.settings.nomination_limit as string | number | undefined) ?? ''} 
                       placeholder="5"
                       onChange={e => {
                         const raw = e.target.value;
