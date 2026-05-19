@@ -573,7 +573,7 @@ export default function Submissions({ user }: { user: User }) {
   };
 
   const addComment = async () => {
-    if (!newComment.trim() || !selected) return;
+    if (!String(newComment || '').trim() || !selected) return;
     setNewComment('');
   };
 

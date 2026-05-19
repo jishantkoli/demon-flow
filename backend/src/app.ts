@@ -46,7 +46,7 @@ app.use(cors({
     const alwaysAllowed = ['https://demon-flow.vercel.app'];
     if (alwaysAllowed.includes(origin)) return callback(null, true);
 
-    const allowed = process.env.FRONTEND_URL.split(',').map(u => u.trim());
+    const allowed = (process.env.FRONTEND_URL || '').split(',').map(u => u.trim());
     if (allowed.indexOf(origin) !== -1 || allowed.includes('*')) {
       callback(null, true);
     } else {

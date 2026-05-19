@@ -81,8 +81,8 @@ export default function Reviews({ user }: { user: User }) {
     await api.post('/review-levels', {
       form_id: levelForm.form_id, level_number: levelForm.level_number, name: levelForm.name,
       scoring_type: levelForm.scoring_type, blind_review: levelForm.blind_review,
-      grade_scale: levelForm.grade_scale.split(',').map(s => s.trim()),
-      reviewer_ids: levelForm.reviewer_ids.split(',').map(s => parseInt(s.trim())).filter(Boolean),
+      grade_scale: String(levelForm.grade_scale || '').split(',').map(s => s.trim()),
+      reviewer_ids: String(levelForm.reviewer_ids || '').split(',').map(s => parseInt(s.trim())).filter(Boolean),
       filter_criteria: levelForm.filter_criteria ? JSON.parse(levelForm.filter_criteria) : {}
     });
     setShowLevelModal(false); fetchData();

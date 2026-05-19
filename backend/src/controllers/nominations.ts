@@ -44,7 +44,7 @@ const sendNominationEmails = async (nomination: any, headUser: any) => {
 };
 
 const ensureTeacherUser = async (teacherData: any) => {
-  const email = teacherData.teacher_email?.toLowerCase().trim();
+  const email = String(teacherData.teacher_email || '').toLowerCase().trim();
   if (!email) return;
 
   const existingUser = await User.findOne({ email });
