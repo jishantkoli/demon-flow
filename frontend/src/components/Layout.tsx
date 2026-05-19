@@ -102,10 +102,17 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
     try {
       const res: any = await api.post('/auth/refresh', {});
       const nextToken = res?.token || res?.accessToken;
-      if (nextToken) localStorage.setItem('auth_token', nextToken);
-      if (res?.user) localStorage.setItem('auth_user', JSON.stringify(res.user));
-      setSessionWarning(false);
-    } catch {
+      if (nextToken) {
+        localStorage.setItem('auth_token', nextToken);
+        // Force re-render of layout state if needed, or just let the interval pick up the new token
+        if (res?.user) localStorage.setItem('auth_user', JSON.stringify(res.user));
+        setSessionWarning(false);
+        // No alert needed, just smooth transition
+      } else {
+        throw new Error('No token received');
+      }
+    } catch (err) {
+      console.error('Session extension failed:', err);
       onLogout();
     } finally {
       setExtending(false);
