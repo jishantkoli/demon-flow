@@ -603,7 +603,14 @@ export default function FormBuilder() {
                 
                 <div className="grid grid-cols-2 gap-2">
                   <label className="text-xs"><span className="text-muted">Limit (per school)</span>
-                    <input type="number" className="input !py-1.5 mt-1" value={(form.settings.nomination_limit as number) || 5} onChange={e => patchSettings({ nomination_limit: +e.target.value })} /></label>
+                    <input 
+                      type="number" 
+                      className="input !py-1.5 mt-1" 
+                      value={form.settings.nomination_limit ?? ''} 
+                      placeholder="5"
+                      onChange={e => patchSettings({ nomination_limit: e.target.value === '' ? undefined : (+e.target.value || 0) })} 
+                    />
+                  </label>
                   <label className="text-xs block"><span className="text-muted">Login Type</span>
                     <select className="select mt-1" value={(form.settings.teacher_login as string) || 'otp'} onChange={e => patchSettings({ teacher_login: e.target.value })}>
                       <option value="otp">OTP via Link</option>

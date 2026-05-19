@@ -98,6 +98,18 @@
 .badge-rose  { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
 .badge-slate { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
 
+/* ── Hide Spin Buttons for Number Inputs ── */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 ::-webkit-scrollbar { height: 10px; width: 10px; }
 ::-webkit-scrollbar-thumb { background: #d7e0f0; border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: #b8c5de; }
