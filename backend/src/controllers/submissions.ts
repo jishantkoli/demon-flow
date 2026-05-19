@@ -68,7 +68,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     if (!linkedNomination && searchEmail) {
       linkedNomination = await Nomination.findOne({
         form_id: form._id,
-        teacher_email: { $regex: new RegExp(`^${searchEmail.trim()}$`, 'i') }
+        teacher_email: { $regex: new RegExp(`^${String(searchEmail).trim()}$`, 'i') }
       });
       if (linkedNomination) {
         console.log('✅ Nomination linked via EMAIL:', searchEmail, '→', linkedNomination._id);
@@ -175,7 +175,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     if (!submissionData.isDraft) {
       const existingSub = await Submission.findOne({
         formId: form._id,
-        userEmail: { $regex: new RegExp(`^${submissionData.userEmail.trim()}$`, 'i') },
+        userEmail: { $regex: new RegExp(`^${String(submissionData.userEmail || '').trim()}$`, 'i') },
         isDraft: false
       });
 

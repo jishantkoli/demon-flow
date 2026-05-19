@@ -54,9 +54,9 @@ export default function UserManagement() {
 
   const handleBulkImport = async () => {
     try {
-      const lines = importText.trim().split('\n').filter(l => l.trim());
-      const userList = lines.map(line => {
-        const parts = line.split(',').map(p => p.trim());
+      const lines = String(importText || '').trim().split('\n').filter(l => String(l || '').trim());
+      const users = lines.map(line => {
+        const parts = line.split(',').map(p => String(p || '').trim());
         // Force role to 'functionary' as requested
         return { name: parts[0], email: parts[1], phone: parts[2] || '', role: 'functionary', school_name: parts[3] || '', district: parts[4] || '' };
       });
@@ -152,7 +152,7 @@ export default function UserManagement() {
           <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={8} placeholder="Paste CSV data here..." className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none font-mono resize-none" />
           <div className="flex justify-end gap-3">
             <button onClick={() => setShowImport(false)} className="px-4 py-2 text-sm rounded-xl border border-slate-200 hover:bg-slate-100">Cancel</button>
-            <button onClick={handleBulkImport} disabled={!importText.trim()} className="px-6 py-2 bg-primary text-white text-sm rounded-xl font-semibold hover:bg-primary-hover disabled:opacity-50">Import</button>
+            <button onClick={handleBulkImport} disabled={!String(importText || '').trim()} className="px-6 py-2 bg-primary text-white text-sm rounded-xl font-semibold hover:bg-primary-hover disabled:opacity-50">Import</button>
           </div>
         </div>
       </Modal>

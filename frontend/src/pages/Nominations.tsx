@@ -139,13 +139,13 @@ export default function Nominations({ user }: { user: User }) {
 
   const handleBulkAdd = async () => {
     if (!selectedForm) return alert('Select a form first');
-    const lines = bulkText.trim().split('\n').filter(l => l.trim());
+    const lines = String(bulkText || '').trim().split('\n').filter(l => String(l || '').trim());
     if (lines.length === 0) return alert('No data provided');
 
     try {
       setLoading(true);
       const nomList = lines.map(line => {
-        const parts = line.split(',').map(p => p.trim());
+        const parts = line.split(',').map(p => String(p || '').trim());
         return { form_id: selectedForm, functionary_id: user.id, teacher_name: parts[0], teacher_email: parts[1], teacher_phone: parts[2] || '', school_code: schoolCode, link_type: 'otp', status: 'pending' };
       });
       await api.post('/nominations', { action: 'bulk-nominate', nominations: nomList });
@@ -502,7 +502,7 @@ export default function Nominations({ user }: { user: User }) {
           <textarea value={bulkText} onChange={e => setBulkText(e.target.value)} rows={8} placeholder="Paste CSV data..." className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none font-mono resize-none" />
           <div className="flex justify-end gap-3">
             <button onClick={() => setShowBulk(false)} className="px-4 py-2 text-sm rounded-xl border border-slate-200 hover:bg-slate-100">Cancel</button>
-            <button onClick={handleBulkAdd} disabled={!bulkText.trim()} className="px-6 py-2 bg-primary text-white text-sm rounded-xl font-semibold hover:bg-primary-hover disabled:opacity-50">Import Teachers</button>
+            <button onClick={handleBulkAdd} disabled={!String(bulkText || '').trim()} className="px-6 py-2 bg-primary text-white text-sm rounded-xl font-semibold hover:bg-primary-hover disabled:opacity-50">Import Teachers</button>
           </div>
         </div>
       </Modal>

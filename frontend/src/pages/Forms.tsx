@@ -144,7 +144,7 @@ export default function Forms({ user }: { user: User }) {
 
   const handleSave = async () => {
     // Legacy modal save fallback (should be unused now)
-    if (!form.title.trim()) return alert('Form title is required');
+    if (!String(form.title || '').trim()) return alert('Form title is required');
     try {
       const payload = { ...form, settings: JSON.stringify(form.settings), created_by: user.id };
       if (editForm) await api.put('/forms', { id: editForm.id, ...payload, change_notes: 'Updated', updated_by: user.id });
