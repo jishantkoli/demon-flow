@@ -577,10 +577,15 @@ export default function FormFill({ user }: { user: User }) {
     
     try {
       let saved: any;
-      if (submissionId) saved = await api.put('/submissions', { id: submissionId, ...payload });
-      else saved = await api.post('/submissions', payload);
+      if (submissionId) {
+        const res = await api.put('/submissions', { id: submissionId, ...payload });
+        saved = res.data || res;
+      } else {
+        const res = await api.post('/submissions', payload);
+        saved = res.data || res;
+      }
       
-      const realId = effectiveToken || saved?.data?._id || saved?.data?.id || saved?._id || saved?.id || submissionId || 'DONE';
+      const realId = effectiveToken || saved?._id || saved?.id || submissionId || 'DONE';
       
       const nomId = nomination?.id || nomination?._id;
       if (nomId) {
@@ -590,8 +595,16 @@ export default function FormFill({ user }: { user: User }) {
           console.warn('Failed to update nomination status:', e);
         }
       }
-      
-      setReceipt({ id: realId, score: sc?.score, max: sc?.max });
+
+      // Use score from server if available, otherwise fallback to local calculation
+      const serverScore = saved?.score?.earnedPoints ?? saved?.score;
+      const serverMax = saved?.score?.totalPoints ?? sc?.max;
+
+      setReceipt({ 
+        id: realId, 
+        score: serverScore !== undefined ? serverScore : sc?.score, 
+        max: serverMax !== undefined ? serverMax : sc?.max 
+      });
       setStep('submitted');
     } catch (err: any) {
       console.error('[FormFill] Submission error:', err);

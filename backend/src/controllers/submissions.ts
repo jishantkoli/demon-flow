@@ -91,25 +91,8 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     let earnedPoints = 0;
     let totalPoints = 0;
     
-    // Fallback to recalculate if not provided by frontend
-    if (req.body.score !== undefined && req.body.score !== null) {
-      earnedPoints = Number(req.body.score);
-      // Extract max score
-      if (form.form_schema && form.form_schema.sections) {
-        form.form_schema.sections.forEach((sec: any) => {
-          sec.fields?.forEach((f: any) => {
-            if (f.type === 'mcq') totalPoints += f.marks || 1;
-          });
-        });
-      }
-      const percentage = totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0;
-      score = {
-        earnedPoints,
-        totalPoints,
-        percentage,
-        passed: percentage >= (form.settings?.passing_score || 0)
-      };
-    } else if (form.form_schema && form.form_schema.sections) {
+    // ALWAYS calculate score on backend for security and accuracy
+    if (form.form_schema && (form.form_schema.sections || form.form_schema.fields || Array.isArray(form.form_schema))) {
       const toOptionText = (raw: any, options: string[] = []) => {
         if (raw === undefined || raw === null) return raw;
         if (typeof raw === 'number' && options[raw] !== undefined) return options[raw];
@@ -118,8 +101,9 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
         return raw;
       };
 
-      form.form_schema.sections.forEach((sec: any) => {
-        sec.fields?.forEach((field: any) => {
+      const processFields = (fields: any[]) => {
+        if (!Array.isArray(fields)) return;
+        fields.forEach((field: any) => {
           if (field.type === 'mcq' && field.correct !== undefined) {
             const qMarks = field.marks || 1;
             totalPoints += qMarks;
@@ -136,8 +120,18 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
               }
             }
           }
+          if (field.children) processFields(field.children);
         });
-      });
+      };
+
+      if (form.form_schema.sections) {
+        form.form_schema.sections.forEach((sec: any) => processFields(sec.fields));
+      } else if (form.form_schema.fields) {
+        processFields(form.form_schema.fields);
+      } else if (Array.isArray(form.form_schema)) {
+        processFields(form.form_schema);
+      }
+
       if (totalPoints > 0) {
         earnedPoints = Math.max(0, earnedPoints);
         const percentage = (earnedPoints / totalPoints) * 100;
