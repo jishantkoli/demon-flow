@@ -80,8 +80,8 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [selectedSub, setSelectedSub] = useState<any>(null);
   const [reviewHistory, setReviewHistory] = useState<any[]>([]);
   const [reviewComment, setReviewComment] = useState('');
-  const [overallScore, setOverallScore] = useState(0);
-  const [questionScores, setQuestionScores] = useState<Record<string, number>>({});
+  const [overallScore, setOverallScore] = useState<number | string>('');
+  const [questionScores, setQuestionScores] = useState<Record<string, number | string>>({});
 
   const [grade, setGrade] = useState('');
   const [recommendation, setRecommendation] = useState('');
@@ -721,6 +721,13 @@ export default function ReviewSystem({ user }: { user: User }) {
   // Auto-sync overall score with question scores when in question mode
   useEffect(() => {
     if (selectedReview?.scoring_type === 'question_level' && reviewQuestions.length > 0) {
+      const hasAnyScore = reviewQuestions.some(q => (questionScores[q.fieldId] ?? questionScores[q.label]) !== undefined && (questionScores[q.fieldId] ?? questionScores[q.label]) !== '');
+      
+      if (!hasAnyScore) {
+        if (overallScore !== '') setOverallScore('');
+        return;
+      }
+
       const total = reviewQuestions.reduce((sum, item) => {
         const score = Number(questionScores[item.fieldId] ?? questionScores[item.label] ?? 0) || 0;
         return sum + score;
@@ -3011,16 +3018,22 @@ export default function ReviewSystem({ user }: { user: User }) {
                                     type="number"
                                     min={0}
                                     max={q.reviewerMaxMarks > 0 ? q.reviewerMaxMarks : undefined}
-                                    value={questionScores[q.fieldId] ?? questionScores[q.label] ?? 0}
+                                    value={questionScores[q.fieldId] ?? questionScores[q.label] ?? ''}
                                     onChange={e => {
-                                      const rawVal = parseFloat(e.target.value);
+                                      const raw = e.target.value;
+                                      if (raw === '') {
+                                        const newScores = { ...questionScores, [q.fieldId]: '' };
+                                        setQuestionScores(newScores);
+                                        return;
+                                      }
+                                      const rawVal = parseFloat(raw);
                                       const normalizedVal = Number.isFinite(rawVal) ? Math.max(0, rawVal) : 0;
                                       const cappedVal = q.reviewerMaxMarks > 0 ? Math.min(normalizedVal, q.reviewerMaxMarks) : normalizedVal;
                                       const newScores = { ...questionScores, [q.fieldId]: cappedVal };
                                       setQuestionScores(newScores);
                                     }}
                                     className="w-full bg-white px-4 py-2.5 rounded-lg border border-primary/20 text-lg font-black text-primary outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
-                                    placeholder="0"
+                                    placeholder="Enter marks"
                                   />
                                 </div>
                                 {q.reviewerMaxMarks > 0 && (
@@ -3053,9 +3066,15 @@ export default function ReviewSystem({ user }: { user: User }) {
                     value={overallScore}
                     onChange={e => {
                       if (selectedReview.scoring_type === 'question_level') return;
-                      const val = parseInt(e.target.value) || 0;
+                      const raw = e.target.value;
+                      if (raw === '') {
+                        setOverallScore('');
+                        return;
+                      }
+                      const val = parseInt(raw) || 0;
                       setOverallScore(Math.min(100, Math.max(0, val)));
                     }}
+                    placeholder="Enter total score"
                     readOnly={selectedReview.scoring_type === 'question_level'}
                     className={`w-full px-4 py-2.5 rounded-xl border font-bold text-lg outline-none transition-all ${selectedReview.scoring_type === 'question_level' ? 'bg-primary/5 border-primary/20 text-primary cursor-default' : 'bg-white border-slate-300 text-primary focus:border-primary focus:ring-2 focus:ring-primary/10'}`}
                   />

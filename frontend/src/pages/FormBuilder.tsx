@@ -564,7 +564,7 @@ export default function FormBuilder() {
               <div className="mt-3 pt-3 border-t border-border space-y-2">
                 <div className="text-xs font-semibold text-ink">Quiz Settings</div>
                 <label className="text-xs"><span className="text-muted">Time limit (minutes)</span>
-                  <input type="number" className="input !py-1.5 mt-1" value={(form.settings.time_limit_min as number) || 30} onChange={e => patchSettings({ time_limit_min: +e.target.value })} /></label>
+                  <input type="number" className="input !py-1.5 mt-1" value={form.settings.time_limit_min ?? ''} onChange={e => patchSettings({ time_limit_min: e.target.value === '' ? undefined : (+e.target.value || 30) })} placeholder="30" /></label>
                 {form.schema.sections.some(s => s.fields.some(f => f.type === 'mcq')) && (
                   <div className="flex items-center justify-between"><span className="text-sm">Shuffle options</span><Toggle checked={!!form.settings.shuffle} onChange={v => patchSettings({ shuffle: v })} /></div>
                 )}

@@ -14,7 +14,7 @@ export default function Reviews({ user }: { user: User }) {
   const [selected, setSelected] = useState<any>(null);
   const [selectedSub, setSelectedSub] = useState<any>(null);
   const [reviewComment, setReviewComment] = useState('');
-  const [overallScore, setOverallScore] = useState<number>(0);
+  const [overallScore, setOverallScore] = useState<number | string>('');
   const [grade, setGrade] = useState('');
   const [recommendation, setRecommendation] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -46,7 +46,7 @@ export default function Reviews({ user }: { user: User }) {
     const sub = getSub(review.submission_id);
     setSelectedSub(sub);
     setReviewComment(review.comments || '');
-    setOverallScore(0); setGrade(''); setRecommendation('');
+    setOverallScore(''); setGrade(''); setRecommendation('');
   };
 
   const handleAction = async () => {
@@ -177,7 +177,17 @@ export default function Reviews({ user }: { user: User }) {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Overall Score (0-100)</label>
-                    <input type="number" min={0} max={100} value={overallScore} onChange={e => setOverallScore(parseInt(e.target.value) || 0)}
+                    <input type="number" min={0} max={100} value={overallScore} 
+                      onChange={e => {
+                        const raw = e.target.value;
+                        if (raw === '') {
+                          setOverallScore('');
+                          return;
+                        }
+                        const val = parseInt(raw) || 0;
+                        setOverallScore(Math.min(100, Math.max(0, val)));
+                      }}
+                      placeholder="Enter marks"
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none focus:border-primary" /></div>
                   <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Grade</label>
                     <select value={grade} onChange={e => setGrade(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">

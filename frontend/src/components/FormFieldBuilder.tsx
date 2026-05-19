@@ -156,7 +156,7 @@ export default function FormFieldBuilder({ fields, onChange, formType }: Props) 
                   <select value={f.correct || ''} onChange={e => onUpd(f.id, { correct: e.target.value })} className={inputCls}>
                     <option value="">— Select correct —</option>{(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}</select></div>
                 <div><label className="text-[11px] font-bold text-amber-800 uppercase mb-1 block">Points / Marks</label>
-                  <input type="number" value={f.points || 0} onChange={e => onUpd(f.id, { points: parseInt(e.target.value) || 0 })} className={inputCls} /></div>
+                  <input type="number" value={f.points ?? ''} onChange={e => onUpd(f.id, { points: e.target.value === '' ? undefined : (parseInt(e.target.value) || 0) })} className={inputCls} placeholder="Enter points" /></div>
                 <p className="col-span-2 text-[11px] text-amber-700 font-medium">⚠ Correct answer is hidden from users & reviewers. Only admin sees it.</p>
               </div>)}
 
@@ -166,7 +166,7 @@ export default function FormFieldBuilder({ fields, onChange, formType }: Props) 
                 <div><label className="text-[11px] font-bold text-sky-800 uppercase mb-1 block">Allowed Formats</label>
                   <input value={(f.allowedFormats || []).join(', ')} onChange={e => onUpd(f.id, { allowedFormats: e.target.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) })} className={inputCls} placeholder="pdf, jpg, png" /></div>
                 <div><label className="text-[11px] font-bold text-sky-800 uppercase mb-1 block">Max Size (MB)</label>
-                  <input type="number" value={f.maxSizeMB || 5} onChange={e => onUpd(f.id, { maxSizeMB: parseInt(e.target.value) || 5 })} className={inputCls} /></div>
+                  <input type="number" value={f.maxSizeMB ?? ''} onChange={e => onUpd(f.id, { maxSizeMB: e.target.value === '' ? undefined : (parseInt(e.target.value) || 5) })} className={inputCls} placeholder="5" /></div>
               </div>)}
 
             {/* Number min/max */}
@@ -179,7 +179,7 @@ export default function FormFieldBuilder({ fields, onChange, formType }: Props) 
             {/* Rating max */}
             {f.type === 'rating' && (
               <div><label className={labelCls}>Max Rating</label>
-                <input type="number" value={f.max || 5} min={2} max={10} onChange={e => onUpd(f.id, { max: parseInt(e.target.value) || 5 })} className={`${inputCls} w-24`} /></div>)}
+                <input type="number" value={f.max ?? ''} min={2} max={10} onChange={e => onUpd(f.id, { max: e.target.value === '' ? undefined : (parseInt(e.target.value) || 5) })} className={`${inputCls} w-24`} placeholder="5" /></div>)}
 
             {/* Section: branching + children */}
             {f.type === 'section' && f.visibleIf && (
