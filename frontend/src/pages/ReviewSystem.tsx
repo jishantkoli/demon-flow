@@ -2917,7 +2917,41 @@ export default function ReviewSystem({ user }: { user: User }) {
                           </div>
                           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
                             <p className="text-sm text-slate-900 leading-relaxed">
-                              {Array.isArray(q.value) ? (q.value as any[]).join(', ') : String(q.value)}
+                              {(() => {
+                                const val = q.value;
+                                if (!val) return 'No answer';
+
+                                const renderItem = (v: any) => {
+                                  const sVal = String(v || '');
+                                  const isUploadPath = /^https?:\/\/[^/\s]+\/uploads\//i.test(sVal) || /^\/?uploads\//i.test(sVal);
+                                  const isFile = typeof v === 'string' && (
+                                    /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp|csv)$/i.test(sVal) ||
+                                    sVal.includes('res.cloudinary.com') ||
+                                    isUploadPath
+                                  );
+
+                                  if (isFile) {
+                                    const fileUrl = sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
+                                    return (
+                                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary font-bold hover:underline flex items-center gap-2">
+                                        <FileText size={14} />
+                                        <span>View File</span>
+                                        <ExternalLink size={12} />
+                                      </a>
+                                    );
+                                  }
+                                  return sVal;
+                                };
+
+                                if (Array.isArray(val)) {
+                                  return (
+                                    <div className="space-y-1">
+                                      {val.map((item, i) => <div key={i}>{renderItem(item)}</div>)}
+                                    </div>
+                                  );
+                                }
+                                return renderItem(val);
+                              })()}
                             </p>
                           </div>
                         </div>
