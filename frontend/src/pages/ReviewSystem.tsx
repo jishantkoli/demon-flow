@@ -618,8 +618,8 @@ export default function ReviewSystem({ user }: { user: User }) {
       console.error("Failed to fetch review data:", err);
     }
     setReviewComment(review.comments || '');
-    setOverallScore(review.overall_score || 0);
-    const qs: Record<string, number> = {};
+    setOverallScore(review.overall_score ?? '');
+    const qs: Record<string, number | string> = {};
     (review.question_scores || []).forEach((s: any) => { qs[s.field_id] = s.score; });
     setQuestionScores(qs);
     setGrade(review.grade || '');

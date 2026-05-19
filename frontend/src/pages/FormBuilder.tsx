@@ -159,9 +159,31 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
               {f.type === 'mcq' && (
                 <div className="grid grid-cols-2 gap-2">
                   <label className="text-xs"><span className="text-muted">Marks</span>
-                    <input type="number" className="input !py-1.5 mt-1" value={f.marks || 1} onChange={e => updateField(activeSection, f.id, { marks: +e.target.value })} /></label>
+                    <input 
+                      type="number" 
+                      className="input !py-1.5 mt-1" 
+                      value={f.marks ?? ''} 
+                      placeholder="1"
+                      onChange={e => {
+                        const raw = e.target.value;
+                        if (raw === '') { updateField(activeSection, f.id, { marks: undefined }); }
+                        else { const n = parseFloat(raw); updateField(activeSection, f.id, { marks: Number.isFinite(n) ? n : 1 }); }
+                      }} 
+                    /></label>
                   <label className="text-xs"><span className="text-muted">Negative</span>
-                    <input type="number" step="0.25" max={0} className="input !py-1.5 mt-1" value={f.negative || 0} onChange={e => updateField(activeSection, f.id, { negative: +e.target.value })} /></label>
+                    <input 
+                      type="number" 
+                      step="0.25" 
+                      max={0} 
+                      className="input !py-1.5 mt-1" 
+                      value={f.negative ?? ''} 
+                      placeholder="0"
+                      onChange={e => {
+                        const raw = e.target.value;
+                        if (raw === '') { updateField(activeSection, f.id, { negative: undefined }); }
+                        else { const n = parseFloat(raw); updateField(activeSection, f.id, { negative: Number.isFinite(n) ? n : 0 }); }
+                      }} 
+                    /></label>
                 </div>
               )}
               {f.type === 'radio' && (
@@ -215,8 +237,12 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
                       type="number" 
                       className="input !py-1.5 border-primary/30 focus:border-primary w-full"
                       placeholder="e.g. 10"
-                      value={f.reviewer_max_marks || ''}
-                      onChange={e => updateField(activeSection, f.id, { reviewer_max_marks: +e.target.value || 0 })} 
+                      value={f.reviewer_max_marks ?? ''}
+                      onChange={e => {
+                        const raw = e.target.value;
+                        if (raw === '') { updateField(activeSection, f.id, { reviewer_max_marks: undefined }); }
+                        else { const n = parseFloat(raw); updateField(activeSection, f.id, { reviewer_max_marks: Number.isFinite(n) ? n : undefined }); }
+                      }} 
                     />
                   </motion.div>
                 )}
@@ -608,7 +634,15 @@ export default function FormBuilder() {
                       className="input !py-1.5 mt-1" 
                       value={form.settings.nomination_limit ?? ''} 
                       placeholder="5"
-                      onChange={e => patchSettings({ nomination_limit: e.target.value === '' ? undefined : (+e.target.value || 0) })} 
+                      onChange={e => {
+                        const raw = e.target.value;
+                        if (raw === '') {
+                          patchSettings({ nomination_limit: undefined });
+                        } else {
+                          const num = parseFloat(raw);
+                          patchSettings({ nomination_limit: Number.isFinite(num) ? num : undefined });
+                        }
+                      }} 
                     />
                   </label>
                   <label className="text-xs block"><span className="text-muted">Login Type</span>
