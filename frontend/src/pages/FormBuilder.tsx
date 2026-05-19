@@ -222,11 +222,11 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-primary">Enable Reviewer Grading</span>
                   <Toggle 
-                    checked={!!f.reviewer_max_marks} 
-                    onChange={v => updateField(activeSection, f.id, { reviewer_max_marks: v ? 10 : 0 })} 
+                    checked={f.reviewer_max_marks !== undefined} 
+                    onChange={v => updateField(activeSection, f.id, { reviewer_max_marks: v ? 10 : undefined })} 
                   />
                 </div>
-                {!!f.reviewer_max_marks && (
+                {f.reviewer_max_marks !== undefined && (
                   <motion.div 
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -237,11 +237,15 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
                       type="number" 
                       className="input !py-1.5 border-primary/30 focus:border-primary w-full"
                       placeholder="e.g. 10"
-                      value={f.reviewer_max_marks ?? ''}
+                      value={f.reviewer_max_marks === null ? '' : (f.reviewer_max_marks ?? '')}
                       onChange={e => {
                         const raw = e.target.value;
-                        if (raw === '') { updateField(activeSection, f.id, { reviewer_max_marks: undefined }); }
-                        else { const n = parseFloat(raw); updateField(activeSection, f.id, { reviewer_max_marks: Number.isFinite(n) ? n : undefined }); }
+                        if (raw === '') { 
+                          updateField(activeSection, f.id, { reviewer_max_marks: null as any }); 
+                        } else { 
+                          const n = parseFloat(raw); 
+                          updateField(activeSection, f.id, { reviewer_max_marks: Number.isFinite(n) ? n : null as any }); 
+                        }
                       }} 
                     />
                   </motion.div>

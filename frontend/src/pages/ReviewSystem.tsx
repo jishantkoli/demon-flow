@@ -1645,6 +1645,41 @@ export default function ReviewSystem({ user }: { user: User }) {
       },
       { key: 'score', label: 'Form Score', sortable: true, render: (v: any) => v != null ? <span className="font-bold text-sm text-primary">{Number(typeof v === 'object' ? v?.percentage : v).toFixed(2)}%</span> : <span className="text-slate-500">—</span> },
       {
+        key: 'rev_score',
+        label: 'Review Marks',
+        render: (_v: any, r: any) => {
+          const stageReviews = currentStageNumber ? (r.level_reviews || []).filter((rv: any) => rv.level === currentStageNumber) : [];
+          if (stageReviews.length === 0) return <span className="text-slate-400 text-xs">—</span>;
+          return (
+            <div className="flex flex-wrap gap-1">
+              {stageReviews.map((rv: any, idx: number) => (
+                <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100">
+                  {rv.overall_score || 0}
+                </span>
+              ))}
+            </div>
+          );
+        }
+      },
+      {
+        key: 'rev_grade',
+        label: 'Grade',
+        render: (_v: any, r: any) => {
+          const stageReviews = currentStageNumber ? (r.level_reviews || []).filter((rv: any) => rv.level === currentStageNumber) : [];
+          const grades = stageReviews.map((rv: any) => rv.grade).filter(Boolean);
+          if (grades.length === 0) return <span className="text-slate-400 text-xs">—</span>;
+          return (
+            <div className="flex flex-wrap gap-1">
+              {grades.map((g: any, idx: number) => (
+                <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-100">
+                  {g}
+                </span>
+              ))}
+            </div>
+          );
+        }
+      },
+      {
         key: 'status',
         label: 'Status',
         render: (v: string, r: any) => {
@@ -1702,7 +1737,6 @@ export default function ReviewSystem({ user }: { user: User }) {
           <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16" />
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-4">
-              <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">1</span>
               <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Select Form</h2>
             </div>
             <select
@@ -1735,7 +1769,6 @@ export default function ReviewSystem({ user }: { user: User }) {
                   )}
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">2</span>
                       <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Filter Teachers</h2>
                     </div>
                     <button
@@ -1887,7 +1920,6 @@ export default function ReviewSystem({ user }: { user: User }) {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className={`w-5 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${isCurrentStageAssigned ? 'bg-slate-700 text-slate-400' : 'bg-white text-navy'}`}>{activeFilterLevel === 1 ? '3' : '2'}</span>
                         <h2 className="text-base font-bold">
                           {isCurrentStageAssigned
                             ? `Stage ${activeFilterLevel === 1 ? '1' : activeFilterLevel - 1} Assignment Locked`
@@ -2127,7 +2159,7 @@ export default function ReviewSystem({ user }: { user: User }) {
               {/* Left Side: Level Config */}
               <div className="space-y-5">
                 <div>
-                  <h4 className="text-sm font-bold mb-4 flex items-center gap-2"><Settings size={16} className="text-primary" /> 1. Level Settings</h4>
+                  <h4 className="text-sm font-bold mb-4 flex items-center gap-2"><Settings size={16} className="text-primary" /> Level Settings</h4>
                   <div className="space-y-4">
                     <div>
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Level Name</label>
@@ -2200,7 +2232,7 @@ export default function ReviewSystem({ user }: { user: User }) {
 
               {/* Right Side: Reviewers */}
               <div>
-                <h4 className="text-sm font-bold mb-4 flex items-center gap-2"><Users size={16} className="text-primary" /> 2. Assign Reviewers</h4>
+                <h4 className="text-sm font-bold mb-4 flex items-center gap-2"><Users size={16} className="text-primary" /> Assign Reviewers</h4>
                 <div className="space-y-2 max-h-[280px] overflow-y-auto pr-2 custom-scrollbar">
                   {reviewers.length === 0 ? (
                     <p className="text-xs text-slate-400 italic py-4 text-center border border-dashed border-slate-200 rounded-xl">No reviewers found in system</p>
@@ -2347,10 +2379,13 @@ export default function ReviewSystem({ user }: { user: User }) {
                               <div className="space-y-2">
                                 {lvl.scores.map((s: any, i: number) => (
                                   <div key={i} className="flex items-center gap-3 p-2 bg-slate-100 rounded-lg border border-slate-200">
-                                    <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold">R{i + 1}</div>
+                                    <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold" title={lvl.blind_review ? `Reviewer ${i + 1}` : s.reviewer_name}>
+                                      {lvl.blind_review ? `R${i + 1}` : (s.reviewer_name?.[0] || 'R')}
+                                    </div>
                                     <div className="flex-1">
                                       <div className="flex items-center gap-2">
                                         <span className="text-sm font-bold">{s.overall_score}</span>
+                                        {!lvl.blind_review && s.reviewer_name && <span className="text-[10px] text-slate-400 font-medium">by {s.reviewer_name}</span>}
                                         {s.grade && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white border border-slate-200 font-bold">{s.grade}</span>}
                                         {s.recommendation && <span className="text-[10px] text-slate-500 capitalize">{s.recommendation?.replace('_', ' ')}</span>}
                                       </div>

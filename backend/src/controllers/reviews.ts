@@ -77,7 +77,7 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
       if (!sub) return res.status(404).json({ error: 'Submission not found' });
 
       const levels = await Level.find({ formId: sub.formId }).sort({ levelNumber: 1 });
-      const reviews = await Review.find({ submission_id: submission_id as string }).sort({ level: 1 });
+      const reviews = await Review.find({ submission_id: submission_id as string }).populate('reviewer_id', 'name').sort({ level: 1 });
 
       const levelData = levels.map(l => {
         const levelReviews = reviews.filter(r => r.level_id.toString() === l._id.toString());
@@ -86,6 +86,8 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
           grade: r.grade,
           comments: r.comments,
           recommendation: r.recommendation,
+          reviewer_id: r.reviewer_id,
+          reviewer_name: (r.reviewer_id as any)?.name || 'Reviewer',
           created_at: r.createdAt
         }));
         const avg = scores.length > 0 ? scores.reduce((a, b) => a + (b.overall_score || 0), 0) / scores.length : null;

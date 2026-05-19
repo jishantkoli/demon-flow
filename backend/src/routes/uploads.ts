@@ -107,10 +107,11 @@ router.post('/', optionalAuthenticate, (req, res, next) => {
 
     // Upload buffer to Cloudinary via upload_stream
     const result: any = await new Promise((resolve, reject) => {
+      const isPdf = req.file!.mimetype === 'application/pdf' || req.file!.originalname.toLowerCase().endsWith('.pdf');
       const stream = cloudinary.uploader.upload_stream(
         {
           folder: 'flow-agent-uploads',
-          resource_type: 'auto', // handles PDFs, images, etc.
+          resource_type: isPdf ? 'raw' : 'auto', // handles PDFs, images, etc.
           use_filename: true,
           unique_filename: true,
           flags: 'attachment:false', // ensure it doesn't force download
