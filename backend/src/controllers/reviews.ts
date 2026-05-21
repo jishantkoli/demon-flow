@@ -504,6 +504,31 @@ export const saveReviewScore = async (req: AuthRequest, res: Response) => {
       reviewed_at: is_draft ? null : new Date()
     }, { new: true });
 
+    // ─── Update Submission Status based on all reviews ─────────────
+    if (!is_draft) {
+      const submissionId = existingReview.submission_id;
+      const levelId = existingReview.level_id;
+
+      // Get all reviews for this submission at this level
+      const allReviewsAtLevel = await Review.find({ submission_id: submissionId, level_id: levelId });
+      
+      const allFinished = allReviewsAtLevel.every(r => r.status === 'approved' || r.status === 'rejected');
+      const anyRejected = allReviewsAtLevel.some(r => r.recommendation === 'reject' || r.status === 'rejected');
+      const allApproved = allReviewsAtLevel.every(r => r.recommendation === 'next_level' || r.status === 'approved');
+
+      if (anyRejected) {
+        await Submission.findByIdAndUpdate(submissionId, { status: 'rejected' });
+      } else if (allFinished && allApproved) {
+        // If all reviewers at this level approved, mark submission as approved
+        // In a multi-level system, this could also mean "Ready for next level"
+        // but based on user request "dono approve me approve hona chahiye", we set to 'approved'
+        await Submission.findByIdAndUpdate(submissionId, { status: 'approved' });
+      } else {
+        // Still under review (some reviewers pending)
+        await Submission.findByIdAndUpdate(submissionId, { status: 'under_review' });
+      }
+    }
+
     res.status(200).json(review);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

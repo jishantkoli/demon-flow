@@ -52,11 +52,9 @@ export default function Reviews({ user }: { user: User }) {
     if (!selected) return;
     if (!recommendation) return alert('Please select a recommendation');
 
-    const submissionStatus = recommendation === 'reject' ? 'rejected' : 'under_review';
     const reviewStatus = 'completed';
 
     await api.put('/reviews', { id: selected.id, status: reviewStatus, comments: reviewComment });
-    await api.put('/submissions', { id: selected.submission_id, status: submissionStatus });
     await api.post('/review-scores', {
       review_id: selected.id, submission_id: selected.submission_id, reviewer_id: user.id,
       level_id: selected.level, overall_score: overallScore, comments: reviewComment,

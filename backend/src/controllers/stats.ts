@@ -37,6 +37,8 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     // 1. KPI Stats
     const totalUsers = await User.countDocuments({ passwordHash: { $exists: true, $ne: null } });
     const activeForms = await Form.countDocuments({ status: 'active' });
+    const draftForms = await Form.countDocuments({ status: 'draft' });
+    const expiredForms = await Form.countDocuments({ status: 'expired' });
     const totalSubmissions = await Submission.countDocuments(subQuery);
     
     // 2. Submissions by Status
@@ -45,7 +47,25 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       under_review: await Submission.countDocuments({ ...subQuery, status: 'under_review' }),
       approved: await Submission.countDocuments({ ...subQuery, status: 'approved' }),
       rejected: await Submission.countDocuments({ ...subQuery, status: 'rejected' }),
+      pending: await Submission.countDocuments({ ...subQuery, status: 'pending' }),
     };
+
+    // 2b. Users by Role
+    const usersByRole = {
+      admin: await User.countDocuments({ role: 'admin' }),
+      reviewer: await User.countDocuments({ role: 'reviewer' }),
+      functionary: await User.countDocuments({ role: 'functionary' }),
+      teacher: await User.countDocuments({ role: 'teacher' }),
+      form_creator: await User.countDocuments({ role: 'form_creator' }),
+    };
+
+    // 2c. Review Stats
+    let reviewQuery: any = {};
+    if (role === 'reviewer') {
+      reviewQuery.reviewer_id = userId;
+    }
+    const pendingReviews = await Review.countDocuments({ ...reviewQuery, status: 'pending' });
+    const completedReviews = await Review.countDocuments({ ...reviewQuery, status: { $in: ['approved', 'rejected', 'completed'] } });
 
     // 3. Nominations Stats
     const nominationsByStatus = {
@@ -112,8 +132,13 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     res.status(200).json({
       totalUsers,
       activeForms,
+      draftForms,
+      expiredForms,
       totalSubmissions,
       submissionsByStatus,
+      usersByRole,
+      pendingReviews,
+      completedReviews,
       nominationsByStatus,
       completionRate,
       avgScore,

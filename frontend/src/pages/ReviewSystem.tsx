@@ -641,12 +641,10 @@ export default function ReviewSystem({ user }: { user: User }) {
     }
 
     // Decision logic: Reviewer can only Reject or move to Next Level
-    const submissionStatus = recommendation === 'reject' ? 'rejected' : 'under_review';
     const reviewStatus = 'completed'; // Review itself is done
 
     await api.put('/reviews', { id: selectedReview.id, status: reviewStatus, comments: reviewComment });
-    await api.put('/submissions', { id: selectedReview.submission_id, status: submissionStatus });
-
+    
     // Find the level for this review
     const levelId = levels.find((l: any) => l.level_number === selectedReview.level)?.id;
     const qsArray = buildQuestionScoresPayload();
