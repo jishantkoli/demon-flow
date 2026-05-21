@@ -31,14 +31,19 @@ app.use(helmet({
   contentSecurityPolicy: false
 }));
 
-// More permissive CORS for development/network access
+// Permissive CORS for development/network access
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    // In development, allow all origins
+    // In development, allow everything
     if (process.env.NODE_ENV === 'development' || !process.env.FRONTEND_URL) {
+      return callback(null, true);
+    }
+
+    // Always allow local access
+    if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1') || origin.startsWith('http://192.168.')) {
       return callback(null, true);
     }
 
@@ -50,12 +55,13 @@ app.use(cors({
     if (allowed.indexOf(origin) !== -1 || allowed.includes('*')) {
       callback(null, true);
     } else {
+      console.warn(`CORS blocked for origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
 app.use(cookieParser(process.env.COOKIE_SECRET));

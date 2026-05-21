@@ -1,10 +1,12 @@
-export const API_BASE = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001/api/v1`;
+export const API_BASE = (import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001/api/v1`).replace(/\/$/, '');
 
 async function request(url: string, options?: RequestInit) {
+  // Ensure url starts with a slash
+  const endpoint = url.startsWith('/') ? url : `/${url}`;
+  
   // Global block for non-existent /comments endpoint to stop 404 logs/errors
-  // Check both with and without leading slash
-  if (url.startsWith('/comments') || url.startsWith('comments')) {
-    console.warn(`Blocked call to non-existent endpoint: ${url}`);
+  if (endpoint.startsWith('/comments')) {
+    console.warn(`Blocked call to non-existent endpoint: ${endpoint}`);
     return options?.method && options.method !== 'GET' ? { success: false } : [];
   }
 
@@ -20,8 +22,10 @@ async function request(url: string, options?: RequestInit) {
     headers['Authorization'] = `Bearer ${token}`;
   }
   
+  const fullUrl = `${API_BASE}${endpoint}`;
+  
   try {
-    const res = await fetch(`${API_BASE}${url}`, { 
+    const res = await fetch(fullUrl, { 
       ...options, 
       credentials: 'include',
       headers: { ...headers, ...options?.headers } 
@@ -35,7 +39,7 @@ async function request(url: string, options?: RequestInit) {
       } catch (e) {
         errMessage = res.statusText || errMessage;
       }
-      console.error(`API Error [${res.status}] ${url}:`, errMessage);
+      console.error(`API Error [${res.status}] ${endpoint}:`, errMessage);
       
       if (res.status === 401 && (errMessage === 'User no longer exists' || errMessage === 'Invalid token')) {
         localStorage.removeItem('auth_token');
@@ -48,7 +52,7 @@ async function request(url: string, options?: RequestInit) {
     return res.json();
   } catch (e: any) {
     if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
-      console.error('Network error or CORS issue. Check if API_URL is correct:', API_BASE);
+      console.error('Network error or CORS issue. Attempted URL:', fullUrl);
       throw new Error('Network error: Unable to reach the server. Please check your internet or API configuration.');
     }
     throw e;

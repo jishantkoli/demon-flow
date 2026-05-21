@@ -63,9 +63,21 @@ export default function DataTable({
     }
     if (sortKey) {
       result = [...result].sort((a, b) => {
-        const av = a[sortKey], bv = b[sortKey];
-        const cmp = typeof av === 'number' ? av - bv : String(av || '').localeCompare(String(bv || ''));
-        return sortDir === 'asc' ? cmp : -cmp;
+        let av = a[sortKey];
+        let bv = b[sortKey];
+
+        // Handle numeric sorting even if values are strings
+        const an = Number(av);
+        const bn = Number(bv);
+
+        if (!isNaN(an) && !isNaN(bn) && av !== '' && bv !== '' && av !== null && bv !== null) {
+          return sortDir === 'asc' ? an - bn : bn - an;
+        }
+
+        // Default string comparison
+        const as = String(av || '').toLowerCase();
+        const bs = String(bv || '').toLowerCase();
+        return sortDir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
       });
     }
     return result;
@@ -73,7 +85,15 @@ export default function DataTable({
 
   const totalPages = Math.ceil(filtered.length / pageSize);
   const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
-  const toggleSort = (key: string) => { if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortKey(key); setSortDir('asc'); } };
+  const toggleSort = (key: string) => { 
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc'); 
+    } else { 
+      setSortKey(key); 
+      setSortDir('asc'); 
+    }
+    setPage(0); // Reset to first page on sort
+  };
 
   return (
     <div className="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm relative print-container">

@@ -15,11 +15,10 @@ export default function Reviews({ user }: { user: User }) {
   const [selectedSub, setSelectedSub] = useState<any>(null);
   const [reviewComment, setReviewComment] = useState('');
   const [overallScore, setOverallScore] = useState<number | string>('');
-  const [grade, setGrade] = useState('');
   const [recommendation, setRecommendation] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showLevelModal, setShowLevelModal] = useState(false);
-  const [levelForm, setLevelForm] = useState({ form_id: 0, name: '', level_number: 1, scoring_type: 'form_level', blind_review: false, grade_scale: 'A,B,C,D', reviewer_ids: '', filter_criteria: '' });
+  const [levelForm, setLevelForm] = useState({ form_id: 0, name: '', level_number: 1, scoring_type: 'form_level', blind_review: false, reviewer_ids: '', filter_criteria: '' });
   const [tab, setTab] = useState<'pending' | 'completed'>('pending');
   const [reviewers, setReviewers] = useState<any[]>([]);
   const [forms, setForms] = useState<any[]>([]);
@@ -46,7 +45,7 @@ export default function Reviews({ user }: { user: User }) {
     const sub = getSub(review.submission_id);
     setSelectedSub(sub);
     setReviewComment(review.comments || '');
-    setOverallScore(''); setGrade(''); setRecommendation('');
+    setOverallScore(''); setRecommendation('');
   };
 
   const handleAction = async () => {
@@ -60,10 +59,10 @@ export default function Reviews({ user }: { user: User }) {
     await api.put('/submissions', { id: selected.submission_id, status: submissionStatus });
     await api.post('/review-scores', {
       review_id: selected.id, submission_id: selected.submission_id, reviewer_id: user.id,
-      level_id: selected.level, overall_score: overallScore, grade, comments: reviewComment,
+      level_id: selected.level, overall_score: overallScore, comments: reviewComment,
       recommendation, is_draft: false
     });
-    await api.post('/audit-logs', { user_id: user.id, action: 'review', details: JSON.stringify({ submission_id: selected.submission_id, decision: recommendation, score: overallScore, grade }) });
+    await api.post('/audit-logs', { user_id: user.id, action: 'review', details: JSON.stringify({ submission_id: selected.submission_id, decision: recommendation, score: overallScore }) });
     setSelected(null); fetchData();
   };
 
@@ -71,7 +70,7 @@ export default function Reviews({ user }: { user: User }) {
     if (!selected) return;
     await api.post('/review-scores', {
       review_id: selected.id, submission_id: selected.submission_id, reviewer_id: user.id,
-      level_id: selected.level, overall_score: overallScore, grade, comments: reviewComment,
+      level_id: selected.level, overall_score: overallScore, comments: reviewComment,
       recommendation, is_draft: true
     });
     alert('Draft saved!');
@@ -81,7 +80,6 @@ export default function Reviews({ user }: { user: User }) {
     await api.post('/review-levels', {
       form_id: levelForm.form_id, level_number: levelForm.level_number, name: levelForm.name,
       scoring_type: levelForm.scoring_type, blind_review: levelForm.blind_review,
-      grade_scale: String(levelForm.grade_scale || '').split(',').map(s => s.trim()),
       reviewer_ids: String(levelForm.reviewer_ids || '').split(',').map(s => parseInt(s.trim())).filter(Boolean),
       filter_criteria: levelForm.filter_criteria ? JSON.parse(levelForm.filter_criteria) : {}
     });
@@ -98,7 +96,12 @@ export default function Reviews({ user }: { user: User }) {
   const columns = [
     { key: 'id', label: '#', sortable: true, render: (v: number) => <span className="text-xs font-mono text-slate-500">#{v}</span> },
     { key: 'submission_id', label: 'Submission', sortable: true, render: (v: number) => { const sub = getSub(v); return <span className="text-sm font-medium">{sub?.form_title || `#${v}`}</span>; } },
-    { key: 'reviewer_name', label: 'Reviewer', sortable: true },
+    { key: 'reviewer_name', label: 'Reviewer', sortable: true, render: (v: string, r: any) => (
+      <div className="flex flex-col">
+        <span className="text-sm font-medium">{v}</span>
+        {user?.role === 'admin' && r.reviewer_email && <span className="text-[10px] text-slate-500">{r.reviewer_email}</span>}
+      </div>
+    )},
     { key: 'level', label: 'Level', render: (v: number) => <span className="text-xs font-mono bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">L{v}</span> },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
     { key: 'created_at', label: 'Assigned', sortable: true, render: (v: string) => v ? <span className="text-xs text-slate-500">{new Date(v).toLocaleDateString()}</span> : '\u2014' },
@@ -154,11 +157,11 @@ export default function Reviews({ user }: { user: User }) {
         {selected && (
           <div className="space-y-5">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[{ label: 'Submission', value: `#${selected.submission_id}` }, { label: 'Level', value: `Level ${selected.level}` },
-                { label: 'Status', value: selected.status, badge: true }, { label: 'Reviewer', value: selected.reviewer_name }]
-                .map((m, i) => (<div key={i} className="bg-slate-100 rounded-xl p-3"><p className="text-[10px] text-slate-500 uppercase font-semibold">{m.label}</p>
-                  {m.badge ? <div className="mt-0.5"><StatusBadge status={m.value} /></div> : <p className="text-sm font-bold mt-0.5">{m.value}</p>}</div>))}
-            </div>
+                {[{ label: 'Submission', value: `#${selected.submission_id}` }, { label: 'Level', value: `Level ${selected.level}` },
+                  { label: 'Status', value: selected.status, badge: true }, { label: 'Reviewer', value: user?.role === 'admin' && selected.reviewer_email ? `${selected.reviewer_name} (${selected.reviewer_email})` : selected.reviewer_name }]
+                  .map((m, i) => (<div key={i} className="bg-slate-100 rounded-xl p-3"><p className="text-[10px] text-slate-500 uppercase font-semibold">{m.label}</p>
+                    {m.badge ? <div className="mt-0.5"><StatusBadge status={m.value} /></div> : <p className="text-sm font-bold mt-0.5 truncate" title={m.value}>{m.value}</p>}</div>))}
+              </div>
 
             {selectedSub && Object.keys(subResponses).length > 0 && (
               <div><h4 className="text-sm font-bold mb-2">Submission Responses</h4>
@@ -175,7 +178,7 @@ export default function Reviews({ user }: { user: User }) {
 
             {selected.status === 'pending' && (user.role === 'admin' || user.role === 'reviewer') && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Overall Score (0-100)</label>
                     <input type="number" min={0} max={100} value={overallScore} 
                       onChange={e => {
@@ -184,14 +187,19 @@ export default function Reviews({ user }: { user: User }) {
                           setOverallScore('');
                           return;
                         }
-                        const val = parseInt(raw) || 0;
-                        setOverallScore(Math.min(100, Math.max(0, val)));
+                        
+                        // Only allow numbers
+                        if (!/^\d*\.?\d*$/.test(raw)) return;
+                        
+                        const rawVal = parseFloat(raw);
+                        if (isNaN(rawVal)) return;
+
+                        // Clamp between 0 and 100
+                        const val = Math.min(100, Math.max(0, rawVal));
+                        setOverallScore(val);
                       }}
                       placeholder="Enter marks"
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none focus:border-primary" /></div>
-                  <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Grade</label>
-                    <select value={grade} onChange={e => setGrade(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
-                      <option value="">Select Grade</option><option value="A">A - Excellent</option><option value="B">B - Good</option><option value="C">C - Average</option><option value="D">D - Below Average</option></select></div>
                   <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Recommendation</label>
                     <select value={recommendation} onChange={e => setRecommendation(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
                       <option value="">Select</option><option value="reject">Reject</option><option value="next_level">Promote to Next Level</option><option value="revise">Request Revision</option></select></div>
@@ -222,8 +230,6 @@ export default function Reviews({ user }: { user: User }) {
             <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Scoring Type</label>
               <select value={levelForm.scoring_type} onChange={e => setLevelForm(p => ({ ...p, scoring_type: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
                 <option value="form_level">Form Level</option><option value="question_level">Question Level</option></select></div>
-            <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Grade Scale (comma-separated)</label>
-              <input type="text" value={levelForm.grade_scale} onChange={e => setLevelForm(p => ({ ...p, grade_scale: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none" /></div>
             <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Reviewer IDs (comma-separated)</label>
               <input type="text" value={levelForm.reviewer_ids} onChange={e => setLevelForm(p => ({ ...p, reviewer_ids: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none" placeholder="e.g. 2,3,14" /></div>
             <div><label className="flex items-center gap-2 text-xs font-semibold text-slate-500"><input type="checkbox" checked={levelForm.blind_review} onChange={e => setLevelForm(p => ({ ...p, blind_review: e.target.checked }))} className="rounded accent-primary" /> Blind Review</label></div>

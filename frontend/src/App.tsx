@@ -92,13 +92,13 @@ function AppContent() {
       <Routes>
         <Route path="/" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
         {user?.role === 'admin' && <Route path="/users" element={<UserManagement />} />}
-        <Route path="/forms" element={user ? <Forms user={user} /> : <Navigate to="/login" />} />
+        <Route path="/forms" element={user && user.role !== 'reviewer' ? <Forms user={user} /> : (user ? <Navigate to="/" /> : <Navigate to="/login" />)} />
         {(user?.role === 'admin' || user?.role === 'form_creator') && <Route path="/forms/new" element={<FormBuilder />} />}
         {(user?.role === 'admin' || user?.role === 'form_creator') && <Route path="/forms/:id/builder" element={<FormBuilder />} />}
         <Route path="/fill/:id" element={<FormFill user={user || { id: 'anon', name: 'Anonymous', role: 'teacher', email: '' }} />} />
         <Route path="/forms/view" element={user ? <FormView user={user} /> : <Navigate to="/login" />} />
         <Route path="/submissions" element={user ? <Submissions user={user} /> : <Navigate to="/login" />} />
-        <Route path="/reviews" element={user ? <ReviewSystem user={user} /> : <Navigate to="/login" />} />
+        <Route path="/reviews" element={user && (user.role === 'admin' || user.role === 'reviewer') ? <ReviewSystem user={user} /> : (user ? <Navigate to="/" /> : <Navigate to="/login" />)} />
         {user?.role === 'functionary' && <Route path="/nominations" element={<Nominations user={user} />} />}
         {user?.role === 'admin' && <Route path="/analytics" element={<Analytics />} />}
         {user?.role === 'admin' && <Route path="/email-center" element={<EmailCenter user={user} />} />}

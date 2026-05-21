@@ -77,10 +77,21 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
       if (!sub) return res.status(404).json({ error: 'Submission not found' });
 
       const levels = await Level.find({ formId: sub.formId }).sort({ levelNumber: 1 });
-      const reviews = await Review.find({ submission_id: submission_id as string }).populate('reviewer_id', 'name').sort({ level: 1 });
+      const reviews = await Review.find({ submission_id: submission_id as string }).populate('reviewer_id', 'name email').sort({ level: 1 });
 
       const levelData = levels.map(l => {
-        const levelReviews = reviews.filter(r => r.level_id.toString() === l._id.toString());
+        let levelReviews = reviews.filter(r => r.level_id.toString() === l._id.toString());
+        
+        // Ensure uniqueness by reviewer_id
+        const uniqueReviews = new Map();
+        levelReviews.forEach(r => {
+          const rid = r.reviewer_id?._id?.toString() || r.reviewer_id?.toString();
+          if (!uniqueReviews.has(rid) || r.updatedAt > uniqueReviews.get(rid).updatedAt) {
+            uniqueReviews.set(rid, r);
+          }
+        });
+        levelReviews = Array.from(uniqueReviews.values());
+
         const scores = levelReviews.map(r => ({
           overall_score: r.overall_score,
           grade: r.grade,
@@ -88,6 +99,7 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
           recommendation: r.recommendation,
           reviewer_id: r.reviewer_id,
           reviewer_name: (r.reviewer_id as any)?.name || 'Reviewer',
+          reviewer_email: (r.reviewer_id as any)?.email || '',
           created_at: r.createdAt
         }));
         const avg = scores.length > 0 ? scores.reduce((a, b) => a + (b.overall_score || 0), 0) / scores.length : null;
@@ -135,10 +147,21 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
 
       const submissions = await Submission.find({ formId: actualFormId, isDraft: false }).populate('nominationId');
       const levels = await Level.find({ formId: actualFormId }).sort({ levelNumber: 1 });
-      const reviews = await Review.find({ submission_id: { $in: submissions.map(s => s._id) } }).populate('reviewer_id', 'name');
+      const reviews = await Review.find({ submission_id: { $in: submissions.map(s => s._id) } }).populate('reviewer_id', 'name email');
 
       const subData = submissions.map(s => {
-        const subReviews = reviews.filter(r => r.submission_id.toString() === s._id.toString());
+        let subReviews = reviews.filter(r => r.submission_id.toString() === s._id.toString());
+        
+        // Ensure uniqueness by reviewer_id AND level
+        const uniqueReviews = new Map();
+        subReviews.forEach(r => {
+          const rid = r.reviewer_id?._id?.toString() || r.reviewer_id?.toString();
+          const key = `${r.level}_${rid}`;
+          if (!uniqueReviews.has(key) || r.updatedAt > uniqueReviews.get(key).updatedAt) {
+            uniqueReviews.set(key, r);
+          }
+        });
+        subReviews = Array.from(uniqueReviews.values());
         
         // Return actual review details for each level
         const levelReviews = subReviews.map(r => ({
@@ -146,10 +169,13 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
           status: r.status,
           overall_score: r.overall_score,
           recommendation: r.recommendation,
-          reviewer_id: r.reviewer_id,
+          comments: r.comments,
+          reviewer_id: (r.reviewer_id as any)?._id || r.reviewer_id,
           reviewer_name: (r.reviewer_id as any)?.name || 'Reviewer',
+          reviewer_email: (r.reviewer_id as any)?.email || '',
           question_scores: r.question_scores,
-          id: r._id
+          id: r._id,
+          created_at: r.createdAt
         }));
 
         return {
@@ -378,18 +404,19 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
 
 export const getReviews = async (req: AuthRequest, res: Response) => {
   try {
-    const { reviewer_id } = req.query;
+    const { reviewer_id, submission_id } = req.query;
     const query: any = {};
     if (reviewer_id) query.reviewer_id = reviewer_id;
+    if (submission_id) query.submission_id = submission_id;
     
-    // Reviewers only see theirs
-    if (req.user.role === 'reviewer') {
+    // Reviewers only see theirs unless an admin/reviewer is viewing a specific submission history
+    if (req.user.role === 'reviewer' && !submission_id) {
       query.reviewer_id = req.user._id;
     }
 
     const reviews = await Review.find(query)
-      .populate('level_id', 'scoringType showPreviousReviews')
-      .populate('reviewer_id', 'name')
+      .populate('level_id', 'scoringType showPreviousReviews sectionId')
+      .populate('reviewer_id', 'name email')
       .populate({
         path: 'submission_id',
         select: 'formId',
@@ -406,7 +433,9 @@ export const getReviews = async (req: AuthRequest, res: Response) => {
         form_id: (obj.submission_id as any)?.formId?._id || (obj.submission_id as any)?.formId,
         form_title: (obj.submission_id as any)?.formId?.title || 'Untitled Form',
         reviewer_name: (obj.reviewer_id as any)?.name || 'Reviewer',
+        reviewer_email: (obj.reviewer_id as any)?.email || '',
         scoring_type: (obj.level_id as any)?.scoringType || 'form_level',
+        section_id: (obj.level_id as any)?.sectionId || null,
         show_previous_reviews: (obj.level_id as any)?.showPreviousReviews || false
       };
     }));
@@ -431,10 +460,7 @@ export const saveReviewScore = async (req: AuthRequest, res: Response) => {
     const { review_id, overall_score, grade, comments, recommendation, is_draft, question_scores } = req.body;
     const existingReview = await Review.findById(review_id);
     if (!existingReview) return res.status(404).json({ error: 'Review not found' });
-    const normalizedOverallScore = Number(overall_score) || 0;
-    if (normalizedOverallScore < 0 || normalizedOverallScore > 100) {
-      return res.status(400).json({ error: 'Overall score must be between 0 and 100' });
-    }
+    const normalizedOverallScore = Math.min(100, Math.max(0, Number(overall_score) || 0));
 
     let normalizedQuestionScores = Array.isArray(question_scores) ? question_scores : [];
     if (normalizedQuestionScores.length > 0) {
@@ -450,23 +476,20 @@ export const saveReviewScore = async (req: AuthRequest, res: Response) => {
         });
       }
 
-      for (const entry of normalizedQuestionScores) {
-        const fieldId = String(entry?.field_id || '');
-        const score = Number(entry?.score) || 0;
-        const allowedMax = reviewerMaxByField[fieldId] || 0;
-        if (score < 0) {
-          return res.status(400).json({ error: `Negative score is not allowed for field ${fieldId}` });
-        }
-        if (allowedMax > 0 && score > allowedMax) {
-          return res.status(400).json({ error: `Score for field ${fieldId} cannot be more than ${allowedMax}` });
-        }
-      }
-
       normalizedQuestionScores = normalizedQuestionScores
-        .map((entry: any) => ({
-          field_id: String(entry?.field_id || ''),
-          score: Number(entry?.score) || 0,
-        }))
+        .map((entry: any) => {
+          const fieldId = String(entry?.field_id || '');
+          const score = Number(entry?.score) || 0;
+          const allowedMax = reviewerMaxByField[fieldId] || 100; // default 100 if no max set
+          
+          // Force clamp on backend too for safety
+          const clampedScore = Math.min(allowedMax, Math.max(0, score));
+          
+          return {
+            field_id: fieldId,
+            score: clampedScore,
+          };
+        })
         .filter((entry: any) => entry.field_id);
     }
 

@@ -83,7 +83,6 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [overallScore, setOverallScore] = useState<number | string>('');
   const [questionScores, setQuestionScores] = useState<Record<string, number | string>>({});
 
-  const [grade, setGrade] = useState('');
   const [recommendation, setRecommendation] = useState('');
   const [selectedFormObj, setSelectedFormObj] = useState<any>(null);
 
@@ -608,10 +607,16 @@ export default function ReviewSystem({ user }: { user: User }) {
         if (Array.isArray(historyRes)) {
           const isFinalized = (r: any) => ['approved', 'rejected', 'completed'].includes(String(r?.status));
           const immediatePreviousLevel = Number(review.level) - 1;
+          
           // Show only immediate previous level reviews (all reviewers from that level)
-          setReviewHistory(
-            historyRes.filter(r => isFinalized(r) && r.id !== review.id && Number(r.level) === immediatePreviousLevel)
-          );
+          // Ensure uniqueness by reviewer ID to avoid showing duplicates if any
+          const filtered = historyRes.filter(r => isFinalized(r) && r.id !== review.id && Number(r.level) === immediatePreviousLevel);
+          const uniqueByReviewer = Array.from(new Map(filtered.map(item => {
+            const rid = typeof item.reviewer_id === 'object' ? (item.reviewer_id._id || item.reviewer_id.id) : item.reviewer_id;
+            return [rid, item];
+          })).values());
+          
+          setReviewHistory(uniqueByReviewer);
         }
       }
     } catch (err) {
@@ -622,7 +627,6 @@ export default function ReviewSystem({ user }: { user: User }) {
     const qs: Record<string, number | string> = {};
     (review.question_scores || []).forEach((s: any) => { qs[s.field_id] = s.score; });
     setQuestionScores(qs);
-    setGrade(review.grade || '');
     setRecommendation(review.recommendation || '');
     setShowReviewModal(true);
   };
@@ -648,7 +652,7 @@ export default function ReviewSystem({ user }: { user: User }) {
     const qsArray = buildQuestionScoresPayload();
     await api.post('/review-scores', {
       review_id: selectedReview.id, submission_id: selectedReview.submission_id, reviewer_id: user.id,
-      level_id: levelId, overall_score: overallScore, grade, comments: reviewComment,
+      level_id: levelId, overall_score: overallScore, comments: reviewComment,
       recommendation, is_draft: false, question_scores: qsArray
     });
     setShowReviewModal(false);
@@ -668,7 +672,7 @@ export default function ReviewSystem({ user }: { user: User }) {
     const qsArray = buildQuestionScoresPayload();
     await api.post('/review-scores', {
       review_id: selectedReview.id, submission_id: selectedReview.submission_id, reviewer_id: user.id,
-      level_id: levelId, overall_score: overallScore, grade, comments: reviewComment,
+      level_id: levelId, overall_score: overallScore, comments: reviewComment,
       recommendation, is_draft: true, question_scores: qsArray
     });
     alert('Draft saved!');
@@ -683,39 +687,48 @@ export default function ReviewSystem({ user }: { user: User }) {
       return [] as Array<{ fieldId: string; label: string; value: any; reviewerMaxMarks: number }>;
     }
 
-    const formSchema = selectedSub.formId?.form_schema;
+    const rawSchema = selectedSub.formId?.form_schema;
+    const formSchema = typeof rawSchema === 'string' ? JSON.parse(rawSchema) : rawSchema;
     const fieldMap: Record<string, { label: string; reviewerMaxMarks: number }> = {};
+    const sectionFieldIds = new Set<string>();
+    const activeSectionId = selectedReview?.section_id;
+
     if (formSchema?.sections) {
-      formSchema.sections.forEach((s: any) => s.fields?.forEach((f: any) => {
-        fieldMap[String(f.id)] = {
-          label: f.label || String(f.id),
-          reviewerMaxMarks: Math.max(0, Number(f.reviewer_max_marks) || 0),
-        };
-      }));
+      formSchema.sections.forEach((s: any) => {
+        const isTargetSection = !activeSectionId || String(s.id) === String(activeSectionId);
+        s.fields?.forEach((f: any) => {
+          if (isTargetSection) {
+            sectionFieldIds.add(String(f.id));
+          }
+          fieldMap[String(f.id)] = {
+            label: f.label || String(f.id),
+            reviewerMaxMarks: Math.max(0, Number(f.reviewer_max_marks) || 0),
+          };
+        });
+      });
     }
+
+    const processItem = (fieldId: string, value: any) => {
+      if (activeSectionId && !sectionFieldIds.has(String(fieldId))) return null;
+      const cfg = fieldMap[fieldId];
+      return {
+        fieldId,
+        label: cfg?.label || fieldId,
+        value,
+        reviewerMaxMarks: cfg?.reviewerMaxMarks || 0,
+      };
+    };
 
     if (Array.isArray(raw)) {
       return raw.map((r: any, idx: number) => {
         const fieldId = String(r?.fieldId || `question_${idx + 1}`);
-        const cfg = fieldMap[fieldId];
-        return {
-          fieldId,
-          label: cfg?.label || fieldId,
-          value: r?.value,
-          reviewerMaxMarks: cfg?.reviewerMaxMarks || 0,
-        };
-      });
+        return processItem(fieldId, r?.value);
+      }).filter(Boolean) as any[];
     }
 
     return Object.entries(raw || {}).map(([key, value]) => {
-      const cfg = fieldMap[String(key)];
-      return {
-        fieldId: String(key),
-        label: cfg?.label || String(key),
-        value,
-        reviewerMaxMarks: cfg?.reviewerMaxMarks || 0,
-      };
-    });
+      return processItem(String(key), value);
+    }).filter(Boolean) as any[];
   })();
 
   // Auto-sync overall score with question scores when in question mode
@@ -1578,11 +1591,26 @@ export default function ReviewSystem({ user }: { user: User }) {
     const subs = shortlistData?.submissions || [];
     const formLevels = shortlistData?.levels || [];
     const currentStageNumber = activeFilterLevel > 1 ? activeFilterLevel - 1 : null;
+
+    // Enhance submissions with pre-calculated average score for the current stage to enable sorting
+    const enhancedSubs = useMemo(() => {
+      return subs.map((s: any) => {
+        const stageReviews = currentStageNumber ? (s.level_reviews || []).filter((rv: any) => rv.level === currentStageNumber) : [];
+        let avg = 0;
+        if (stageReviews.length > 0) {
+          const sum = stageReviews.reduce((acc: number, rv: any) => acc + (Number(rv.overall_score) || 0), 0);
+          avg = sum / stageReviews.length;
+        }
+        return { ...s, avg_rev_score: avg };
+      });
+    }, [subs, currentStageNumber]);
+
     const stageDefaultSubmissions = currentStageNumber
-      ? subs.filter((s: any) => (s.level_reviews || []).some((r: any) => r.level === currentStageNumber))
-      : subs;
+      ? enhancedSubs.filter((s: any) => (s.level_reviews || []).some((r: any) => r.level === currentStageNumber))
+      : enhancedSubs;
+
     const actionCandidates = filteredResults !== null
-      ? filteredResults
+      ? enhancedSubs.filter((s: any) => filteredResults.some((fr: any) => fr.id === s.id))
       : (activeFilterLevel > 1 ? stageDefaultSubmissions : null);
     const getLevelReviews = (levelNumber: number) =>
       subs.flatMap((s: any) => (s.level_reviews || []).filter((r: any) => r.level === levelNumber));
@@ -1652,31 +1680,34 @@ export default function ReviewSystem({ user }: { user: User }) {
           if (stageReviews.length === 0) return <span className="text-slate-400 text-xs">—</span>;
           return (
             <div className="flex flex-wrap gap-1">
-              {stageReviews.map((rv: any, idx: number) => (
-                <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100">
-                  {rv.overall_score || 0}
-                </span>
-              ))}
+              {stageReviews.map((rv: any, idx: number) => {
+                const isRejected = rv.recommendation === 'reject';
+                const isPromoted = rv.recommendation === 'next_level';
+                
+                let colorClass = 'bg-blue-50 text-blue-700 border-blue-100'; // Default
+                if (isRejected) colorClass = 'bg-red-50 text-red-700 border-red-100';
+                if (isPromoted) colorClass = 'bg-emerald-50 text-emerald-700 border-emerald-100';
+
+                return (
+                  <span key={idx} className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border ${colorClass}`}>
+                    {rv.overall_score || 0}
+                  </span>
+                );
+              })}
             </div>
           );
         }
       },
       {
-        key: 'rev_grade',
-        label: 'Grade',
+        key: 'avg_rev_score',
+        label: 'Avg Marks',
+        sortable: true,
         render: (_v: any, r: any) => {
           const stageReviews = currentStageNumber ? (r.level_reviews || []).filter((rv: any) => rv.level === currentStageNumber) : [];
-          const grades = stageReviews.map((rv: any) => rv.grade).filter(Boolean);
-          if (grades.length === 0) return <span className="text-slate-400 text-xs">—</span>;
-          return (
-            <div className="flex flex-wrap gap-1">
-              {grades.map((g: any, idx: number) => (
-                <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-100">
-                  {g}
-                </span>
-              ))}
-            </div>
-          );
+          if (stageReviews.length === 0) return <span className="text-slate-400 text-xs">—</span>;
+          const sum = stageReviews.reduce((acc: number, rv: any) => acc + (Number(rv.overall_score) || 0), 0);
+          const avg = sum / stageReviews.length;
+          return <span className="font-bold text-sm text-slate-700">{avg.toFixed(2)}</span>;
         }
       },
       {
@@ -2130,7 +2161,10 @@ export default function ReviewSystem({ user }: { user: User }) {
                   </div>
                 ) : null}
                 columns={subColumns}
-                data={filteredResults !== null ? filteredResults : stageDefaultSubmissions}
+                data={filteredResults !== null 
+                  ? enhancedSubs.filter((s: any) => filteredResults.some((fr: any) => fr.id === s.id)) 
+                  : stageDefaultSubmissions
+                }
                 searchPlaceholder="Search by name, email..."
                 onRowClick={(row: any) => openProfile(row.id)}
                 filters={null}
@@ -2378,24 +2412,42 @@ export default function ReviewSystem({ user }: { user: User }) {
                             {lvl.total_reviewers > 0 ? (
                               <div className="space-y-2">
                                 {lvl.scores.map((s: any, i: number) => (
-                                  <div key={i} className="flex items-center gap-3 p-2 bg-slate-100 rounded-lg border border-slate-200">
-                                    <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold" title={lvl.blind_review ? `Reviewer ${i + 1}` : s.reviewer_name}>
-                                      {lvl.blind_review ? `R${i + 1}` : (s.reviewer_name?.[0] || 'R')}
-                                    </div>
-                                    <div className="flex-1">
+                                  <div key={i} className="flex flex-col gap-2 p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
+                                    <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-2">
-                                        <span className="text-sm font-bold">{s.overall_score}</span>
-                                        {!lvl.blind_review && s.reviewer_name && <span className="text-[10px] text-slate-400 font-medium">by {s.reviewer_name}</span>}
-                                        {s.grade && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white border border-slate-200 font-bold">{s.grade}</span>}
-                                        {s.recommendation && <span className="text-[10px] text-slate-500 capitalize">{s.recommendation?.replace('_', ' ')}</span>}
+                                        <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold" title={lvl.blind_review ? `Reviewer ${i + 1}` : s.reviewer_name}>
+                                          {lvl.blind_review ? `R${i + 1}` : (s.reviewer_name?.[0] || 'R')}
+                                        </div>
+                                        <div className="flex flex-col">
+                                          <span className="text-xs font-bold text-slate-800">
+                                            {lvl.blind_review ? `Reviewer ${i + 1}` : (s.reviewer_name || 'Reviewer')}
+                                            {!lvl.blind_review && user?.role === 'admin' && s.reviewer_email && (
+                                              <span className="ml-1.5 text-[10px] text-slate-500 font-medium">({s.reviewer_email})</span>
+                                            )}
+                                          </span>
+                                          <span className="text-[9px] text-slate-400">{new Date(s.created_at).toLocaleDateString()}</span>
+                                        </div>
                                       </div>
-                                      {s.comments && <p className="text-xs text-slate-500 mt-0.5">{s.comments}</p>}
+                                      <div className="text-right">
+                                        <span className="text-sm font-black text-primary">{s.overall_score} <span className="text-[9px] text-slate-400">pts</span></span>
+                                        {s.recommendation && (
+                                          <div className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-md mt-0.5 ${
+                                            s.recommendation === 'reject' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'
+                                          }`}>
+                                            {s.recommendation.replace('_', ' ')}
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
-                                    <span className="text-[9px] text-slate-500">{new Date(s.created_at).toLocaleDateString()}</span>
+                                    {s.comments && (
+                                      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                        <p className="text-xs text-slate-500 italic leading-relaxed">"{s.comments}"</p>
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>
-                            ) : <p className="text-xs text-slate-500">Not yet reviewed at this level</p>}
+                            ) : <p className="text-xs text-slate-500 italic py-2">Not yet reviewed at this level</p>}
                           </div>
                         ))}
                       </div>
@@ -2937,24 +2989,61 @@ export default function ReviewSystem({ user }: { user: User }) {
       <Modal open={showReviewModal} onClose={() => setShowReviewModal(false)} title={`Review Submission #${selectedReview?.submission_id || ''}`} size="xl">
         {selectedReview && (
           <div className="space-y-6">
-            {/* Previous Reviews History for Reviewer */}
+            {/* Detailed Previous Reviews History for Reviewer */}
             {selectedReview.show_previous_reviews && reviewHistory.length > 0 && (
-              <div className="space-y-3">
-                <h4 className="text-sm font-bold flex items-center gap-2 px-1 text-amber-600">
-                  <History size={16} /> {selectedReview.show_previous_reviews ? 'Review History (Multiple Reviewers)' : 'Previous Level Reviews'}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <h4 className="text-sm font-bold flex items-center gap-2 text-amber-600">
+                    <History size={16} /> 
+                    <span>Previous Reviewer Feedback</span>
+                  </h4>
+                  <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-50 px-2 py-1 rounded-md border border-amber-100">
+                    {reviewHistory.length} {reviewHistory.length === 1 ? 'Review' : 'Reviews'} Found
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {reviewHistory.map((prev, pIdx) => (
-                    <div key={pIdx} className="bg-amber-50/50 border border-amber-100 rounded-xl p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase">Level {prev.level}</span>
-                        <span className="text-[10px] text-slate-400 font-medium">{new Date(prev.updatedAt || prev.createdAt).toLocaleDateString()}</span>
+                    <div key={pIdx} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all border-l-4 border-l-amber-400">
+                      <div className="p-4 space-y-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 border border-slate-200">
+                              {(prev.reviewer_name || 'R')[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-800">
+                                {prev.reviewer_name || 'Reviewer'}
+                                {user?.role === 'admin' && prev.reviewer_email && (
+                                  <span className="ml-1.5 text-[10px] text-slate-500 font-medium">({prev.reviewer_email})</span>
+                                )}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase">L{prev.level}</span>
+                                <span className="text-[10px] text-slate-400 font-medium">{new Date(prev.updatedAt || prev.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-black text-primary leading-none">{prev.overall_score}<span className="text-[10px] text-slate-400 ml-0.5">PTS</span></p>
+                            {prev.recommendation && (
+                              <span className={`text-[8px] font-bold uppercase tracking-tighter px-1.5 py-0.5 rounded-md mt-1.5 inline-block ${
+                                prev.recommendation === 'reject' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                              }`}>
+                                {prev.recommendation.replace('_', ' ')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {prev.comments ? (
+                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                            <p className="text-xs text-slate-600 leading-relaxed italic">"{prev.comments}"</p>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-400 italic px-1">No feedback comments provided.</p>
+                        )}
                       </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-slate-700">{prev.reviewer_name || 'Reviewer'}</p>
-                        <p className="text-sm font-black text-primary">{prev.overall_score}<span className="text-[10px] text-slate-400 ml-0.5">pts</span></p>
-                      </div>
-                      {prev.comments && <p className="text-xs text-slate-500 italic line-clamp-2">"{prev.comments}"</p>}
                     </div>
                   ))}
                 </div>
@@ -2964,7 +3053,15 @@ export default function ReviewSystem({ user }: { user: User }) {
             {selectedSub && reviewQuestions.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-bold flex items-center gap-2"><FileText size={16} className="text-primary" /> Form Responses</h4>
+                  <h4 className="text-sm font-bold flex items-center gap-2">
+                    <FileText size={16} className="text-primary" /> 
+                    {(() => {
+                      const rawSchema = selectedSub?.formId?.form_schema;
+                      const schema = typeof rawSchema === 'string' ? JSON.parse(rawSchema) : rawSchema;
+                      const section = selectedReview?.section_id && schema?.sections?.find((s: any) => String(s.id) === String(selectedReview.section_id));
+                      return section ? section.title : "Form Responses";
+                    })()}
+                  </h4>
                   {selectedReview.scoring_type === 'question_level' && (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 uppercase">Question Level Marking Enabled</span>
                   )}
@@ -3028,7 +3125,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                             {selectedReview.show_previous_reviews && (
                               <div className="space-y-2">
                                 <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block px-1">Previous Level Scores</label>
-                                <div className="bg-amber-50/50 rounded-xl border border-amber-100 p-2.5 min-h-[68px]">
+                                <div className="bg-amber-50/50 rounded-xl border border-amber-100 p-2.5 min-h-[68px] flex flex-col gap-2">
                                   {reviewHistory.length > 0 ? (
                                     (() => {
                                       const scoresToShow = reviewHistory.map((prev, pIdx) => {
@@ -3084,9 +3181,17 @@ export default function ReviewSystem({ user }: { user: User }) {
                                         setQuestionScores(newScores);
                                         return;
                                       }
+                                      
+                                      // Only allow numbers
+                                      if (!/^\d*\.?\d*$/.test(raw)) return;
+                                      
                                       const rawVal = parseFloat(raw);
-                                      const normalizedVal = Number.isFinite(rawVal) ? Math.max(0, rawVal) : 0;
-                                      const cappedVal = q.reviewerMaxMarks > 0 ? Math.min(normalizedVal, q.reviewerMaxMarks) : normalizedVal;
+                                      if (isNaN(rawVal)) return;
+
+                                      // Hard validation: 0 to max_marks (or 100 if no max_marks)
+                                      const maxLimit = q.reviewerMaxMarks > 0 ? q.reviewerMaxMarks : 100;
+                                      const cappedVal = Math.min(maxLimit, Math.max(0, rawVal));
+                                      
                                       const newScores = { ...questionScores, [q.fieldId]: cappedVal };
                                       setQuestionScores(newScores);
                                     }}
@@ -3129,8 +3234,16 @@ export default function ReviewSystem({ user }: { user: User }) {
                         setOverallScore('');
                         return;
                       }
-                      const val = parseInt(raw) || 0;
-                      setOverallScore(Math.min(100, Math.max(0, val)));
+                      
+                      // Only allow numbers
+                      if (!/^\d*\.?\d*$/.test(raw)) return;
+                      
+                      const rawVal = parseFloat(raw);
+                      if (isNaN(rawVal)) return;
+
+                      // Clamp between 0 and 100
+                      const val = Math.min(100, Math.max(0, rawVal));
+                      setOverallScore(val);
                     }}
                     placeholder="Enter total score"
                     readOnly={selectedReview.scoring_type === 'question_level'}
@@ -3271,29 +3384,56 @@ export default function ReviewSystem({ user }: { user: User }) {
                       <Star size={16} className="text-amber-500" />
                       Review History
                     </h4>
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                       {profileData.levels.map((lvl: any) => (
-                        <div key={lvl.level_id} className="p-4 rounded-2xl border border-slate-200 bg-white">
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="text-sm font-bold text-slate-800">L{lvl.level_number}: {lvl.level_name}</span>
-                            {lvl.average_score != null && (
-                              <div className="flex flex-col items-end">
-                                <span className="text-lg font-bold text-primary">{lvl.average_score}</span>
-                                <span className="text-[10px] text-slate-400 font-bold uppercase">Avg Score</span>
-                              </div>
-                            )}
+                        <div key={lvl.level_id} className="relative pl-8 before:absolute before:left-3 before:top-5 before:bottom-0 before:w-0.5 before:bg-slate-100 last:before:hidden">
+                          {/* Level indicator dot */}
+                          <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-primary/10 border-2 border-primary flex items-center justify-center z-10">
+                            <span className="text-[10px] font-bold text-primary">{lvl.level_number}</span>
                           </div>
-                          <div className="space-y-2">
-                            {(lvl.scores || []).map((s: any, i: number) => (
-                              <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-slate-600">Score: {s.overall_score}</span>
-                                  {s.grade && <span className="text-[10px] font-bold bg-white border border-slate-200 px-2 py-0.5 rounded-full text-primary uppercase">{s.grade}</span>}
+                          
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h5 className="text-sm font-bold text-slate-800">{lvl.level_name}</h5>
+                              {lvl.average_score != null && (
+                                <div className="text-right">
+                                  <span className="text-sm font-black text-primary">{lvl.average_score}</span>
+                                  <span className="text-[9px] text-slate-400 font-bold uppercase ml-1">Avg</span>
                                 </div>
-                                {s.comments && <p className="text-xs text-slate-500 italic">"{s.comments}"</p>}
-                              </div>
-                            ))}
-                            {lvl.total_reviewers === 0 && <p className="text-xs text-slate-400 text-center py-2 bg-slate-50 rounded-xl border border-dashed border-slate-200">Not reviewed yet at this level</p>}
+                              )}
+                            </div>
+                            
+                            <div className="grid grid-cols-1 gap-2">
+                              {(lvl.scores || []).map((s: any, i: number) => (
+                                <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100 shadow-sm">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[9px] font-bold text-slate-400 border border-slate-200">
+                                        {(s.reviewer_name || 'R')[0].toUpperCase()}
+                                      </div>
+                                      <span className="text-xs font-bold text-slate-600">{s.reviewer_name || 'Reviewer'}</span>
+                                    </div>
+                                    <span className="text-sm font-black text-primary">{s.overall_score} <span className="text-[9px] text-slate-400">pts</span></span>
+                                  </div>
+                                  {s.comments && (
+                                    <p className="text-xs text-slate-500 italic bg-white/50 p-2 rounded-lg border border-slate-100">"{s.comments}"</p>
+                                  )}
+                                  <div className="flex items-center justify-between mt-2">
+                                    <span className="text-[9px] text-slate-400">{new Date(s.created_at).toLocaleDateString()}</span>
+                                    {s.recommendation && (
+                                      <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-md ${
+                                        s.recommendation === 'reject' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'
+                                      }`}>
+                                        {s.recommendation.replace('_', ' ')}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                              {lvl.total_reviewers === 0 && (
+                                <p className="text-xs text-slate-400 italic py-3 bg-slate-50/50 rounded-xl border border-dashed border-slate-200 text-center">No reviews at this level</p>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}

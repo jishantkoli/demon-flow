@@ -1204,7 +1204,6 @@ export default function Submissions({ user }: { user: User }) {
           return (
             <div className="flex flex-col">
               <span className="font-bold text-sm text-primary">{score.toFixed(2)}%</span>
-              {row.my_review.grade && <span className="text-[10px] text-muted font-bold uppercase">Grade: {row.my_review.grade}</span>}
             </div>
           );
         }
