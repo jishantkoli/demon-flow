@@ -52,9 +52,11 @@ export default function Reviews({ user }: { user: User }) {
     if (!selected) return;
     if (!recommendation) return alert('Please select a recommendation');
 
+    const submissionStatus = recommendation === 'reject' ? 'rejected' : 'under_review';
     const reviewStatus = 'completed';
 
     await api.put('/reviews', { id: selected.id, status: reviewStatus, comments: reviewComment });
+    await api.put('/submissions', { id: selected.submission_id, status: submissionStatus });
     await api.post('/review-scores', {
       review_id: selected.id, submission_id: selected.submission_id, reviewer_id: user.id,
       level_id: selected.level, overall_score: overallScore, comments: reviewComment,
@@ -200,7 +202,7 @@ export default function Reviews({ user }: { user: User }) {
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none focus:border-primary" /></div>
                   <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Recommendation</label>
                     <select value={recommendation} onChange={e => setRecommendation(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none">
-                      <option value="">Select</option><option value="reject">Reject</option><option value="next_level">Promote to Next Level</option><option value="revise">Request Revision</option></select></div>
+                      <option value="">Select</option><option value="reject">Reject</option><option value="next_level">Approve</option><option value="revise">Request Revision</option></select></div>
                 </div>
                 <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Review Comments</label>
                   <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm outline-none h-24 resize-none" placeholder="Add detailed review comments..." /></div>

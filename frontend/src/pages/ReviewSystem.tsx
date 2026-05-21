@@ -60,6 +60,7 @@ export default function ReviewSystem({ user }: { user: User }) {
   const [selectedLevelColumn, setSelectedLevelColumn] = useState<string>('all');
   const [selectedLevels, setSelectedLevels] = useState<number[]>([]);
   const [showLevelDropdown, setShowLevelDropdown] = useState(false);
+  const [includeMixedDecisions, setIncludeMixedDecisions] = useState(false);
 
   useEffect(() => {
     // Default to current stage level whenever stage changes.
@@ -435,6 +436,102 @@ export default function ReviewSystem({ user }: { user: User }) {
   const isFinalizedReview = (status: any) =>
     ['approved', 'rejected', 'completed'].includes(String(status));
 
+  // ═══════════ DATA PREPARATION & HOOKS ═══════════
+  const subs = shortlistData?.submissions || [];
+  const formLevels = shortlistData?.levels || [];
+  const currentStageNumber = activeFilterLevel > 1 ? activeFilterLevel - 1 : null;
+
+  // Enhance submissions with pre-calculated average score for the current stage to enable sorting
+  const enhancedSubs = useMemo(() => {
+    return subs.map((s: any) => {
+      const stageReviews = currentStageNumber ? (s.level_reviews || []).filter((rv: any) => rv.level === currentStageNumber) : [];
+      let avg = 0;
+      if (stageReviews.length > 0) {
+        const sum = stageReviews.reduce((acc: number, rv: any) => acc + (Number(rv.overall_score) || 0), 0);
+        avg = sum / stageReviews.length;
+      }
+      return { ...s, avg_rev_score: avg };
+    });
+  }, [subs, currentStageNumber]);
+
+  const stageDefaultSubmissions = currentStageNumber
+    ? enhancedSubs.filter((s: any) => (s.level_reviews || []).some((r: any) => r.level === currentStageNumber))
+    : enhancedSubs;
+
+  const promotableCandidates = useMemo(() => {
+    // If we are at Total Pool (Level 1), we use filtered results or all subs
+    if (activeFilterLevel === 1) return filteredResults !== null 
+      ? enhancedSubs.filter((s: any) => filteredResults.some((fr: any) => fr.id === s.id))
+      : enhancedSubs;
+    
+    const currentStage = activeFilterLevel - 1;
+    return enhancedSubs.filter((s: any) => {
+      const stageReviews = (s.level_reviews || []).filter((rv: any) => rv.level === currentStage);
+      const finalized = stageReviews.filter((rv: any) => isFinalizedReview(rv.status));
+      
+      if (finalized.length === 0) return false;
+
+      const allApproved = finalized.length > 0 && finalized.every(rv => rv.recommendation === 'next_level');
+      const isMixed = finalized.some(rv => rv.recommendation === 'next_level') && finalized.some(rv => rv.recommendation === 'reject');
+
+      if (allApproved) return true;
+      if (includeMixedDecisions && isMixed) return true;
+      return false;
+    });
+  }, [enhancedSubs, filteredResults, activeFilterLevel, includeMixedDecisions, currentStageNumber]);
+
+  const getLevelReviews = (levelNumber: number) =>
+    subs.flatMap((s: any) => (s.level_reviews || []).filter((r: any) => r.level === levelNumber));
+
+  const getReviewerKey = (review: any) => {
+    const reviewer = review?.reviewer_id;
+    if (reviewer && typeof reviewer === 'object') return String(reviewer._id || reviewer.id || '');
+    return String(reviewer || '');
+  };
+
+  const isSubmissionPendingAtLevel = (submission: any, levelNumber: number) => {
+    const reviewsAtLevel = (submission?.level_reviews || []).filter((r: any) => r.level === levelNumber);
+    if (reviewsAtLevel.length === 0) return false;
+
+    // Reviewer-wise completion: if a reviewer has any finalized row, that reviewer is considered done.
+    const reviewerState = new Map<string, { done: boolean }>();
+    for (const review of reviewsAtLevel) {
+      const key = getReviewerKey(review) || `review-${review?.id || Math.random()}`;
+      const prev = reviewerState.get(key) || { done: false };
+      reviewerState.set(key, { done: prev.done || isFinalizedReview(review?.status) });
+    }
+
+    return Array.from(reviewerState.values()).some((state) => !state.done);
+  };
+
+  const isLevelFullyReviewed = (levelNumber: number) => {
+    const reviewsAtLevel = getLevelReviews(levelNumber);
+    if (reviewsAtLevel.length === 0) return false;
+    return !subs.some((s: any) => isSubmissionPendingAtLevel(s, levelNumber));
+  };
+
+  const isCurrentStageAssigned = formLevels.some((l: any) => {
+    if (l.level_number !== activeFilterLevel) return false;
+    const atLevel = subs.filter((s: any) => s.highest_level >= l.level_number).length;
+    return atLevel > 0;
+  });
+
+  const sourceLevelNumberForNext = activeFilterLevel > 1 ? activeFilterLevel - 1 : null;
+  const sourceLevelReviewsForNext = sourceLevelNumberForNext ? getLevelReviews(sourceLevelNumberForNext) : [];
+  const sourceLevelHasAnyReviewsForNext = sourceLevelReviewsForNext.length > 0;
+  const sourceLevelPendingFormsForNext = sourceLevelNumberForNext
+    ? subs.filter((s: any) => isSubmissionPendingAtLevel(s, sourceLevelNumberForNext)).length
+    : 0;
+  const isNextShortlistBlocked = activeFilterLevel > 1 && (!sourceLevelHasAnyReviewsForNext || sourceLevelPendingFormsForNext > 0);
+
+  const selectableLevels = !currentStageNumber
+    ? formLevels
+    : formLevels.filter((l: any) => l.level_number <= currentStageNumber);
+
+  const visibleLevelColumns = selectedLevels.length === 0
+    ? selectableLevels
+    : selectableLevels.filter((l: any) => selectedLevels.includes(l.level_number));
+
   useEffect(() => {
     applyFilters();
   }, [levelFilter, shortlistFilter, fieldFilters]);
@@ -449,7 +546,11 @@ export default function ReviewSystem({ user }: { user: User }) {
   const applyFilters = () => {
     if (!shortlistData?.submissions) return;
     setIsFiltering(true);
-    let results = [...shortlistData.submissions];
+    
+    const currentStageNumber = activeFilterLevel > 1 ? activeFilterLevel - 1 : null;
+    let results = currentStageNumber 
+      ? shortlistData.submissions.filter((s: any) => (s.level_reviews || []).some((r: any) => r.level === currentStageNumber))
+      : [...shortlistData.submissions];
 
     // Filter by Score
     if (shortlistFilter.filter_type === 'form_score_gte') {
@@ -548,7 +649,7 @@ export default function ReviewSystem({ user }: { user: User }) {
   const createShortlist = async () => {
     if (!selectedFormId || levelForm.reviewer_ids.length === 0) return alert('Select reviewers');
     // Find or create the level
-    let levelId = levels.find((l: any) => l.level_number === levelForm.level_number)?.id;
+    let levelId = levels.find((l: any) => Number(l.level_number) === Number(levelForm.level_number))?.id;
     if (!levelId) {
       const newLevel = await api.post('/review-levels', {
         form_id: selectedFormId,
@@ -568,14 +669,14 @@ export default function ReviewSystem({ user }: { user: User }) {
     // or use the filter criteria. For now, let's stick to criteria but ensure they match what's on screen.
     const cleanedFieldFilters = fieldFilters.filter(f => f.field_id && String(f.field_value).trim() !== '');
 
-    // NEW: If we have filteredResults, we can pass specific submission IDs
-    const submissionIds = filteredResults ? filteredResults.map(s => s.id) : null;
+    // Use promotableCandidates (which respects includeMixedDecisions)
+    const submissionIds = promotableCandidates.map(s => s.id);
 
     const result = await api.post('/shortlist', {
       action: 'create-shortlist',
       form_id: selectedFormId,
       level_id: levelId,
-      submission_ids: submissionIds, // Backend should handle this
+      submission_ids: submissionIds, // Backend handles this
       filter_type: shortlistFilter.filter_type,
       filter_value: shortlistFilter.filter_value,
       field_id: shortlistFilter.field_id,
@@ -641,10 +742,12 @@ export default function ReviewSystem({ user }: { user: User }) {
     }
 
     // Decision logic: Reviewer can only Reject or move to Next Level
+    const submissionStatus = recommendation === 'reject' ? 'rejected' : 'under_review';
     const reviewStatus = 'completed'; // Review itself is done
 
     await api.put('/reviews', { id: selectedReview.id, status: reviewStatus, comments: reviewComment });
-    
+    await api.put('/submissions', { id: selectedReview.submission_id, status: submissionStatus });
+
     // Find the level for this review
     const levelId = levels.find((l: any) => l.level_number === selectedReview.level)?.id;
     const qsArray = buildQuestionScoresPayload();
@@ -1586,76 +1689,6 @@ export default function ReviewSystem({ user }: { user: User }) {
 
   // ═══════════ ADMIN VIEW ═══════════
   if (user.role === 'admin') {
-    const subs = shortlistData?.submissions || [];
-    const formLevels = shortlistData?.levels || [];
-    const currentStageNumber = activeFilterLevel > 1 ? activeFilterLevel - 1 : null;
-
-    // Enhance submissions with pre-calculated average score for the current stage to enable sorting
-    const enhancedSubs = useMemo(() => {
-      return subs.map((s: any) => {
-        const stageReviews = currentStageNumber ? (s.level_reviews || []).filter((rv: any) => rv.level === currentStageNumber) : [];
-        let avg = 0;
-        if (stageReviews.length > 0) {
-          const sum = stageReviews.reduce((acc: number, rv: any) => acc + (Number(rv.overall_score) || 0), 0);
-          avg = sum / stageReviews.length;
-        }
-        return { ...s, avg_rev_score: avg };
-      });
-    }, [subs, currentStageNumber]);
-
-    const stageDefaultSubmissions = currentStageNumber
-      ? enhancedSubs.filter((s: any) => (s.level_reviews || []).some((r: any) => r.level === currentStageNumber))
-      : enhancedSubs;
-
-    const actionCandidates = filteredResults !== null
-      ? enhancedSubs.filter((s: any) => filteredResults.some((fr: any) => fr.id === s.id))
-      : (activeFilterLevel > 1 ? stageDefaultSubmissions : null);
-    const getLevelReviews = (levelNumber: number) =>
-      subs.flatMap((s: any) => (s.level_reviews || []).filter((r: any) => r.level === levelNumber));
-    const getReviewerKey = (review: any) => {
-      const reviewer = review?.reviewer_id;
-      if (reviewer && typeof reviewer === 'object') return String(reviewer._id || reviewer.id || '');
-      return String(reviewer || '');
-    };
-    const isSubmissionPendingAtLevel = (submission: any, levelNumber: number) => {
-      const reviewsAtLevel = (submission?.level_reviews || []).filter((r: any) => r.level === levelNumber);
-      if (reviewsAtLevel.length === 0) return false;
-
-      // Reviewer-wise completion: if a reviewer has any finalized row, that reviewer is considered done.
-      const reviewerState = new Map<string, { done: boolean }>();
-      for (const review of reviewsAtLevel) {
-        const key = getReviewerKey(review) || `review-${review?.id || Math.random()}`;
-        const prev = reviewerState.get(key) || { done: false };
-        reviewerState.set(key, { done: prev.done || isFinalizedReview(review?.status) });
-      }
-
-      return Array.from(reviewerState.values()).some((state) => !state.done);
-    };
-    const isLevelFullyReviewed = (levelNumber: number) => {
-      const reviewsAtLevel = getLevelReviews(levelNumber);
-      if (reviewsAtLevel.length === 0) return false;
-      return !subs.some((s: any) => isSubmissionPendingAtLevel(s, levelNumber));
-    };
-    const isCurrentStageAssigned = formLevels.some((l: any) => {
-      if (l.level_number !== activeFilterLevel) return false;
-      const atLevel = subs.filter((s: any) => s.highest_level >= l.level_number).length;
-      return atLevel > 0;
-    });
-    const sourceLevelNumberForNext = activeFilterLevel > 1 ? activeFilterLevel - 1 : null;
-    const sourceLevelReviewsForNext = sourceLevelNumberForNext ? getLevelReviews(sourceLevelNumberForNext) : [];
-    const sourceLevelHasAnyReviewsForNext = sourceLevelReviewsForNext.length > 0;
-    const sourceLevelPendingFormsForNext = sourceLevelNumberForNext
-      ? subs.filter((s: any) => isSubmissionPendingAtLevel(s, sourceLevelNumberForNext)).length
-      : 0;
-    const isNextShortlistBlocked = activeFilterLevel > 1 && (!sourceLevelHasAnyReviewsForNext || sourceLevelPendingFormsForNext > 0);
-    const selectableLevels = !currentStageNumber
-      ? formLevels
-      : formLevels.filter((l: any) => l.level_number <= currentStageNumber);
-
-    const visibleLevelColumns = selectedLevels.length === 0
-      ? selectableLevels
-      : selectableLevels.filter((l: any) => selectedLevels.includes(l.level_number));
-
     const subColumns = [
       {
         key: 'id', label: 'Reference ID', sortable: true, render: (_v: string, row: any) => {
@@ -1712,14 +1745,28 @@ export default function ReviewSystem({ user }: { user: User }) {
         key: 'status',
         label: 'Status',
         render: (v: string, r: any) => {
+          let displayStatus = v;
           if (currentStageNumber) {
             const stageReviews = (r.level_reviews || []).filter((rv: any) => rv.level === currentStageNumber);
-            const hasFinalizedStageReview = stageReviews.some((rv: any) => isFinalizedReview(rv.status));
-            if (!hasFinalizedStageReview) {
+            const finalized = stageReviews.filter((rv: any) => isFinalizedReview(rv.status));
+            
+            if (finalized.length === 0) {
               return <span className="text-slate-400 text-xs">—</span>;
             }
+
+            // If all finalized reviews in this stage are 'next_level', show as approved
+            // If all are rejected, show as rejected
+            // If it's a mix of approved and rejected, show as under review
+            const allApproved = finalized.length > 0 && finalized.every(rv => rv.recommendation === 'next_level');
+            const allRejected = finalized.length > 0 && finalized.every(rv => rv.recommendation === 'reject');
+            const isMixed = finalized.some(rv => rv.recommendation === 'next_level') && finalized.some(rv => rv.recommendation === 'reject');
+
+            if (allApproved) displayStatus = 'next_level';
+            else if (allRejected) displayStatus = 'rejected';
+            else if (isMixed) displayStatus = 'under_review';
+            else displayStatus = 'under_review'; // Default for other cases (like revise or partial completion)
           }
-          return <StatusBadge status={v} />;
+          return <StatusBadge status={displayStatus} />;
         }
       },
     ];
@@ -1819,7 +1866,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                             <select value={shortlistFilter.filter_type} onChange={e => setShortlistFilter(p => ({ ...p, filter_type: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium outline-none focus:border-primary">
                               <option value="all">View All Submissions</option>
                               <option value="form_score_gte">Score Based Filter</option>
-                              <option value="next_level_only">Next Level Recommendations</option>
+                              <option value="next_level_only">Approved Recommendations</option>
                             </select>
 
                             {(shortlistFilter.filter_type === 'form_score_gte' || shortlistFilter.filter_type === 'next_level_only') && (
@@ -1939,7 +1986,7 @@ export default function ReviewSystem({ user }: { user: User }) {
             {/* STEP 3: Pipeline & Action (Right Column) */}
             <div className="lg:col-span-2 space-y-6">
               {/* Shortlist Action Bar */}
-              {actionCandidates !== null && (
+              {promotableCandidates !== null && (
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
                   className={`rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden transition-all ${isCurrentStageAssigned ? 'bg-slate-800 shadow-slate-900/20' : 'bg-navy shadow-navy/20'}`}>
                   <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32" />
@@ -1961,8 +2008,8 @@ export default function ReviewSystem({ user }: { user: User }) {
                         {isCurrentStageAssigned
                           ? "This stage has already been finalized and assigned."
                           : activeFilterLevel === 1
-                            ? `${actionCandidates.length} teachers match your filters`
-                            : `${actionCandidates.length} recommended candidates ready for next stage`}
+                            ? `${promotableCandidates.length} teachers match your filters`
+                            : `${promotableCandidates.length} recommended candidates ready for next stage`}
                       </p>
                     </div>
                   </div>
@@ -2042,7 +2089,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                           onClick={() => {
                             setActiveFilterLevel(idx + 2);
                             setFilteredResults(null);
-                            setShortlistFilter(p => ({ ...p, filter_type: 'next_level_only', source_level_id: l.id }));
+                            setShortlistFilter(p => ({ ...p, filter_type: 'all', source_level_id: l.id }));
                           }}
                           className={`flex-shrink-0 p-4 rounded-2xl border-2 text-center min-w-[150px] shadow-md relative group transition-all snap-center ${isStageLocked ? 'bg-slate-50 border-slate-200 opacity-70 cursor-pointer' : isActive ? 'bg-white border-primary ring-2 ring-primary/10' : 'bg-white border-primary/20 hover:border-primary/50'}`}
                         >
@@ -2096,10 +2143,10 @@ export default function ReviewSystem({ user }: { user: User }) {
 
               {/* Submissions table */}
               <DataTable
-                title={filteredResults !== null ? "Filtered Teachers" : (currentStageNumber ? `Stage ${currentStageNumber} Submissions` : "All Submissions")}
-                subtitle={filteredResults !== null
-                  ? `${filteredResults.length} teachers selected for shortlisting`
-                  : (currentStageNumber ? `Showing teachers currently in Stage ${currentStageNumber}` : "Use the filters on the left to shortlist teachers for review")}
+                title={currentStageNumber ? `Stage ${currentStageNumber} Submissions` : "Total Pool Submissions"}
+                subtitle={currentStageNumber 
+                  ? `Showing ${filteredResults?.length || 0} teachers assigned to Stage ${currentStageNumber}`
+                  : `Total ${filteredResults?.length || 0} submissions in the pool`}
                 headerActions={selectableLevels.length > 0 ? (
                   <div className="flex items-center gap-2 relative">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Stages</span>
@@ -2182,7 +2229,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                 <UserCheck size={24} />
               </div>
               <div>
-                <p className="text-base font-bold text-emerald-900">{filteredResults ? filteredResults.length : subs.length} Teachers Selected</p>
+                <p className="text-base font-bold text-emerald-900">{promotableCandidates.length} Teachers Selected</p>
                 <p className="text-xs text-emerald-700">These teachers will be moved to <span className="font-bold">Level {levelForm.level_number}</span> for review.</p>
               </div>
             </div>
@@ -2257,6 +2304,20 @@ export default function ReviewSystem({ user }: { user: User }) {
                           </p>
                         </div>
                       </label>
+                      {activeFilterLevel > 1 && (
+                        <label className="flex items-center gap-3 p-3 rounded-xl border border-emerald-100 bg-emerald-50/30 cursor-pointer group sm:col-span-2">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded accent-emerald-500"
+                            checked={includeMixedDecisions}
+                            onChange={e => setIncludeMixedDecisions(e.target.checked)}
+                          />
+                          <div>
+                            <p className="text-xs font-bold text-emerald-900">Include 'Under Review' Candidates</p>
+                            <p className="text-[10px] text-emerald-700">Also move teachers with mixed (Approve + Reject) decisions</p>
+                          </div>
+                        </label>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2306,7 +2367,7 @@ export default function ReviewSystem({ user }: { user: User }) {
               </button>
               <button onClick={createShortlist} disabled={levelForm.reviewer_ids.length === 0 || !levelForm.name}
                 className="px-8 py-3 bg-navy text-white text-sm rounded-xl font-bold hover:bg-navy-light flex items-center gap-2 shadow-lg shadow-navy/20 disabled:opacity-50 disabled:shadow-none transition-all active:scale-95">
-                <Zap size={16} /> Assign {filteredResults?.length || subs.length} Teachers to Level {levelForm.level_number}
+                <Zap size={16} /> Assign {promotableCandidates.length} Teachers to Level {levelForm.level_number}
               </button>
             </div>
           </div>
@@ -2432,7 +2493,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                                           <div className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-md mt-0.5 ${
                                             s.recommendation === 'reject' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'
                                           }`}>
-                                            {s.recommendation.replace('_', ' ')}
+                                            {s.recommendation === 'next_level' ? 'approved' : s.recommendation.replace('_', ' ')}
                                           </div>
                                         )}
                                       </div>
@@ -3260,7 +3321,7 @@ export default function ReviewSystem({ user }: { user: User }) {
                 <select value={recommendation} onChange={e => setRecommendation(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-bold outline-none focus:border-primary focus:ring-2 focus:ring-primary/10">
                   <option value="">Choose action...</option>
                   <option value="reject">Reject Submission</option>
-                  <option value="next_level">Recommend for Next Level</option>
+                  <option value="next_level">Approve Submission</option>
                 </select>
               </div>
             </div>
