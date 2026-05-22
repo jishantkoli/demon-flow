@@ -132,33 +132,61 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
             <div className="mt-3 space-y-3 animate-in">
               {(f.type === 'text' || f.type === 'textarea' || f.type === 'email' || f.type === 'phone') && (
                 <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs"><span className="text-muted">Placeholder</span>
-                    <input className="input !py-1.5 mt-1" value={f.placeholder || ''} onChange={e => updateField(activeSection, f.id, { placeholder: e.target.value })} /></label>
-                  <label className="text-xs"><span className="text-muted">Max length</span>
-                    <input type="number" className="input !py-1.5 mt-1" value={f.maxLength || ''} onChange={e => updateField(activeSection, f.id, { maxLength: +e.target.value || undefined })} /></label>
+                  <label className="text-xs">
+                    <span className="text-muted">Placeholder</span>
+                    <input className="input !py-1.5 mt-1" value={f.placeholder || ''} onChange={e => updateField(activeSection, f.id, { placeholder: e.target.value })} />
+                  </label>
+                  <label className="text-xs">
+                    <span className="text-muted">Max length</span>
+                    <input type="number" className="input !py-1.5 mt-1" value={f.maxLength || ''} onChange={e => updateField(activeSection, f.id, { maxLength: +e.target.value || undefined })} />
+                  </label>
                 </div>
               )}
+
               {(f.type === 'dropdown' || f.type === 'radio' || f.type === 'checkbox' || f.type === 'mcq') && (
                 <div>
-                  <div className="text-xs text-muted mb-1">Options</div>
-                  <div className="space-y-1">
+                  <div className="text-xs text-muted mb-2 font-semibold">Options</div>
+                  <div className="space-y-2">
                     {f.options?.map((opt, oi) => (
-                      <div key={oi} className="flex items-center gap-2">
+                      <div key={oi} className="flex items-center gap-2 group/opt">
                         {f.type === 'mcq' && (
-                          <input type="radio" checked={f.correct === oi} onChange={() => updateField(activeSection, f.id, { correct: oi })} className="w-4 h-4" />
+                          <input 
+                            type="radio" 
+                            checked={f.correct === oi} 
+                            onChange={() => updateField(activeSection, f.id, { correct: oi })} 
+                            className="w-4 h-4 accent-primary" 
+                          />
                         )}
-                        <input className="input !py-1.5" value={opt}
-                          onChange={e => updateField(activeSection, f.id, { options: f.options!.map((x, j) => j === oi ? e.target.value : x) })} />
-                        <button onClick={() => updateField(activeSection, f.id, { options: f.options!.filter((_, j) => j !== oi) })} className="btn btn-danger !py-1 !px-2"><Trash2 size={14} /></button>
+                        <div className="flex-1 relative">
+                          <input 
+                            className="input !py-2 pr-10 w-full focus:ring-1 focus:ring-primary/20" 
+                            value={opt}
+                            onChange={e => updateField(activeSection, f.id, { options: f.options!.map((x, j) => j === oi ? e.target.value : x) })} 
+                            placeholder={`Option ${oi + 1}`}
+                          />
+                          <button 
+                            onClick={() => updateField(activeSection, f.id, { options: f.options!.filter((_, j) => j !== oi) })} 
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover/opt:opacity-100"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     ))}
-                    <button onClick={() => updateField(activeSection, f.id, { options: [...(f.options || []), `Option ${(f.options?.length || 0) + 1}`] })} className="text-xs text-blue hover:underline">+ add option</button>
+                    <button 
+                      onClick={() => updateField(activeSection, f.id, { options: [...(f.options || []), `Option ${(f.options?.length || 0) + 1}`] })} 
+                      className="flex items-center gap-2 text-xs font-bold text-primary hover:text-navy transition-colors px-1 py-1"
+                    >
+                      <PlusCircle size={14} /> Add option
+                    </button>
                   </div>
                 </div>
               )}
+
               {f.type === 'mcq' && (
                 <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs"><span className="text-muted">Marks</span>
+                  <label className="text-xs">
+                    <span className="text-muted">Marks</span>
                     <input 
                       type="number" 
                       className="input !py-1.5 mt-1" 
@@ -169,8 +197,10 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
                         if (raw === '') { updateField(activeSection, f.id, { marks: undefined }); }
                         else { const n = parseFloat(raw); updateField(activeSection, f.id, { marks: Number.isFinite(n) ? n : 1 }); }
                       }} 
-                    /></label>
-                  <label className="text-xs"><span className="text-muted">Negative</span>
+                    />
+                  </label>
+                  <label className="text-xs">
+                    <span className="text-muted">Negative</span>
                     <input 
                       type="number" 
                       step="0.25" 
@@ -183,41 +213,28 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
                         if (raw === '') { updateField(activeSection, f.id, { negative: undefined }); }
                         else { const n = parseFloat(raw); updateField(activeSection, f.id, { negative: Number.isFinite(n) ? n : 0 }); }
                       }} 
-                    /></label>
+                    />
+                  </label>
                 </div>
               )}
-              {f.type === 'radio' && (
+
+              {(f.type === 'radio' || f.type === 'mcq') && (
                 <div className="pt-2 border-t border-border/30 mt-2">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex flex-col">
                       <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Auto-Scoring (Quiz Mode)</span>
-                      <p className="text-[10px] text-muted">Enable to set a correct answer and marks</p>
+                      <p className="text-[10px] text-muted">{f.type === 'mcq' ? 'Field is currently in Quiz mode' : 'Enable to set a correct answer and marks'}</p>
                     </div>
                     <Toggle 
-                      checked={false} 
+                      checked={f.type === 'mcq'} 
                       onChange={v => {
-                        if (v) updateField(activeSection, f.id, { type: 'mcq' as FieldType, marks: 1, correct: 0 });
+                        updateField(activeSection, f.id, { type: v ? 'mcq' : 'radio', ...(v ? { marks: 1, correct: 0 } : {}) });
                       }} 
                     />
                   </div>
                 </div>
               )}
-              {f.type === 'mcq' && (
-                <div className="pt-2 border-t border-border/30 mt-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Auto-Scoring (Quiz Mode)</span>
-                      <p className="text-[10px] text-muted">Field is currently in Quiz mode</p>
-                    </div>
-                    <Toggle 
-                      checked={true} 
-                      onChange={v => {
-                        if (!v) updateField(activeSection, f.id, { type: 'radio' as FieldType });
-                      }} 
-                    />
-                  </div>
-                </div>
-              )}
+
               <div className="pt-2 border-t border-border/30 mt-2">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-primary">Enable Reviewer Grading</span>
@@ -251,26 +268,39 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
                   </motion.div>
                 )}
               </div>
+
               {f.type === 'file' && (
                 <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs"><span className="text-muted">Allowed types</span>
-                    <input className="input !py-1.5 mt-1" placeholder="pdf,jpg,png" value={f.fileTypes || ''} onChange={e => updateField(activeSection, f.id, { fileTypes: e.target.value })} /></label>
-                  <label className="text-xs"><span className="text-muted">Max size MB</span>
-                    <input type="number" className="input !py-1.5 mt-1" value={f.maxSizeMB || 5} onChange={e => updateField(activeSection, f.id, { maxSizeMB: +e.target.value })} /></label>
+                  <label className="text-xs">
+                    <span className="text-muted">Allowed types</span>
+                    <input className="input !py-1.5 mt-1" placeholder="pdf,jpg,png" value={f.fileTypes || ''} onChange={e => updateField(activeSection, f.id, { fileTypes: e.target.value })} />
+                  </label>
+                  <label className="text-xs">
+                    <span className="text-muted">Max size MB</span>
+                    <input type="number" className="input !py-1.5 mt-1" value={f.maxSizeMB || 5} onChange={e => updateField(activeSection, f.id, { maxSizeMB: +e.target.value })} />
+                  </label>
                 </div>
               )}
+
               {(form.form_type === 'branching' || form.form_type === 'multi' || true) && (
                 <BranchingEditor allFields={section.fields.filter(x => x.id !== f.id)} value={f.visibleIf}
                   onChange={v => updateField(activeSection, f.id, { visibleIf: v })} />
               )}
+
               <div className="flex items-center justify-between pt-2 border-t border-border/30">
                 <div className="flex items-center gap-2">
                   <Toggle checked={f.required || false} onChange={v => updateField(activeSection, f.id, { required: v })} label="Required" />
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => moveField(f.id, -1)} className="btn btn-ghost !p-1.5"><ChevronDown className="rotate-180" size={16} /></button>
-                  <button onClick={() => moveField(f.id, 1)} className="btn btn-ghost !p-1.5"><ChevronDown size={16} /></button>
-                  <button onClick={() => removeField(f.id)} className="btn btn-ghost !p-1.5 text-rose-500"><Trash2 size={16} /></button>
+                  <button onClick={() => moveField(f.id, -1)} className="btn btn-ghost !p-2 rounded-xl hover:bg-slate-100 transition-colors" title="Move Up">
+                    <ChevronDown className="rotate-180 text-slate-400" size={18} />
+                  </button>
+                  <button onClick={() => moveField(f.id, 1)} className="btn btn-ghost !p-2 rounded-xl hover:bg-slate-100 transition-colors" title="Move Down">
+                    <ChevronDown className="text-slate-400" size={18} />
+                  </button>
+                  <button onClick={() => removeField(f.id)} className="btn btn-ghost !p-2 rounded-xl text-rose-500 hover:bg-rose-50 transition-colors" title="Delete">
+                    <Trash2 size={18} />
+                  </button>
                 </div>
               </div>
             </div>

@@ -162,18 +162,18 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
 
       {/* ===== SIDEBAR — CISCE Deep Blue ===== */}
       <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-[260px] bg-gradient-to-b from-sidebar-light to-sidebar text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="p-6 flex flex-col items-center">
-          <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center p-3 mb-4 group-hover:scale-110 transition-transform border border-white/10 backdrop-blur-sm">
-            <img src="/logo-sidebar.png" alt="CISCE" className="w-full h-full object-contain" onError={(e) => {
+        <div className="p-4 flex items-center gap-3 border-b border-white/10 bg-white/[0.03]">
+          <div className="w-20 h-20 flex items-center justify-center overflow-hidden shrink-0">
+            <img src="/logo-sidebar.png" alt="Logo" className="w-20 h-20 object-contain" onError={(e) => {
               e.currentTarget.style.display = 'none';
               e.currentTarget.parentElement!.innerHTML = '<span class="text-white font-extrabold text-xs">CISCE</span>';
             }} />
           </div>
-          <div className="text-center">
-            <h1 className="text-white font-black text-sm tracking-widest uppercase">CISCE Portal</h1>
-            <p className="text-white/40 text-[9px] font-bold tracking-[0.2em] uppercase mt-1">Official System</p>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-heading font-bold text-[15px] leading-tight tracking-tight text-white">CISCE Portal</h1>
+            <p className="text-[9px] text-white/60 uppercase tracking-[0.15em]">Official System</p>
           </div>
-          <button className="lg:hidden absolute top-4 right-4 text-white/60 hover:text-white" onClick={() => setSidebarOpen(false)}><X size={20} /></button>
+          <button className="lg:hidden text-white/60 hover:text-white" onClick={() => setSidebarOpen(false)}><X size={20} /></button>
         </div>
 
         {schoolCode && (
