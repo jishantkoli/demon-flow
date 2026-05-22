@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Users, FileText, Inbox, CheckSquare, Clock, TrendingUp, 
   Activity, Award, UserPlus, Calendar, Target, AlertTriangle, Shield,
-  ChevronRight, ArrowUpRight, School, CheckCircle2, Settings
+  ChevronRight, ArrowUpRight, School, CheckCircle2, Settings, Terminal
 } from 'lucide-react';
 
 export default function Dashboard({ user }: { user: User }) {
@@ -17,6 +17,7 @@ export default function Dashboard({ user }: { user: User }) {
   const [recentSubs, setRecentSubs] = useState<any[]>([]);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'submissions' | 'logs'>('submissions');
 
   const fetchData = async () => {
     try {
@@ -136,10 +137,46 @@ export default function Dashboard({ user }: { user: User }) {
         {/* Stunning Glow-Effect Stats Grid */}
         <motion.div {...anim(0)} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
-            { label: "Total Platform Users", value: s.totalUsers || 0, icon: Users, color: "from-blue-500 to-indigo-600", text: "text-blue-500", glow: "rgba(59, 130, 246, 0.15)", cta: "Manage Users", path: "/users" },
-            { label: "Active Evaluation Forms", value: s.activeForms || 0, icon: FileText, color: "from-emerald-400 to-teal-600", text: "text-emerald-500", glow: "rgba(16, 185, 129, 0.15)", cta: "Configure Forms", path: "/forms" },
-            { label: "Submissions Received", value: s.totalSubmissions || 0, icon: Inbox, color: "from-violet-500 to-purple-700", text: "text-violet-500", glow: "rgba(139, 92, 246, 0.15)", cta: "Browse Records", path: "/submissions" },
-            { label: "Pending Evaluations", value: s.pendingReviews || 0, icon: CheckSquare, color: "from-amber-400 to-orange-500", text: "text-amber-500", glow: "rgba(245, 158, 11, 0.15)", cta: "Process Reviews", path: "/reviews" }
+            { 
+              label: "Platform Registry", 
+              value: s.totalUsers || 0, 
+              subtext: `${s.usersByRole?.teacher || 0} Teachers • ${s.usersByRole?.reviewer || 0} Reviewers`,
+              icon: Users, 
+              color: "from-blue-500 to-indigo-600", 
+              glow: "rgba(59, 130, 246, 0.15)", 
+              cta: "Manage Users", 
+              path: "/users" 
+            },
+            { 
+              label: "Evaluation Surveys", 
+              value: s.activeForms || 0, 
+              subtext: `${s.draftForms || 0} Drafts • ${s.expiredForms || 0} Expired`,
+              icon: FileText, 
+              color: "from-emerald-400 to-teal-600", 
+              glow: "rgba(16, 185, 129, 0.15)", 
+              cta: "Configure Forms", 
+              path: "/forms" 
+            },
+            { 
+              label: "Submissions Received", 
+              value: s.totalSubmissions || 0, 
+              subtext: `Success Index: ${s.totalSubmissions > 0 ? Math.round(((s.submissionsByStatus?.approved || 0) / s.totalSubmissions) * 100) : 0}%`,
+              icon: Inbox, 
+              color: "from-violet-500 to-purple-700", 
+              glow: "rgba(139, 92, 246, 0.15)", 
+              cta: "Browse Records", 
+              path: "/submissions" 
+            },
+            { 
+              label: "Pending Reviews", 
+              value: s.pendingReviews || 0, 
+              subtext: `${s.completedReviews || 0} Gradings Completed`,
+              icon: CheckSquare, 
+              color: "from-amber-400 to-orange-500", 
+              glow: "rgba(245, 158, 11, 0.15)", 
+              cta: "Process Reviews", 
+              path: "/reviews" 
+            }
           ].map((card, i) => (
             <div 
               key={card.label} 
@@ -147,7 +184,6 @@ export default function Dashboard({ user }: { user: User }) {
               style={{ boxShadow: `0 20px 40px -15px ${card.glow}` }}
               className="bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm hover:border-slate-300 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group relative overflow-hidden"
             >
-              {/* Internal abstract decoration */}
               <div className="absolute right-0 bottom-0 w-24 h-24 bg-slate-50 rounded-full blur-xl group-hover:bg-slate-100 transition-colors pointer-events-none" />
               
               <div className="flex justify-between items-start mb-6">
@@ -165,6 +201,10 @@ export default function Dashboard({ user }: { user: User }) {
                 <div className="text-3xl font-black text-slate-900 tracking-tight mt-1.5">
                   {typeof card.value === 'number' ? card.value.toLocaleString() : card.value}
                 </div>
+                <div className="text-[10px] font-bold text-slate-400 mt-2 flex items-center gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-slate-300" />
+                  {card.subtext}
+                </div>
               </div>
             </div>
           ))}
@@ -173,7 +213,7 @@ export default function Dashboard({ user }: { user: User }) {
         {/* Main Dashboard Panel layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* Left Column: Visual Analytics & Recent Events (col-span-8) */}
+          {/* Left Column: Visual Analytics & Tabbed Ledger (col-span-8) */}
           <div className="lg:col-span-8 space-y-8">
             
             {/* Custom Premium Activity Chart */}
@@ -231,6 +271,139 @@ export default function Dashboard({ user }: { user: User }) {
               )}
             </motion.div>
 
+            {/* Premium Tabbed Stream Center: Submissions vs System Audit Logs */}
+            <motion.div {...anim(2)} className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+              
+              {/* Tab Selector Header */}
+              <div className="p-6 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/30">
+                <div className="flex items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/50">
+                  <button 
+                    onClick={() => setActiveTab('submissions')}
+                    className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${activeTab === 'submissions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  >
+                    Recent Submissions
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('logs')}
+                    className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${activeTab === 'logs' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  >
+                    System Audit Logs
+                  </button>
+                </div>
+                
+                {activeTab === 'submissions' ? (
+                  <button 
+                    onClick={() => navigate('/submissions')} 
+                    className="inline-flex items-center gap-1.5 text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest bg-indigo-50 hover:bg-indigo-100 px-4 py-2.5 rounded-xl transition-all active:scale-95 self-start sm:self-center"
+                  >
+                    View All Submissions <ChevronRight size={10} />
+                  </button>
+                ) : (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-full text-[9px] font-black text-slate-500 uppercase tracking-wider">
+                    <Shield size={12} className="text-slate-400" />
+                    Security Ledger (Last 10 Actions)
+                  </div>
+                )}
+              </div>
+              
+              {/* Tab Content Panels */}
+              <div className="divide-y divide-slate-50">
+                {activeTab === 'submissions' ? (
+                  recentSubs.length === 0 ? (
+                    <div className="p-16 text-center text-slate-400">
+                      <Inbox size={44} className="mx-auto opacity-20 mb-4" />
+                      <p className="text-xs font-bold uppercase tracking-wider">No submissions in queue</p>
+                    </div>
+                  ) : recentSubs.map((sub, i) => (
+                    <div 
+                      key={subId(sub)} 
+                      onClick={() => { if (canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }} 
+                      className="w-full text-left px-8 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-slate-50/50 cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-50 to-slate-100 text-slate-600 group-hover:from-indigo-600 group-hover:to-indigo-500 group-hover:text-white flex items-center justify-center text-sm font-black transition-all duration-300 border border-slate-100/50 shrink-0">
+                          {displaySubmissionNameFirstChar(sub)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-black text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
+                            {sub.form_title || 'Untitled Form submission'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] font-black text-slate-400 tracking-wider">Nominee:</span>
+                            <span className="text-[10px] text-slate-600 font-extrabold truncate">
+                              {displaySubmissionName(sub)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between sm:justify-end gap-5 shrink-0 self-stretch sm:self-center">
+                        <div className="text-left sm:text-right">
+                          <StatusBadge 
+                            status={
+                              ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status) 
+                              ? 'submitted' 
+                              : 'pending'
+                            } 
+                            size="xs" 
+                          />
+                          <p className="text-[9px] text-slate-400 font-bold mt-1.5 uppercase tracking-tighter">
+                            {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : 'Today'}
+                          </p>
+                        </div>
+                        <ChevronRight size={16} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  recentLogs.length === 0 ? (
+                    <div className="p-16 text-center text-slate-400 bg-slate-900/5 font-mono">
+                      <Terminal size={40} className="mx-auto opacity-10 mb-3 text-slate-500 animate-bounce" />
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-500">Security audit trail is empty</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                            <th className="px-6 py-4">User</th>
+                            <th className="px-6 py-4">Action</th>
+                            <th className="px-6 py-4">Timestamp</th>
+                            <th className="px-6 py-4">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {recentLogs.map((log: any) => (
+                            <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-black text-slate-800">{log.user_name || 'System Operator'}</span>
+                                  <span className="text-[10px] text-slate-400 font-semibold">{log.user_email}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200/40">{log.action}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-xs font-semibold text-slate-500">
+                                {log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-50 text-emerald-600 uppercase border border-emerald-100">
+                                  <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" /> PASS
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                )}
+              </div>
+            </motion.div>
+
             {/* Quick Actions Shortcuts Board */}
             <motion.div {...anim(1.5)} className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-md transition-shadow">
               <div className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Administrative Utilities</div>
@@ -265,80 +438,72 @@ export default function Dashboard({ user }: { user: User }) {
               </div>
             </motion.div>
 
-            {/* Premium Recent Activity list */}
-            <motion.div {...anim(2)} className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-              <div className="p-6 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Real-time Stream</div>
-                  <h3 className="font-black text-slate-900 flex items-center gap-3 text-sm">
-                    <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><Activity size={16} /></div>
-                    Recent Submissions
-                  </h3>
+          </div>
+
+          {/* Right Column: Platform Diagnostics & Fulfillment (col-span-4) */}
+          <div className="lg:col-span-4 space-y-8">
+            
+            {/* Highly Useful Platform Progress Widget */}
+            <motion.div {...anim(2.5)} className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+              <div className="absolute right-0 bottom-0 w-32 h-32 bg-slate-50 rounded-full blur-3xl pointer-events-none" />
+              
+              <div className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Fulfillment Monitor</div>
+              <h3 className="font-black text-slate-900 flex items-center gap-3 text-sm mb-6">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><Award size={16} /></div>
+                Nomination Response Rate
+              </h3>
+              
+              {/* Circular CSS Progress Indicator */}
+              <div className="flex flex-col items-center justify-center py-6 border-b border-slate-50">
+                <div className="relative w-36 h-36 flex items-center justify-center">
+                  {/* Decorative outer glow */}
+                  <div className="absolute inset-0 rounded-full bg-slate-50 border border-slate-100 animate-pulse pointer-events-none" />
+                  
+                  {/* Circle SVG */}
+                  <svg className="w-32 h-32 transform -rotate-90">
+                    <circle cx="64" cy="64" r="50" stroke="#f1f5f9" strokeWidth="8" fill="transparent" />
+                    <motion.circle 
+                      cx="64" 
+                      cy="64" 
+                      r="50" 
+                      stroke="#4f46e5" 
+                      strokeWidth="8" 
+                      fill="transparent" 
+                      strokeDasharray="314"
+                      initial={{ strokeDashoffset: 314 }}
+                      animate={{ strokeDashoffset: 314 - (314 * (s.completionRate || 0)) / 100 }}
+                      transition={{ delay: 0.5, duration: 1.2, ease: "easeOut" }}
+                    />
+                  </svg>
+                  <div className="absolute flex flex-col items-center justify-center text-center">
+                    <span className="text-3xl font-black text-slate-900">{s.completionRate || 0}%</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Finished</span>
+                  </div>
                 </div>
-                <button 
-                  onClick={() => navigate('/submissions')} 
-                  className="inline-flex items-center gap-1 text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-xl transition-all active:scale-95 self-start sm:self-center"
-                >
-                  Submission Ledger <ChevronRight size={10} />
-                </button>
+                
+                <div className="grid grid-cols-3 gap-6 w-full text-center mt-6">
+                  <div>
+                    <div className="text-xs font-black text-slate-700">{s.nominationsByStatus?.invited || 0}</div>
+                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Invited</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-slate-700">{s.nominationsByStatus?.in_progress || 0}</div>
+                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Pending</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-slate-700">{s.nominationsByStatus?.completed || 0}</div>
+                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Completed</div>
+                  </div>
+                </div>
               </div>
               
-              <div className="divide-y divide-slate-50">
-                {recentSubs.length === 0 ? (
-                  <div className="p-16 text-center text-slate-400">
-                    <Inbox size={44} className="mx-auto opacity-20 mb-4" />
-                    <p className="text-xs font-bold uppercase tracking-wider">No submissions in queue</p>
-                  </div>
-                ) : recentSubs.map((sub, i) => (
-                  <div 
-                    key={subId(sub)} 
-                    onClick={() => { if (canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }} 
-                    className="w-full text-left px-8 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-slate-50/50 cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-50 to-slate-100 text-slate-600 group-hover:from-indigo-600 group-hover:to-indigo-500 group-hover:text-white flex items-center justify-center text-sm font-black transition-all duration-300 border border-slate-100/50 shrink-0">
-                        {displaySubmissionNameFirstChar(sub)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-black text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
-                          {sub.form_title || 'Untitled Form submission'}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[10px] font-black text-slate-400 tracking-wider">Nominee:</span>
-                          <span className="text-[10px] text-slate-600 font-extrabold truncate">
-                            {displaySubmissionName(sub)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between sm:justify-end gap-5 shrink-0 self-stretch sm:self-center">
-                      <div className="text-left sm:text-right">
-                        <StatusBadge 
-                          status={
-                            ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status) 
-                            ? 'submitted' 
-                            : 'pending'
-                          } 
-                          size="xs" 
-                        />
-                        <p className="text-[9px] text-slate-400 font-bold mt-1.5 uppercase tracking-tighter">
-                          {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : 'Today'}
-                        </p>
-                      </div>
-                      <ChevronRight size={16} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
-                    </div>
-                  </div>
-                ))}
+              <div className="pt-4 flex items-center justify-between text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                <span>Avg Graded Score</span>
+                <span className="text-indigo-600 font-extrabold">{s.avgScore || 0}% Average</span>
               </div>
             </motion.div>
 
-          </div>
-
-          {/* Right Column: Platform Diagnostics & Conversion Status (col-span-4) */}
-          <div className="lg:col-span-4 space-y-8">
-            
-            {/* Highly Refined Performance Statistics Card */}
+            {/* Platform Funnel */}
             <motion.div {...anim(3)} className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
               <div className="absolute -right-12 -top-12 w-32 h-32 bg-slate-50 rounded-full blur-3xl group-hover:bg-indigo-50/20 transition-all pointer-events-none" />
               
