@@ -472,8 +472,8 @@ export default function ReviewSystem({ user }: { user: User }) {
       
       if (finalized.length === 0) return false;
 
-      const allApproved = finalized.length > 0 && finalized.every(rv => rv.recommendation === 'next_level');
-      const isMixed = finalized.some(rv => rv.recommendation === 'next_level') && finalized.some(rv => rv.recommendation === 'reject');
+      const allApproved = finalized.length > 0 && finalized.every((rv: any) => rv.recommendation === 'next_level');
+      const isMixed = finalized.some((rv: any) => rv.recommendation === 'next_level') && finalized.some((rv: any) => rv.recommendation === 'reject');
 
       if (allApproved) return true;
       if (includeMixedDecisions && isMixed) return true;
@@ -556,7 +556,7 @@ export default function ReviewSystem({ user }: { user: User }) {
     // Filter by Score
     if (shortlistFilter.filter_type === 'form_score_gte') {
       const val = parseFloat(shortlistFilter.filter_value);
-      results = results.filter(s => {
+      results = results.filter((s: any) => {
         const scoreVal = typeof s.score === 'object' ? s.score?.percentage : s.score;
         return (scoreVal || 0) >= val;
       });
@@ -564,12 +564,12 @@ export default function ReviewSystem({ user }: { user: User }) {
 
     // Filter by Level (New)
     if (levelFilter.length > 0) {
-      results = results.filter(s => levelFilter.includes(s.highest_level || 0));
+      results = results.filter((s: any) => levelFilter.includes(s.highest_level || 0));
     }
 
     // Filter by Recommendation
     if (shortlistFilter.filter_type === 'next_level_only') {
-      results = results.filter(s => {
+      results = results.filter((s: any) => {
         const reviews = s.level_reviews || [];
         if (shortlistFilter.source_level_id) {
           const sourceLevelNumber = levels.find(l => l.id === shortlistFilter.source_level_id)?.level_number;
@@ -592,7 +592,7 @@ export default function ReviewSystem({ user }: { user: User }) {
       getFormFilterFields().map((f: any) => [String(f.id), f])
     );
     if (activeFieldFilters.length > 0) {
-      results = results.filter(s => {
+      results = results.filter((s: any) => {
         let responseArray: any[] = [];
         try {
           responseArray = Array.isArray(s.responses) ? s.responses : (typeof s.responses === 'string' ? JSON.parse(s.responses) : []);
@@ -671,7 +671,7 @@ export default function ReviewSystem({ user }: { user: User }) {
     const cleanedFieldFilters = fieldFilters.filter(f => f.field_id && String(f.field_value).trim() !== '');
 
     // Use promotableCandidates (which respects includeMixedDecisions)
-    const submissionIds = promotableCandidates.map(s => s.id);
+    const submissionIds = promotableCandidates.map((s: any) => s.id);
 
     const result = await api.post('/shortlist', {
       action: 'create-shortlist',

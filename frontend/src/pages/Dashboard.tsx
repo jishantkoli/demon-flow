@@ -273,8 +273,8 @@ export default function Dashboard({ user }: { user: User }) {
         </>}
       </motion.div>
 
-      <div className={`grid grid-cols-1 ${user.role === 'admin' || user.role === 'reviewer' || user.role === 'functionary' ? 'lg:grid-cols-12' : ''} gap-8`}>
-        <div className={user.role === 'admin' || user.role === 'reviewer' || user.role === 'functionary' ? 'lg:col-span-8 space-y-8' : 'space-y-8'}>
+      <div className={`grid grid-cols-1 ${(user.role as string) === 'admin' || user.role === 'reviewer' || user.role === 'functionary' ? 'lg:grid-cols-12' : ''} gap-8`}>
+        <div className={(user.role as string) === 'admin' || user.role === 'reviewer' || user.role === 'functionary' ? 'lg:col-span-8 space-y-8' : 'space-y-8'}>
           {/* Enhanced Progress for Reviewers */}
           {user.role === 'reviewer' && (
             <motion.div {...anim(1)} className="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm relative overflow-hidden group">
@@ -351,7 +351,7 @@ export default function Dashboard({ user }: { user: User }) {
         </div>
 
         {/* Right Column: Platform Updates & CTA */}
-        {(user.role === 'admin' || user.role === 'reviewer' || user.role === 'functionary') && (
+        {((user.role as string) === 'admin' || user.role === 'reviewer' || user.role === 'functionary') && (
           <div className="lg:col-span-4 space-y-8">
             <motion.div {...anim(3)} className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
               <div className="absolute right-0 top-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-white/10 transition-all" />

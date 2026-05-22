@@ -429,8 +429,8 @@ export default function FormRenderer({ fields, formType, settings, initialValues
               (() => {
                 const qPoints = Number(f.points ?? f.marks ?? 0);
                 const isCorrect = isMcqCorrect(f, val);
-                const hasNegative = f.negative && f.negative < 0;
-                const penaltyValue = hasNegative ? Math.abs(f.negative) : Math.round(qPoints * 0.25);
+                const hasNegative = f.negative !== undefined && f.negative < 0;
+                const penaltyValue = hasNegative && f.negative !== undefined ? Math.abs(f.negative) : Math.round(qPoints * 0.25);
                 
                 return (
                   <p className={`text-[12px] font-bold mt-1 ${isCorrect ? 'text-emerald-600' : (val ? 'text-red-600' : 'text-slate-400')}`}>
