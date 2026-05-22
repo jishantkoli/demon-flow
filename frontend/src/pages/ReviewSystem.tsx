@@ -2503,14 +2503,15 @@ export default function ReviewSystem({ user }: { user: User }) {
                                 <div className="w-full">
                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Assigned Teachers</p>
                                   <div className="flex flex-wrap gap-1.5">
-                                    {lvl.assigned_reviewers?.length > 0 ? lvl.assigned_reviewers.map((r: any) => (
+                                    {lvl.assigned_reviewers?.filter((r: any) => r && (r.name || r.email)).map((r: any) => (
                                       <div key={r._id || r.id} className="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded-md shadow-sm">
                                         <div className="w-4 h-4 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-[8px] font-bold">
-                                          {(r.name || '?')[0]}
+                                          {(r.name || r.email || '?')[0].toUpperCase()}
                                         </div>
-                                        <span className="text-[10px] font-medium text-slate-600">{r.name}</span>
+                                        <span className="text-[10px] font-medium text-slate-600">{r.name || r.email.split('@')[0]}</span>
                                       </div>
-                                    )) : <span className="text-[10px] text-slate-400 italic">No teachers assigned yet</span>}
+                                    ))}
+                                    {(!lvl.assigned_reviewers || lvl.assigned_reviewers.length === 0) && <span className="text-[10px] text-slate-400 italic">No teachers assigned yet</span>}
                                   </div>
                                 </div>
                               </div>
