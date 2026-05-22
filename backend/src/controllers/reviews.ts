@@ -523,6 +523,31 @@ export const saveReviewScore = async (req: AuthRequest, res: Response) => {
       reviewed_at: is_draft ? null : new Date()
     }, { new: true });
 
+    // NEW: Update Submission status based on all reviews at the current level
+    if (!is_draft) {
+      const submissionId = existingReview.submission_id;
+      const currentLevelId = existingReview.level_id;
+      
+      const allReviewsAtLevel = await Review.find({ 
+        submission_id: submissionId, 
+        level_id: currentLevelId 
+      });
+
+      const finalized = allReviewsAtLevel.filter(r => ['approved', 'rejected', 'completed'].includes(String(r.status)));
+      
+      let newStatus = 'under_review';
+      if (finalized.length > 0) {
+        const allApproved = finalized.every(r => r.recommendation === 'next_level');
+        const allRejected = finalized.every(r => r.recommendation === 'reject');
+        
+        if (allApproved) newStatus = 'approved';
+        else if (allRejected) newStatus = 'rejected';
+        else newStatus = 'under_review'; // mixed or partial
+      }
+
+      await Submission.findByIdAndUpdate(submissionId, { status: newStatus });
+    }
+
     res.status(200).json(review);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

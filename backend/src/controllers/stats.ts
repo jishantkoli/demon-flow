@@ -45,10 +45,30 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     const submissionsByStatus = {
       submitted: await Submission.countDocuments({ ...subQuery, status: 'submitted' }),
       under_review: await Submission.countDocuments({ ...subQuery, status: 'under_review' }),
-      approved: await Submission.countDocuments({ ...subQuery, status: 'approved' }),
+      approved: await Submission.countDocuments({ ...subQuery, status: { $in: ['approved', 'next_level'] } }),
       rejected: await Submission.countDocuments({ ...subQuery, status: 'rejected' }),
       pending: await Submission.countDocuments({ ...subQuery, status: 'pending' }),
     };
+
+    // Fix for "under_review" items that are actually approved or rejected
+    // If a submission is marked under_review but all reviews are finished, we should count it correctly
+    if (role === 'admin') {
+      const underReviewSubs = await Submission.find({ ...subQuery, status: 'under_review' });
+      for (const sub of underReviewSubs) {
+        const reviews = await Review.find({ submission_id: sub._id, level: sub.highest_level || 1 });
+        if (reviews.length > 0 && reviews.every(r => ['approved', 'rejected', 'completed'].includes(String(r.status)))) {
+          const allApproved = reviews.every(r => r.recommendation === 'next_level');
+          const allRejected = reviews.every(r => r.recommendation === 'reject');
+          if (allApproved) {
+            submissionsByStatus.approved++;
+            submissionsByStatus.under_review--;
+          } else if (allRejected) {
+            submissionsByStatus.rejected++;
+            submissionsByStatus.under_review--;
+          }
+        }
+      }
+    }
 
     // 2b. Users by Role
     const usersByRole = {
