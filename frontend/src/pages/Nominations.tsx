@@ -195,7 +195,9 @@ export default function Nominations({ user }: { user: User }) {
       key: 'status', 
       label: 'Status', 
       render: (v: string) => {
-        const displayStatus = v === 'under_review' ? 'submitted' : v;
+        // Simplified status for School Functionaries: only Pending or Submitted
+        const isSubmitted = ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(v);
+        const displayStatus = isSubmitted ? 'submitted' : 'pending';
         return <StatusBadge status={displayStatus} />;
       } 
     },

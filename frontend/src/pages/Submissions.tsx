@@ -1188,8 +1188,14 @@ export default function Submissions({ user }: { user: User }) {
           }
           return <StatusBadge status="pending" />;
         }
-        const displayStatus = user.role === 'teacher' && (v === 'under_review' || v === 'approved' || v === 'rejected') ? 'submitted' : v;
-        return <StatusBadge status={displayStatus} />;
+        
+        // Simplified status for Teachers and School Functionaries: only Pending or Submitted
+        if (user.role === 'teacher' || user.role === 'functionary') {
+          const isSubmitted = ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(v);
+          return <StatusBadge status={isSubmitted ? 'submitted' : 'pending'} />;
+        }
+        
+        return <StatusBadge status={v} />;
       } 
     },
     { 

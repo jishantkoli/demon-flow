@@ -290,7 +290,15 @@ export default function Dashboard({ user }: { user: User }) {
                     <p className="text-[10px] text-muted truncate">{displaySubmissionName(sub)}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <StatusBadge status={sub.status} size="xs" />
+                    <StatusBadge 
+                      status={
+                        (['teacher', 'functionary'].includes(user.role) && 
+                         ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status)) 
+                        ? 'submitted' 
+                        : sub.status
+                      } 
+                      size="xs" 
+                    />
                     <p className="text-[9px] text-muted mt-0.5">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Today'}</p>
                   </div>
                 </div>
