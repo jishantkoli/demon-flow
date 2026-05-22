@@ -169,9 +169,16 @@ export default function Dashboard({ user }: { user: User }) {
                       <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">{displaySubmissionName(sub)}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <StatusBadge status={sub.status} size="xs" />
-                      <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Today'}</p>
-                    </div>
+                    <StatusBadge 
+                      status={
+                        ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status) 
+                        ? 'submitted' 
+                        : 'pending'
+                      } 
+                      size="xs" 
+                    />
+                    <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Today'}</p>
+                  </div>
                   </div>
                 ))}
               </div>
@@ -329,7 +336,15 @@ export default function Dashboard({ user }: { user: User }) {
                     <p className="text-[11px] text-slate-400 font-medium mt-1 uppercase tracking-wider">{displaySubmissionName(sub)}</p>
                   </div>
                   <div className="text-right shrink-0 space-y-1.5">
-                    <StatusBadge status={sub.status} size="xs" />
+                    <StatusBadge 
+                      status={
+                        (['teacher', 'functionary'].includes(user.role) && 
+                         ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status)) 
+                        ? 'submitted' 
+                        : (user.role === 'admin' ? sub.status : (['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status) ? 'submitted' : 'pending'))
+                      } 
+                      size="xs" 
+                    />
                     <p className="text-[9px] text-slate-300 font-black uppercase tracking-tighter">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Active'}</p>
                   </div>
                   <ChevronRight size={16} className="text-slate-200 group-hover:text-primary transition-all translate-x-0 group-hover:translate-x-1" />
