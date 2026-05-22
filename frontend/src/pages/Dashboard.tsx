@@ -359,20 +359,60 @@ export default function Dashboard({ user }: { user: User }) {
                   </motion.div>
                 )}
 
-                {/* Admin Status Summary */}
+                {/* Admin Status Summary - Redesigned */}
                 {user.role === 'admin' && (
-                  <motion.div {...anim(3)} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-                    <h3 className="font-semibold font-heading text-sm mb-4">Submission Status</h3>
-                    <div className="space-y-3">
-                      {[{ label: 'Submitted', value: s.submissionsByStatus?.submitted || 0, color: 'bg-blue-500' },
-                        { label: 'Under Review', value: s.submissionsByStatus?.under_review || 0, color: 'bg-indigo-500' },
-                        { label: 'Approved', value: s.submissionsByStatus?.approved || 0, color: 'bg-emerald-500' },
-                        { label: 'Rejected', value: s.submissionsByStatus?.rejected || 0, color: 'bg-red-500' }]
-                        .map(st => { const total = Math.max(s.totalSubmissions || 1, 1); return (
-                          <div key={st.label}><div className="flex justify-between text-xs mb-1"><span className="font-medium">{st.label}</span><span className="text-slate-500">{st.value}</span></div>
-                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><motion.div initial={{ width: 0 }} animate={{ width: `${(st.value / total) * 100}%` }} transition={{ delay: 0.3, duration: 0.8 }} className={`h-full rounded-full ${st.color}`} /></div>
+                  <motion.div {...anim(3)} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm overflow-hidden relative group">
+                    <div className="absolute -right-12 -top-12 w-32 h-32 bg-slate-50 rounded-full blur-3xl group-hover:bg-primary/5 transition-colors" />
+                    
+                    <div className="flex items-center justify-between mb-6 relative">
+                      <h3 className="font-bold font-heading text-sm text-slate-800 flex items-center gap-2">
+                        <Target size={16} className="text-primary" /> Submission Status
+                      </h3>
+                      <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                        Total: {s.totalSubmissions || 0}
+                      </span>
+                    </div>
+
+                    <div className="space-y-5 relative">
+                      {[
+                        { label: 'Submitted', value: s.submissionsByStatus?.submitted || 0, color: 'from-blue-500 to-blue-600', icon: Inbox, bg: 'bg-blue-50', text: 'text-blue-600' },
+                        { label: 'Under Review', value: s.submissionsByStatus?.under_review || 0, color: 'from-indigo-500 to-indigo-600', icon: Clock, bg: 'bg-indigo-50', text: 'text-indigo-600' },
+                        { label: 'Approved', value: s.submissionsByStatus?.approved || 0, color: 'from-emerald-500 to-emerald-600', icon: CheckSquare, bg: 'bg-emerald-50', text: 'text-emerald-600' },
+                        { label: 'Rejected', value: s.submissionsByStatus?.rejected || 0, color: 'from-rose-500 to-rose-600', icon: AlertTriangle, bg: 'bg-rose-50', text: 'text-rose-600' }
+                      ].map((st, i) => { 
+                        const total = Math.max(s.totalSubmissions || 1, 1); 
+                        const pct = (st.value / total) * 100;
+                        return (
+                          <div key={st.label} className="group/item">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-6 h-6 rounded-lg ${st.bg} ${st.text} flex items-center justify-center`}>
+                                  <st.icon size={12} />
+                                </div>
+                                <span className="text-[11px] font-bold text-slate-600">{st.label}</span>
+                              </div>
+                              <span className="text-[11px] font-black text-slate-900">{st.value}</span>
+                            </div>
+                            <div className="h-1.5 bg-slate-50 rounded-full overflow-hidden p-0">
+                              <motion.div 
+                                initial={{ width: 0 }} 
+                                animate={{ width: `${pct}%` }} 
+                                transition={{ delay: 0.4 + (i * 0.1), duration: 1, ease: "circOut" }} 
+                                className={`h-full rounded-full bg-gradient-to-r ${st.color} shadow-sm relative`}
+                              >
+                                {pct > 15 && (
+                                  <div className="absolute top-0 right-0 bottom-0 w-1 bg-white/30" />
+                                )}
+                              </motion.div>
+                            </div>
                           </div>
-                        ); })}
+                        ); 
+                      })}
+                    </div>
+
+                    <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                      <span>Conversion Rate</span>
+                      <span className="text-emerald-500">{s.totalSubmissions > 0 ? Math.round(((s.submissionsByStatus?.approved || 0) / s.totalSubmissions) * 100) : 0}% Approved</span>
                     </div>
                   </motion.div>
                 )}
