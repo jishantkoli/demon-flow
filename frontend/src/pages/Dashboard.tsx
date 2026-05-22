@@ -6,9 +6,9 @@ import StatusBadge from '../components/StatusBadge';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Users, FileText, Inbox, CheckSquare, BarChart3, Clock, TrendingUp, 
+  Users, FileText, Inbox, CheckSquare, Clock, TrendingUp, 
   Activity, Award, UserPlus, Calendar, Target, AlertTriangle, Shield,
-  ChevronRight, ArrowUpRight, School
+  ChevronRight, ArrowUpRight, School, CheckCircle2
 } from 'lucide-react';
 
 export default function Dashboard({ user }: { user: User }) {
@@ -270,15 +270,13 @@ export default function Dashboard({ user }: { user: User }) {
         {user.role === 'teacher' && <>
           <StatCard label="Open Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} />
           <StatCard label="My Entries" value={s.totalSubmissions || 0} icon={Inbox} color="green" onClick={() => navigate('/submissions')} />
-          <StatCard label="Approved" value={s.submissionsByStatus?.approved || 0} icon={CheckSquare} color="purple" />
-          <StatCard label="In Review" value={s.submissionsByStatus?.under_review || 0} icon={Clock} color="amber" />
         </>}
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-8 space-y-8">
-          {/* Enhanced Progress for Reviewers/Teachers */}
-          {(user.role === 'reviewer' || user.role === 'teacher') && (
+      <div className={`grid grid-cols-1 ${user.role === 'admin' || user.role === 'reviewer' || user.role === 'functionary' ? 'lg:grid-cols-12' : ''} gap-8`}>
+        <div className={user.role === 'admin' || user.role === 'reviewer' || user.role === 'functionary' ? 'lg:col-span-8 space-y-8' : 'space-y-8'}>
+          {/* Enhanced Progress for Reviewers */}
+          {user.role === 'reviewer' && (
             <motion.div {...anim(1)} className="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm relative overflow-hidden group">
               <div className="absolute right-0 top-0 w-48 h-48 bg-primary/5 rounded-full -mr-24 -mt-24 blur-3xl" />
               <h3 className="font-black text-slate-800 text-sm mb-6 flex items-center gap-3 relative">
@@ -290,9 +288,7 @@ export default function Dashboard({ user }: { user: User }) {
                   <div className="space-y-1">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Completion</p>
                     <p className="text-3xl font-black text-slate-900">
-                      {user.role === 'reviewer' 
-                        ? (s.pendingReviews + s.completedReviews > 0 ? Math.round((s.completedReviews / (s.pendingReviews + s.completedReviews)) * 100) : 0)
-                        : (s.activeForms > 0 ? Math.round((s.totalSubmissions / s.activeForms) * 100) : 0)}%
+                      {s.pendingReviews + s.completedReviews > 0 ? Math.round((s.completedReviews / (s.pendingReviews + s.completedReviews)) * 100) : 0}%
                     </p>
                   </div>
                   <div className="text-right">
@@ -303,7 +299,7 @@ export default function Dashboard({ user }: { user: User }) {
                 <div className="h-3 bg-slate-50 rounded-full overflow-hidden p-0.5 border border-slate-100 shadow-inner">
                   <motion.div 
                     initial={{ width: 0 }} 
-                    animate={{ width: `${user.role === 'reviewer' ? (s.completedReviews / Math.max(s.pendingReviews + s.completedReviews, 1)) * 100 : (s.totalSubmissions / Math.max(s.activeForms, 1)) * 100}%` }} 
+                    animate={{ width: `${(s.completedReviews / Math.max(s.pendingReviews + s.completedReviews, 1)) * 100}%` }} 
                     className="h-full bg-gradient-to-r from-primary to-accent-blue rounded-full shadow-sm"
                   />
                 </div>
@@ -355,43 +351,45 @@ export default function Dashboard({ user }: { user: User }) {
         </div>
 
         {/* Right Column: Platform Updates & CTA */}
-        <div className="lg:col-span-4 space-y-8">
-          <motion.div {...anim(3)} className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
-            <div className="absolute right-0 top-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-white/10 transition-all" />
-            <div className="relative z-10">
-              <div className="w-11 h-11 bg-white/10 rounded-2xl flex items-center justify-center mb-6 border border-white/10">
-                <Award size={22} className="text-primary" />
+        {(user.role === 'admin' || user.role === 'reviewer' || user.role === 'functionary') && (
+          <div className="lg:col-span-4 space-y-8">
+            <motion.div {...anim(3)} className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
+              <div className="absolute right-0 top-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-white/10 transition-all" />
+              <div className="relative z-10">
+                <div className="w-11 h-11 bg-white/10 rounded-2xl flex items-center justify-center mb-6 border border-white/10">
+                  <Award size={22} className="text-primary" />
+                </div>
+                <h3 className="text-xl font-black mb-3 leading-tight">Ready to start?</h3>
+                <p className="text-white/60 text-xs font-medium leading-relaxed mb-8">
+                  {user.role === 'reviewer' ? `You have ${s.pendingReviews || 0} submissions to evaluate. Your feedback helps teachers grow.` : 
+                   user.role === 'functionary' ? 'Manage your school nominations and ensure all teachers complete their forms on time.' :
+                   'Complete your pending forms to submit your profile for review.'}
+                </p>
+                <button 
+                  onClick={() => navigate(user.role === 'reviewer' ? '/reviews' : user.role === 'functionary' ? '/nominations' : '/forms')}
+                  className="w-full bg-white text-slate-900 py-3.5 rounded-2xl font-black text-xs uppercase tracking-[0.15em] hover:bg-primary hover:text-white transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                >
+                  Launch Dashboard <ArrowUpRight size={14} />
+                </button>
               </div>
-              <h3 className="text-xl font-black mb-3 leading-tight">Ready to start?</h3>
-              <p className="text-white/60 text-xs font-medium leading-relaxed mb-8">
-                {user.role === 'reviewer' ? `You have ${s.pendingReviews || 0} submissions to evaluate. Your feedback helps teachers grow.` : 
-                 user.role === 'functionary' ? 'Manage your school nominations and ensure all teachers complete their forms on time.' :
-                 'Complete your pending forms to submit your profile for review.'}
-              </p>
-              <button 
-                onClick={() => navigate(user.role === 'reviewer' ? '/reviews' : user.role === 'functionary' ? '/nominations' : '/forms')}
-                className="w-full bg-white text-slate-900 py-3.5 rounded-2xl font-black text-xs uppercase tracking-[0.15em] hover:bg-primary hover:text-white transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
-              >
-                Launch Dashboard <ArrowUpRight size={14} />
-              </button>
-            </div>
-          </motion.div>
+            </motion.div>
 
-          <div className="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100">
-                <Shield size={16} className="text-slate-400" />
+            <div className="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100">
+                  <Shield size={16} className="text-slate-400" />
+                </div>
+                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Portal Notice</h3>
               </div>
-              <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Portal Notice</h3>
-            </div>
-            <p className="text-xs text-slate-600 leading-relaxed font-medium mb-4">
-              Your session is secured with end-to-end encryption. For any technical support, please contact the district coordinator.
-            </p>
-            <div className="pt-4 border-t border-slate-50 flex items-center gap-3 text-[10px] font-black text-primary uppercase tracking-widest">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> System Online
+              <p className="text-xs text-slate-600 leading-relaxed font-medium mb-4">
+                Your session is secured with end-to-end encryption. For any technical support, please contact the district coordinator.
+              </p>
+              <div className="pt-4 border-t border-slate-50 flex items-center gap-3 text-[10px] font-black text-primary uppercase tracking-widest">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> System Online
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

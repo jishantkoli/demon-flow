@@ -31,7 +31,7 @@ export default function StatCard({ label, value, icon: Icon, trend, trendUp, col
           <p className="text-[26px] font-bold mt-1 font-heading leading-tight text-slate-900">{value}</p>
           {subtitle && <p className="text-[10px] text-slate-500 mt-0.5">{subtitle}</p>}
           {trend && <p className={`text-xs mt-1.5 font-semibold ${trendUp ? 'text-emerald-500' : 'text-rose-500'}`}>{trendUp ? '↑' : '↓'} {trend}</p>}
-          {clickable && <p className="text-[10px] text-primary font-semibold mt-1.5">{ctaText || 'Click to open details'}</p>}
+          {ctaText && <p className="text-[10px] text-primary font-semibold mt-1.5">{ctaText}</p>}
         </div>
         <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${c.bg} group-hover:scale-110 transition-transform`}>
           <Icon size={20} className={c.icon} />
