@@ -1189,9 +1189,12 @@ export default function Submissions({ user }: { user: User }) {
           return <StatusBadge status="pending" />;
         }
         
-        // Simplified status for Teachers and School Functionaries: only Pending or Submitted
+        // Simplified status for Teachers and School Functionaries
         if (user.role === 'teacher' || user.role === 'functionary') {
-          const isSubmitted = ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(v);
+          if (['under_review', 'approved', 'next_level'].includes(v)) {
+            return <StatusBadge status={v} />;
+          }
+          const isSubmitted = ['submitted', 'rejected', 'completed'].includes(v);
           return <StatusBadge status={isSubmitted ? 'submitted' : 'pending'} />;
         }
         
@@ -1336,9 +1339,15 @@ export default function Submissions({ user }: { user: User }) {
               <div className="bg-surface rounded-xl p-3">
                 <p className="text-[10px] text-muted uppercase font-semibold">Status</p>
                 <div className="mt-0.5">
-                  <StatusBadge status={user.role === 'reviewer' 
-                    ? (selected.my_review?.recommendation === 'approve' ? 'approved' : (selected.my_review?.recommendation || 'pending')) 
-                    : selected.status} 
+                  <StatusBadge status={
+                    user.role === 'reviewer' 
+                      ? (selected.my_review?.recommendation === 'approve' ? 'approved' : (selected.my_review?.recommendation || 'pending')) 
+                      : (['teacher', 'functionary'].includes(user.role) 
+                          ? (['under_review', 'approved', 'next_level'].includes(selected.status) 
+                              ? selected.status 
+                              : (['submitted', 'rejected', 'completed'].includes(selected.status) ? 'submitted' : 'pending'))
+                          : selected.status)
+                  } 
                   />
                 </div>
               </div>
