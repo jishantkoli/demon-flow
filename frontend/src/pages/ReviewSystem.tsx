@@ -2473,9 +2473,11 @@ export default function ReviewSystem({ user }: { user: User }) {
                   {/* Level-wise scores */}
                   <div>
                     <h3 className="text-sm font-bold font-heading mb-3 flex items-center gap-2"><BarChart3 size={15} className="text-primary" /> Level-wise Review Scores</h3>
-                    {profileData.levels.length === 0 ? <p className="text-sm text-slate-500">No review levels configured yet.</p> : (
+                    {profileData.levels.filter((lvl: any) => lvl.scores.length > 0 || lvl.level_number <= (profileData.highest_level || 1)).length === 0 ? <p className="text-sm text-slate-500">No review levels configured yet.</p> : (
                       <div className="space-y-3">
-                        {profileData.levels.map((lvl: any) => (
+                        {profileData.levels
+                          .filter((lvl: any) => lvl.scores.length > 0 || lvl.level_number <= (profileData.highest_level || 1))
+                          .map((lvl: any) => (
                           <div key={lvl.level_id} className={`p-4 rounded-xl border ${lvl.total_reviewers > 0 ? 'border-primary/30 bg-primary/[0.02]' : 'border-slate-200 bg-slate-100'}`}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
