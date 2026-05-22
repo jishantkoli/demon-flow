@@ -1189,13 +1189,23 @@ export default function Submissions({ user }: { user: User }) {
           return <StatusBadge status="pending" />;
         }
         
-        // Simplified status for Teachers and School Functionaries
+        // Simplified status for Teachers and School Functionaries: only Pending or Submitted
         if (user.role === 'teacher' || user.role === 'functionary') {
-          if (['under_review', 'approved', 'next_level'].includes(v)) {
-            return <StatusBadge status={v} />;
-          }
-          const isSubmitted = ['submitted', 'rejected', 'completed'].includes(v);
+          const isSubmitted = ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(v);
           return <StatusBadge status={isSubmitted ? 'submitted' : 'pending'} />;
+        }
+
+        // For Admin: If under review, show the latest review's recommendation
+        if (v === 'under_review' && Array.isArray(row.level_reviews) && row.level_reviews.length > 0) {
+          const currentLevel = row.currentLevel || 1;
+          const relevantReviews = row.level_reviews.filter((r: any) => r.level === currentLevel);
+          if (relevantReviews.length > 0) {
+            const lastRec = relevantReviews[relevantReviews.length - 1].recommendation;
+            if (lastRec) {
+              const trendStatus = lastRec === 'approve' || lastRec === 'next_level' ? 'approved' : lastRec;
+              return <StatusBadge status={trendStatus} />;
+            }
+          }
         }
         
         return <StatusBadge status={v} />;
@@ -1339,15 +1349,9 @@ export default function Submissions({ user }: { user: User }) {
               <div className="bg-surface rounded-xl p-3">
                 <p className="text-[10px] text-muted uppercase font-semibold">Status</p>
                 <div className="mt-0.5">
-                  <StatusBadge status={
-                    user.role === 'reviewer' 
-                      ? (selected.my_review?.recommendation === 'approve' ? 'approved' : (selected.my_review?.recommendation || 'pending')) 
-                      : (['teacher', 'functionary'].includes(user.role) 
-                          ? (['under_review', 'approved', 'next_level'].includes(selected.status) 
-                              ? selected.status 
-                              : (['submitted', 'rejected', 'completed'].includes(selected.status) ? 'submitted' : 'pending'))
-                          : selected.status)
-                  } 
+                  <StatusBadge status={user.role === 'reviewer' 
+                    ? (selected.my_review?.recommendation === 'approve' ? 'approved' : (selected.my_review?.recommendation || 'pending')) 
+                    : selected.status} 
                   />
                 </div>
               </div>

@@ -1765,8 +1765,13 @@ export default function ReviewSystem({ user }: { user: User }) {
 
             if (allApproved) displayStatus = 'next_level';
             else if (allRejected) displayStatus = 'rejected';
-            else if (isMixed) displayStatus = 'under_review';
-            else displayStatus = 'under_review'; // Default for other cases (like revise or partial completion)
+            else if (finalized.length > 0) {
+              // Instead of 'under_review', show the latest finalized review's recommendation
+              const lastRec = finalized[finalized.length - 1].recommendation;
+              displayStatus = lastRec === 'approve' || lastRec === 'next_level' ? 'next_level' : lastRec;
+            } else {
+              displayStatus = 'under_review';
+            }
           }
           return <StatusBadge status={displayStatus} />;
         }

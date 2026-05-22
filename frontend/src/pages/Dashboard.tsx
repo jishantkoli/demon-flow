@@ -170,7 +170,11 @@ export default function Dashboard({ user }: { user: User }) {
                     </div>
                     <div className="text-right shrink-0">
                     <StatusBadge 
-                      status={sub.status} 
+                      status={
+                        ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status) 
+                        ? 'submitted' 
+                        : 'pending'
+                      } 
                       size="xs" 
                     />
                     <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Today'}</p>
@@ -330,11 +334,10 @@ export default function Dashboard({ user }: { user: User }) {
                   <div className="text-right shrink-0 space-y-1.5">
                     <StatusBadge 
                       status={
-                        (user.role === 'admin' || user.role === 'reviewer')
-                          ? sub.status
-                          : (['under_review', 'approved', 'next_level'].includes(sub.status) 
-                              ? sub.status 
-                              : (['submitted', 'rejected', 'completed'].includes(sub.status) ? 'submitted' : 'pending'))
+                        (['teacher', 'functionary'].includes(user.role) && 
+                         ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status)) 
+                        ? 'submitted' 
+                        : (user.role === 'admin' ? sub.status : (['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status) ? 'submitted' : 'pending'))
                       } 
                       size="xs" 
                     />
