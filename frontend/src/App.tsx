@@ -13,7 +13,6 @@ import FormBuilder from './pages/FormBuilder';
 import Submissions from './pages/Submissions';
 import ReviewSystem from './pages/ReviewSystem';
 import Nominations from './pages/Nominations';
-import Analytics from './pages/Analytics';
 import EmailCenter from './pages/EmailCenter';
 import Profile from './pages/Profile';
 
@@ -100,7 +99,6 @@ function AppContent() {
         <Route path="/submissions" element={user ? <Submissions user={user} /> : <Navigate to="/login" />} />
         <Route path="/reviews" element={user && (user.role === 'admin' || user.role === 'reviewer') ? <ReviewSystem user={user} /> : (user ? <Navigate to="/" /> : <Navigate to="/login" />)} />
         {user?.role === 'functionary' && <Route path="/nominations" element={<Nominations user={user} />} />}
-        {user?.role === 'admin' && <Route path="/analytics" element={<Analytics />} />}
         {user?.role === 'admin' && <Route path="/email-center" element={<EmailCenter user={user} />} />}
         <Route path="/profile" element={user ? <Profile user={user} /> : <Navigate to="/login" />} />
         <Route path="/login" element={user ? <Navigate to={searchParams.get('redirect') || "/"} replace /> : <Login onLogin={refreshUser} />} />
