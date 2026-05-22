@@ -1748,31 +1748,18 @@ export default function ReviewSystem({ user }: { user: User }) {
         label: 'Status',
         render: (v: string, r: any) => {
           let displayStatus = v;
-          if (currentStageNumber) {
-            const stageReviews = (r.level_reviews || []).filter((rv: any) => rv.level === currentStageNumber);
-            const finalized = stageReviews.filter((rv: any) => isFinalizedReview(rv.status));
-            
-            if (finalized.length === 0) {
-              return <span className="text-slate-400 text-xs">—</span>;
-            }
-
-            // If all finalized reviews in this stage are 'next_level', show as approved
-            // If all are rejected, show as rejected
-            // If it's a mix of approved and rejected, show as under review
-            const allApproved = finalized.length > 0 && finalized.every(rv => rv.recommendation === 'next_level');
-            const allRejected = finalized.length > 0 && finalized.every(rv => rv.recommendation === 'reject');
-            const isMixed = finalized.some(rv => rv.recommendation === 'next_level') && finalized.some(rv => rv.recommendation === 'reject');
-
-            if (allApproved) displayStatus = 'next_level';
-            else if (allRejected) displayStatus = 'rejected';
-            else if (finalized.length > 0) {
-              // Instead of 'under_review', show the latest finalized review's recommendation
+          
+          // Try to show the latest finalized recommendation from ANY level
+          if (Array.isArray(r.level_reviews) && r.level_reviews.length > 0) {
+            const finalized = r.level_reviews.filter((rv: any) => isFinalizedReview(rv.status));
+            if (finalized.length > 0) {
               const lastRec = finalized[finalized.length - 1].recommendation;
-              displayStatus = lastRec === 'approve' || lastRec === 'next_level' ? 'next_level' : lastRec;
-            } else {
-              displayStatus = 'under_review';
+              if (lastRec) {
+                displayStatus = lastRec === 'approve' || lastRec === 'next_level' ? 'next_level' : lastRec;
+              }
             }
           }
+          
           return <StatusBadge status={displayStatus} />;
         }
       },
@@ -2473,10 +2460,10 @@ export default function ReviewSystem({ user }: { user: User }) {
                   {/* Level-wise scores */}
                   <div>
                     <h3 className="text-sm font-bold font-heading mb-3 flex items-center gap-2"><BarChart3 size={15} className="text-primary" /> Level-wise Review Scores</h3>
-                    {profileData.levels.filter((lvl: any) => lvl.scores.length > 0 || lvl.level_number <= (profileData.highest_level || 1)).length === 0 ? <p className="text-sm text-slate-500">No review levels configured yet.</p> : (
+                    {profileData.levels.filter((lvl: any) => lvl.scores.length > 0).length === 0 ? <p className="text-sm text-slate-500">No review scores recorded yet.</p> : (
                       <div className="space-y-3">
                         {profileData.levels
-                          .filter((lvl: any) => lvl.scores.length > 0 || lvl.level_number <= (profileData.highest_level || 1))
+                          .filter((lvl: any) => lvl.scores.length > 0)
                           .map((lvl: any) => (
                           <div key={lvl.level_id} className={`p-4 rounded-xl border ${lvl.total_reviewers > 0 ? 'border-primary/30 bg-primary/[0.02]' : 'border-slate-200 bg-slate-100'}`}>
                             <div className="flex items-center justify-between mb-2">
