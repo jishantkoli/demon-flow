@@ -94,56 +94,33 @@ export default function Dashboard({ user }: { user: User }) {
     return (
       <div className="max-w-[1400px] mx-auto space-y-8 pb-12 px-4 sm:px-6">
         
-        {/* Premium Glass Welcome Hero Banner */}
-        <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 sm:p-10 text-white shadow-2xl border border-slate-800/60 group">
-          {/* Abstract glowing mesh backgrounds */}
-          <div className="absolute right-0 top-0 -mr-16 -mt-16 w-80 h-80 rounded-full bg-violet-600/20 blur-[100px] transition-all duration-1000 group-hover:bg-violet-500/30 group-hover:scale-110 pointer-events-none" />
-          <div className="absolute left-1/3 bottom-0 w-60 h-60 rounded-full bg-blue-500/10 blur-[80px] pointer-events-none" />
-          
-          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-            <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
-                <Shield size={14} className="text-violet-400 animate-pulse" />
-                <span className="text-[10px] font-black text-violet-300 uppercase tracking-widest">Enterprise Command Center</span>
-              </div>
-              <h1 className="text-3xl sm:text-4xl font-black tracking-tight leading-none bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
-                System Overview
-              </h1>
-              <p className="text-slate-400 text-sm max-w-xl font-medium">
-                Welcome back, <span className="text-white font-bold">{user.name}</span>. The system is operating normally with all services online. Here is your operational intelligence for today.
-              </p>
+        {/* Clean Enterprise Corporate Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 pb-6 gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">System Command Center</h1>
+            <p className="text-sm text-slate-500 mt-1">Hello, {user.name}. Centralized platform status, nominations audit trail, and user analytics.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-xs font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              All Services Operational
             </div>
-            
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="px-5 py-3.5 bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl flex items-center gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-                <div>
-                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Server Status</div>
-                  <div className="text-xs font-extrabold text-slate-200">100% Operational</div>
-                </div>
-              </div>
-              
-              <div className="px-5 py-3.5 bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl flex items-center gap-3">
-                <Activity size={16} className="text-blue-400" />
-                <div>
-                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Sync Latency</div>
-                  <div className="text-xs font-extrabold text-slate-200">12ms (Optimal)</div>
-                </div>
-              </div>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 text-xs font-semibold">
+              <Activity size={13} className="text-slate-500" />
+              Sync Latency: 12ms
             </div>
           </div>
         </div>
 
-        {/* Stunning Glow-Effect Stats Grid */}
-        <motion.div {...anim(0)} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Crisp Enterprise Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
             { 
               label: "Platform Registry", 
               value: s.totalUsers || 0, 
               subtext: `${s.usersByRole?.teacher || 0} Teachers • ${s.usersByRole?.reviewer || 0} Reviewers`,
               icon: Users, 
-              color: "from-blue-500 to-indigo-600", 
-              glow: "rgba(59, 130, 246, 0.15)", 
+              color: "text-blue-600 bg-blue-50 border-blue-100/50",
               cta: "Manage Users", 
               path: "/users" 
             },
@@ -152,8 +129,7 @@ export default function Dashboard({ user }: { user: User }) {
               value: s.activeForms || 0, 
               subtext: `${s.draftForms || 0} Drafts • ${s.expiredForms || 0} Expired`,
               icon: FileText, 
-              color: "from-emerald-400 to-teal-600", 
-              glow: "rgba(16, 185, 129, 0.15)", 
+              color: "text-emerald-600 bg-emerald-50 border-emerald-100/50",
               cta: "Configure Forms", 
               path: "/forms" 
             },
@@ -162,8 +138,7 @@ export default function Dashboard({ user }: { user: User }) {
               value: s.totalSubmissions || 0, 
               subtext: `Success Index: ${s.totalSubmissions > 0 ? Math.round(((s.submissionsByStatus?.approved || 0) / s.totalSubmissions) * 100) : 0}%`,
               icon: Inbox, 
-              color: "from-violet-500 to-purple-700", 
-              glow: "rgba(139, 92, 246, 0.15)", 
+              color: "text-indigo-600 bg-indigo-50 border-indigo-100/50",
               cta: "Browse Records", 
               path: "/submissions" 
             },
@@ -172,8 +147,7 @@ export default function Dashboard({ user }: { user: User }) {
               value: s.pendingReviews || 0, 
               subtext: `${s.completedReviews || 0} Gradings Completed`,
               icon: CheckSquare, 
-              color: "from-amber-400 to-orange-500", 
-              glow: "rgba(245, 158, 11, 0.15)", 
+              color: "text-amber-600 bg-amber-50 border-amber-100/50",
               cta: "Process Reviews", 
               path: "/reviews" 
             }
@@ -181,34 +155,31 @@ export default function Dashboard({ user }: { user: User }) {
             <div 
               key={card.label} 
               onClick={() => navigate(card.path)}
-              style={{ boxShadow: `0 20px 40px -15px ${card.glow}` }}
-              className="bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm hover:border-slate-300 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group relative overflow-hidden"
+              className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:border-slate-300 hover:shadow-md transition-all duration-200 cursor-pointer group"
             >
-              <div className="absolute right-0 bottom-0 w-24 h-24 bg-slate-50 rounded-full blur-xl group-hover:bg-slate-100 transition-colors pointer-events-none" />
-              
-              <div className="flex justify-between items-start mb-6">
-                <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${card.color} text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                  <card.icon size={22} />
+              <div className="flex justify-between items-center mb-4">
+                <div className={`w-10 h-10 rounded-xl ${card.color} border flex items-center justify-center`}>
+                  <card.icon size={18} />
                 </div>
-                <div className="flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-wider bg-slate-50 group-hover:bg-slate-100 px-3 py-1.5 rounded-full transition-colors">
+                <div className="flex items-center gap-0.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 group-hover:bg-slate-200/80 px-2.5 py-1 rounded-lg transition-colors">
                   {card.cta}
                   <ChevronRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </div>
               
               <div>
-                <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{card.label}</div>
-                <div className="text-3xl font-black text-slate-900 tracking-tight mt-1.5">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{card.label}</div>
+                <div className="text-2xl font-bold text-slate-900 mt-1">
                   {typeof card.value === 'number' ? card.value.toLocaleString() : card.value}
                 </div>
-                <div className="text-[10px] font-bold text-slate-400 mt-2 flex items-center gap-1.5">
+                <div className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
                   <span className="w-1 h-1 rounded-full bg-slate-300" />
                   {card.subtext}
                 </div>
               </div>
             </div>
           ))}
-        </motion.div>
+        </div>
 
         {/* Main Dashboard Panel layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -216,52 +187,50 @@ export default function Dashboard({ user }: { user: User }) {
           {/* Left Column: Visual Analytics & Tabbed Ledger (col-span-8) */}
           <div className="lg:col-span-8 space-y-8">
             
-            {/* Custom Premium Activity Chart */}
-            <motion.div {...anim(1)} className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+            {/* Custom Clean Activity Chart */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-                <div className="space-y-1">
-                  <div className="text-[9px] font-black text-violet-600 uppercase tracking-widest">Analytics Dashboard</div>
-                  <h3 className="text-base font-black text-slate-900 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center"><TrendingUp size={16} /></div>
-                    Submission Frequency & Volatility
+                <div>
+                  <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Analytics Dashboard</div>
+                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 mt-1">
+                    <TrendingUp size={16} className="text-slate-500" />
+                    Submission Velocity Trend
                   </h3>
                 </div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-full text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
                   <Calendar size={12} className="text-slate-400" />
                   Temporal Analysis: Last 10 Days
                 </div>
               </div>
 
               {timeline.length === 0 ? (
-                <div className="py-16 text-center text-slate-400 border border-dashed border-slate-200 rounded-[2rem] bg-slate-50/50">
-                  <Inbox size={44} className="opacity-20 mx-auto mb-3 text-slate-400" />
-                  <p className="text-xs font-extrabold uppercase tracking-widest text-slate-400">Waiting for system records...</p>
+                <div className="py-16 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                  <Inbox size={40} className="opacity-20 mx-auto mb-2 text-slate-400" />
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Waiting for system records...</p>
                 </div>
               ) : (
                 <div>
-                  <div className="flex items-end gap-3 h-52 px-2 relative">
+                  <div className="flex items-end gap-3 h-48 px-2 relative">
                     {/* Horizontal helper grid lines */}
-                    <div className="absolute inset-x-0 top-0 border-t border-slate-50 pointer-events-none" />
-                    <div className="absolute inset-x-0 top-1/3 border-t border-slate-50 pointer-events-none" />
-                    <div className="absolute inset-x-0 top-2/3 border-t border-slate-50 pointer-events-none" />
+                    <div className="absolute inset-x-0 top-0 border-t border-slate-100 pointer-events-none" />
+                    <div className="absolute inset-x-0 top-1/3 border-t border-slate-100 pointer-events-none" />
+                    <div className="absolute inset-x-0 top-2/3 border-t border-slate-100 pointer-events-none" />
                     
                     {timeline.map(([date, count], i) => (
-                      <div key={date} className="flex-1 group relative flex flex-col items-center gap-3 h-full justify-end z-10">
+                      <div key={date} className="flex-1 group relative flex flex-col items-center gap-2 h-full justify-end z-10">
                         {/* Hover Tooltip card */}
-                        <div className="absolute -top-12 opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 transition-all duration-200 bg-slate-900 text-white text-[10px] px-3 py-1.5 rounded-xl pointer-events-none z-20 shadow-xl flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
-                          <span className="font-extrabold">{count as number} Submissions</span>
+                        <div className="absolute -top-10 opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 transition-all duration-150 bg-slate-900 text-white text-[10px] px-2.5 py-1 rounded-lg pointer-events-none z-20 shadow-md flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                          <span className="font-semibold">{count as number} Submissions</span>
                         </div>
                         
-                        {/* Beautiful gradient bar */}
-                        <motion.div 
-                          initial={{ height: 0 }} 
-                          animate={{ height: `${((count as number) / maxTimeline) * 85}%` }}
-                          transition={{ delay: 0.2 + i * 0.03, duration: 0.8, ease: "circOut" }}
-                          className="w-full bg-gradient-to-t from-violet-600 via-indigo-600 to-indigo-500 rounded-xl min-h-[10px] group-hover:from-violet-500 group-hover:to-blue-400 group-hover:shadow-lg group-hover:shadow-indigo-500/25 transition-all duration-300"
+                        {/* Beautiful clean bar */}
+                        <div 
+                          style={{ height: `${((count as number) / maxTimeline) * 85}%` }}
+                          className="w-full bg-indigo-600 rounded-md min-h-[6px] group-hover:bg-indigo-500 transition-colors duration-150"
                         />
                         
-                        <span className="text-[9px] font-black text-slate-400 group-hover:text-indigo-600 transition-colors uppercase mt-1">
+                        <span className="text-[9px] font-bold text-slate-400 group-hover:text-slate-700 transition-colors mt-1">
                           {date.split('-').slice(1).join('/')}
                         </span>
                       </div>
@@ -269,23 +238,23 @@ export default function Dashboard({ user }: { user: User }) {
                   </div>
                 </div>
               )}
-            </motion.div>
+            </div>
 
-            {/* Premium Tabbed Stream Center: Submissions vs System Audit Logs */}
-            <motion.div {...anim(2)} className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+            {/* Clean Tabbed Stream Center: Submissions vs System Audit Logs */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               
               {/* Tab Selector Header */}
-              <div className="p-6 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/30">
-                <div className="flex items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/50">
+              <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
+                <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200/50">
                   <button 
                     onClick={() => setActiveTab('submissions')}
-                    className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${activeTab === 'submissions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'submissions' ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}
                   >
                     Recent Submissions
                   </button>
                   <button 
                     onClick={() => setActiveTab('logs')}
-                    className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${activeTab === 'logs' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'logs' ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}
                   >
                     System Audit Logs
                   </button>
@@ -294,50 +263,50 @@ export default function Dashboard({ user }: { user: User }) {
                 {activeTab === 'submissions' ? (
                   <button 
                     onClick={() => navigate('/submissions')} 
-                    className="inline-flex items-center gap-1.5 text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest bg-indigo-50 hover:bg-indigo-100 px-4 py-2.5 rounded-xl transition-all active:scale-95 self-start sm:self-center"
+                    className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 uppercase tracking-wider bg-slate-100 hover:bg-slate-200/80 border border-slate-200 px-3 py-1.5 rounded-lg transition-all"
                   >
                     View All Submissions <ChevronRight size={10} />
                   </button>
                 ) : (
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-full text-[9px] font-black text-slate-500 uppercase tracking-wider">
-                    <Shield size={12} className="text-slate-400" />
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 border border-slate-200 rounded-lg text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                    <Shield size={11} className="text-slate-400" />
                     Security Ledger (Last 10 Actions)
                   </div>
                 )}
               </div>
               
               {/* Tab Content Panels */}
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-slate-100">
                 {activeTab === 'submissions' ? (
                   recentSubs.length === 0 ? (
                     <div className="p-16 text-center text-slate-400">
-                      <Inbox size={44} className="mx-auto opacity-20 mb-4" />
-                      <p className="text-xs font-bold uppercase tracking-wider">No submissions in queue</p>
+                      <Inbox size={40} className="mx-auto opacity-20 mb-3" />
+                      <p className="text-xs font-semibold uppercase tracking-wider">No submissions in queue</p>
                     </div>
                   ) : recentSubs.map((sub, i) => (
                     <div 
                       key={subId(sub)} 
                       onClick={() => { if (canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }} 
-                      className="w-full text-left px-8 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-slate-50/50 cursor-pointer group"
+                      className="w-full text-left px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-slate-50/50 cursor-pointer group"
                     >
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-50 to-slate-100 text-slate-600 group-hover:from-indigo-600 group-hover:to-indigo-500 group-hover:text-white flex items-center justify-center text-sm font-black transition-all duration-300 border border-slate-100/50 shrink-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600 flex items-center justify-center text-xs font-bold transition-all border border-slate-200/80 shrink-0">
                           {displaySubmissionNameFirstChar(sub)}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-black text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
+                          <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
                             {sub.form_title || 'Untitled Form submission'}
                           </p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[10px] font-black text-slate-400 tracking-wider">Nominee:</span>
-                            <span className="text-[10px] text-slate-600 font-extrabold truncate">
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] text-slate-400">Nominee:</span>
+                            <span className="text-[10px] text-slate-600 font-semibold truncate">
                               {displaySubmissionName(sub)}
                             </span>
                           </div>
                         </div>
                       </div>
                       
-                      <div className="flex items-center justify-between sm:justify-end gap-5 shrink-0 self-stretch sm:self-center">
+                      <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 self-stretch sm:self-center">
                         <div className="text-left sm:text-right">
                           <StatusBadge 
                             status={
@@ -347,51 +316,51 @@ export default function Dashboard({ user }: { user: User }) {
                             } 
                             size="xs" 
                           />
-                          <p className="text-[9px] text-slate-400 font-bold mt-1.5 uppercase tracking-tighter">
+                          <p className="text-[9px] text-slate-400 font-semibold mt-1 uppercase tracking-tighter">
                             {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : 'Today'}
                           </p>
                         </div>
-                        <ChevronRight size={16} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+                        <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
                       </div>
                     </div>
                   ))
                 ) : (
                   recentLogs.length === 0 ? (
-                    <div className="p-16 text-center text-slate-400 bg-slate-900/5 font-mono">
-                      <Terminal size={40} className="mx-auto opacity-10 mb-3 text-slate-500 animate-bounce" />
-                      <p className="text-xs font-black uppercase tracking-widest text-slate-500">Security audit trail is empty</p>
+                    <div className="p-16 text-center text-slate-400 bg-slate-50/50 font-mono">
+                      <Terminal size={32} className="mx-auto opacity-10 mb-2 text-slate-500" />
+                      <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Security audit trail is empty</p>
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                            <th className="px-6 py-4">User</th>
-                            <th className="px-6 py-4">Action</th>
-                            <th className="px-6 py-4">Timestamp</th>
-                            <th className="px-6 py-4">Status</th>
+                          <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                            <th className="px-6 py-3.5">User</th>
+                            <th className="px-6 py-3.5">Action</th>
+                            <th className="px-6 py-3.5">Timestamp</th>
+                            <th className="px-6 py-3.5">Status</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-50">
+                        <tbody className="divide-y divide-slate-100">
                           {recentLogs.map((log: any) => (
-                            <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="px-6 py-4">
+                            <tr key={log.id} className="hover:bg-slate-50/30 transition-colors">
+                              <td className="px-6 py-3.5">
                                 <div className="flex flex-col">
-                                  <span className="text-xs font-black text-slate-800">{log.user_name || 'System Operator'}</span>
-                                  <span className="text-[10px] text-slate-400 font-semibold">{log.user_email}</span>
+                                  <span className="text-xs font-semibold text-slate-800">{log.user_name || 'System Operator'}</span>
+                                  <span className="text-[10px] text-slate-400 font-medium">{log.user_email}</span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="px-6 py-3.5">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200/40">{log.action}</span>
+                                  <span className="text-[10.5px] font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded border border-slate-200">{log.action}</span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 text-xs font-semibold text-slate-500">
+                              <td className="px-6 py-3.5 text-xs font-medium text-slate-500">
                                 {log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}
                               </td>
-                              <td className="px-6 py-4">
-                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-50 text-emerald-600 uppercase border border-emerald-100">
-                                  <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" /> PASS
+                              <td className="px-6 py-3.5">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                  PASS
                                 </span>
                               </td>
                             </tr>
@@ -402,41 +371,41 @@ export default function Dashboard({ user }: { user: User }) {
                   )
                 )}
               </div>
-            </motion.div>
+            </div>
 
             {/* Quick Actions Shortcuts Board */}
-            <motion.div {...anim(1.5)} className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-md transition-shadow">
-              <div className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Administrative Utilities</div>
-              <h3 className="text-base font-black text-slate-900 mb-6 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><Settings size={16} /></div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Administrative Utilities</div>
+              <h3 className="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
+                <Settings size={16} className="text-slate-500" />
                 System Operational Controls
               </h3>
               
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[
-                  { title: "Form Generator", desc: "Design new custom forms", icon: FileText, bg: "bg-blue-50 text-blue-600", path: "/forms" },
-                  { title: "Review Pipeline", desc: "Configure stages & groups", icon: Target, bg: "bg-purple-50 text-purple-600", path: "/reviews" },
-                  { title: "Security Matrix", desc: "Manage system operators", icon: Shield, bg: "bg-amber-50 text-amber-600", path: "/users" }
+                  { title: "Form Generator", desc: "Design new custom forms", icon: FileText, bg: "bg-blue-50 text-blue-600 border-blue-100/50", path: "/forms" },
+                  { title: "Review Pipeline", desc: "Configure stages & groups", icon: Target, bg: "bg-purple-50 text-purple-600 border-purple-100/50", path: "/reviews" },
+                  { title: "Security Matrix", desc: "Manage system operators", icon: Shield, bg: "bg-amber-50 text-amber-600 border-amber-100/50", path: "/users" }
                 ].map((act) => (
                   <div 
                     key={act.title}
                     onClick={() => navigate(act.path)}
-                    className="p-5 rounded-2xl border border-slate-100 hover:border-slate-300 hover:bg-slate-50/50 cursor-pointer transition-all duration-200 group flex flex-col justify-between min-h-[120px]"
+                    className="p-5 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 cursor-pointer transition-all duration-150 group flex flex-col justify-between min-h-[110px]"
                   >
-                    <div className={`w-9 h-9 rounded-xl ${act.bg} flex items-center justify-center`}>
-                      <act.icon size={16} />
+                    <div className={`w-8 h-8 rounded-lg ${act.bg} border flex items-center justify-center`}>
+                      <act.icon size={15} />
                     </div>
                     <div className="mt-4">
-                      <div className="text-xs font-black text-slate-800 flex items-center gap-1">
+                      <div className="text-xs font-bold text-slate-800 flex items-center gap-0.5">
                         {act.title}
-                        <ArrowUpRight size={12} className="opacity-0 group-hover:opacity-100 translate-x-[-4px] group-hover:translate-x-0 transition-all text-slate-500" />
+                        <ArrowUpRight size={11} className="opacity-0 group-hover:opacity-100 translate-x-[-2px] group-hover:translate-x-0 transition-all text-slate-400" />
                       </div>
-                      <div className="text-[10px] font-medium text-slate-400 mt-1">{act.desc}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">{act.desc}</div>
                     </div>
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </div>
 
           </div>
 
@@ -444,107 +413,100 @@ export default function Dashboard({ user }: { user: User }) {
           <div className="lg:col-span-4 space-y-8">
             
             {/* Highly Useful Platform Progress Widget */}
-            <motion.div {...anim(2.5)} className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-              <div className="absolute right-0 bottom-0 w-32 h-32 bg-slate-50 rounded-full blur-3xl pointer-events-none" />
-              
-              <div className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Fulfillment Monitor</div>
-              <h3 className="font-black text-slate-900 flex items-center gap-3 text-sm mb-6">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><Award size={16} /></div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm relative overflow-hidden group">
+              <div className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-1">Fulfillment Monitor</div>
+              <h3 className="font-bold text-slate-900 flex items-center gap-2 text-sm mb-6">
+                <Award size={16} className="text-slate-500" />
                 Nomination Response Rate
               </h3>
               
-              {/* Circular CSS Progress Indicator */}
-              <div className="flex flex-col items-center justify-center py-6 border-b border-slate-50">
-                <div className="relative w-36 h-36 flex items-center justify-center">
-                  {/* Decorative outer glow */}
-                  <div className="absolute inset-0 rounded-full bg-slate-50 border border-slate-100 animate-pulse pointer-events-none" />
-                  
+              {/* Circular SVG Progress Indicator */}
+              <div className="flex flex-col items-center justify-center py-4 border-b border-slate-100">
+                <div className="relative w-32 h-32 flex items-center justify-center">
                   {/* Circle SVG */}
-                  <svg className="w-32 h-32 transform -rotate-90">
-                    <circle cx="64" cy="64" r="50" stroke="#f1f5f9" strokeWidth="8" fill="transparent" />
+                  <svg className="w-28 h-28 transform -rotate-90">
+                    <circle cx="56" cy="56" r="44" stroke="#f1f5f9" strokeWidth="6" fill="transparent" />
                     <motion.circle 
-                      cx="64" 
-                      cy="64" 
-                      r="50" 
+                      cx="56" 
+                      cy="56" 
+                      r="44" 
                       stroke="#4f46e5" 
-                      strokeWidth="8" 
+                      strokeWidth="6" 
                       fill="transparent" 
-                      strokeDasharray="314"
-                      initial={{ strokeDashoffset: 314 }}
-                      animate={{ strokeDashoffset: 314 - (314 * (s.completionRate || 0)) / 100 }}
-                      transition={{ delay: 0.5, duration: 1.2, ease: "easeOut" }}
+                      strokeDasharray="276"
+                      initial={{ strokeDashoffset: 276 }}
+                      animate={{ strokeDashoffset: 276 - (276 * (s.completionRate || 0)) / 100 }}
+                      transition={{ delay: 0.3, duration: 1, ease: "easeOut" }}
                     />
                   </svg>
                   <div className="absolute flex flex-col items-center justify-center text-center">
-                    <span className="text-3xl font-black text-slate-900">{s.completionRate || 0}%</span>
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Finished</span>
+                    <span className="text-2xl font-bold text-slate-900">{s.completionRate || 0}%</span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Finished</span>
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-3 gap-6 w-full text-center mt-6">
+                <div className="grid grid-cols-3 gap-4 w-full text-center mt-6">
                   <div>
-                    <div className="text-xs font-black text-slate-700">{s.nominationsByStatus?.invited || 0}</div>
-                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Invited</div>
+                    <div className="text-xs font-bold text-slate-700">{s.nominationsByStatus?.invited || 0}</div>
+                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Invited</div>
                   </div>
                   <div>
-                    <div className="text-xs font-black text-slate-700">{s.nominationsByStatus?.in_progress || 0}</div>
-                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Pending</div>
+                    <div className="text-xs font-bold text-slate-700">{s.nominationsByStatus?.in_progress || 0}</div>
+                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Pending</div>
                   </div>
                   <div>
-                    <div className="text-xs font-black text-slate-700">{s.nominationsByStatus?.completed || 0}</div>
-                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Completed</div>
+                    <div className="text-xs font-bold text-slate-700">{s.nominationsByStatus?.completed || 0}</div>
+                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Completed</div>
                   </div>
                 </div>
               </div>
               
-              <div className="pt-4 flex items-center justify-between text-[10px] text-slate-400 font-black uppercase tracking-widest">
+              <div className="pt-4 flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                 <span>Avg Graded Score</span>
-                <span className="text-indigo-600 font-extrabold">{s.avgScore || 0}% Average</span>
+                <span className="text-indigo-600 font-bold">{s.avgScore || 0}% Average</span>
               </div>
-            </motion.div>
+            </div>
 
             {/* Platform Funnel */}
-            <motion.div {...anim(3)} className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-              <div className="absolute -right-12 -top-12 w-32 h-32 bg-slate-50 rounded-full blur-3xl group-hover:bg-indigo-50/20 transition-all pointer-events-none" />
-              
-              <div className="flex items-center justify-between mb-8 relative">
-                <div className="space-y-1">
-                  <div className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Platform Status</div>
-                  <h3 className="font-black text-slate-900 flex items-center gap-3 text-sm">
-                    <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><Target size={16} /></div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm relative overflow-hidden group">
+              <div className="flex items-center justify-between mb-6 relative">
+                <div>
+                  <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Platform Status</div>
+                  <h3 className="font-bold text-slate-900 flex items-center gap-2 text-sm mt-1">
+                    <Target size={16} className="text-slate-500" />
                     Conversion Funnel
                   </h3>
                 </div>
-                <div className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-[10px] font-black text-slate-600">
+                <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-[11px] font-bold text-slate-600">
                   {s.totalSubmissions || 0}
                 </div>
               </div>
 
-              <div className="space-y-6 relative">
+              <div className="space-y-4 relative">
                 {[
-                  { label: 'Pending Assessment', value: s.submissionsByStatus?.submitted || 0, color: 'from-blue-500 to-indigo-500', icon: Inbox, bg: 'bg-blue-50', text: 'text-blue-600' },
-                  { label: 'Under Review', value: s.submissionsByStatus?.under_review || 0, color: 'from-indigo-500 to-purple-500', icon: Clock, bg: 'bg-indigo-50', text: 'text-indigo-600' },
-                  { label: 'Approved Records', value: s.submissionsByStatus?.approved || 0, color: 'from-emerald-400 to-emerald-500', icon: CheckSquare, bg: 'bg-emerald-50', text: 'text-emerald-600' },
-                  { label: 'Declined Submissions', value: s.submissionsByStatus?.rejected || 0, color: 'from-rose-400 to-rose-500', icon: AlertTriangle, bg: 'bg-rose-50', text: 'text-rose-600' }
+                  { label: 'Pending Assessment', value: s.submissionsByStatus?.submitted || 0, color: 'bg-blue-600', icon: Inbox, bg: 'bg-blue-50 text-blue-600 border-blue-100/50' },
+                  { label: 'Under Review', value: s.submissionsByStatus?.under_review || 0, color: 'bg-indigo-600', icon: Clock, bg: 'bg-indigo-50 text-indigo-600 border-indigo-100/50' },
+                  { label: 'Approved Records', value: s.submissionsByStatus?.approved || 0, color: 'bg-emerald-500', icon: CheckSquare, bg: 'bg-emerald-50 text-emerald-600 border-emerald-100/50' },
+                  { label: 'Declined Submissions', value: s.submissionsByStatus?.rejected || 0, color: 'bg-rose-500', icon: AlertTriangle, bg: 'bg-rose-50 text-rose-600 border-rose-100/50' }
                 ].map((st, i) => { 
                   const total = Math.max(s.totalSubmissions || 1, 1); 
                   const pct = (st.value / total) * 100;
                   return (
                     <div key={st.label}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-7 h-7 rounded-xl ${st.bg} ${st.text} flex items-center justify-center shadow-sm`}><st.icon size={13} /></div>
-                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{st.label}</span>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded-md ${st.bg} border flex items-center justify-center`}><st.icon size={11} /></div>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{st.label}</span>
                         </div>
-                        <span className="text-xs font-black text-slate-900">{st.value}</span>
+                        <span className="text-xs font-bold text-slate-900">{st.value}</span>
                       </div>
                       
-                      <div className="h-2 bg-slate-50 border border-slate-100/50 rounded-full overflow-hidden p-[1.5px]">
+                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                         <motion.div 
                           initial={{ width: 0 }} 
                           animate={{ width: `${pct}%` }} 
-                          transition={{ delay: 0.4 + (i * 0.08), duration: 1, ease: "circOut" }} 
-                          className={`h-full rounded-full bg-gradient-to-r ${st.color} shadow-sm`} 
+                          transition={{ delay: 0.3 + (i * 0.05), duration: 0.8, ease: "circOut" }} 
+                          className={`h-full rounded-full ${st.color}`} 
                         />
                       </div>
                     </div>
@@ -552,29 +514,29 @@ export default function Dashboard({ user }: { user: User }) {
                 })}
               </div>
 
-              <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between text-[10px] text-slate-400 font-black uppercase tracking-widest">
+              <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                 <span>Success Index</span>
-                <span className="text-emerald-500 font-black">
+                <span className="text-emerald-600 font-bold">
                   {s.totalSubmissions > 0 ? Math.round(((s.submissionsByStatus?.approved || 0) / s.totalSubmissions) * 100) : 0}% Approved
                 </span>
               </div>
-            </motion.div>
+            </div>
 
             {/* Premium System Information Widget */}
-            <motion.div {...anim(3.5)} className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100">
-                  <Shield size={15} className="text-slate-400" />
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
+                  <Shield size={13} className="text-slate-400" />
                 </div>
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Security Notice</h3>
+                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Security Notice</h3>
               </div>
-              <p className="text-xs text-slate-500 leading-relaxed font-medium mb-6">
+              <p className="text-[11.5px] text-slate-500 leading-relaxed font-medium mb-4">
                 Your connection to the enterprise console is fully encrypted. All actions in this console are recorded in the central audit ledger for security compliance.
               </p>
-              <div className="pt-4 border-t border-slate-50 flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Secure Connection Active
+              <div className="pt-3 border-t border-slate-100 flex items-center gap-1.5 text-[9.5px] font-bold text-indigo-600 uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Secure Connection Active
               </div>
-            </motion.div>
+            </div>
 
           </div>
 
