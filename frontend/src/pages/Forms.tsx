@@ -234,51 +234,49 @@ export default function Forms({ user }: { user: User }) {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-[1400px] mx-auto space-y-8 pb-10">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className="text-xl font-bold font-heading">{isAdmin ? 'Form Builder' : 'Available Forms'}</h1>
-          <p className="text-sm text-slate-500">{isAdmin ? 'Create, configure fields, set branching & quiz logic' : 'Select a form to fill'}</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">{isAdmin ? 'Form Builder' : 'Available Forms'}</h1>
+          <p className="text-sm text-slate-500 font-medium mt-1">{isAdmin ? 'Create, configure fields, set branching & quiz logic' : 'Select a form to fill'}</p>
         </div>
         {isAdmin && (
-          <button onClick={() => openCreateModal()} className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover shadow-sm min-h-[44px]">
-            <Plus size={16} /> Create Form
+          <button onClick={() => openCreateModal()} className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-primary-hover shadow-lg shadow-primary/20 transition-all active:scale-95">
+            <Plus size={18} strokeWidth={3} /> Create Form
           </button>
         )}
       </div>
 
       {/* Tabs + Search + Filter */}
       {(forms.length > 0 || isAdmin) && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-2 rounded-[1.5rem] border border-slate-200 shadow-sm">
+          <div className="flex p-1 bg-slate-50 rounded-xl overflow-x-auto no-scrollbar">
             {(['active', 'draft', 'expired'] as const)
               .filter(t => !((user.role === 'functionary' || user.role === 'teacher') && t === 'draft'))
               .map(t => (
               <button key={t} onClick={() => setTab(t)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${
-                  tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                className={`px-6 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
+                  tab === t ? 'bg-white text-primary shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:text-slate-600'
                 }`}>
-                {t} <span className="ml-1 opacity-60">({
-                  forms.filter(f => {
-                    // APPLY ROLE FILTERING TO COUNT TOO
+                {t} <span className="ml-1.5 opacity-40 font-bold">
+                  {forms.filter(f => {
                     if (user.role === 'functionary' && f.form_type !== 'nomination') return false;
-                    
                     const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
                     let finalStatus = f.status;
                     if (isExpired) finalStatus = 'expired';
                     return finalStatus === t;
-                  }).length
-                })</span>
+                  }).length}
+                </span>
               </button>
             ))}
           </div>
-          <div className="flex-1" />
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 min-w-[180px]">
-              <Search size={14} className="text-slate-500 flex-shrink-0" />
-              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search forms..."
-                className="bg-transparent text-sm outline-none w-full placeholder-muted text-slate-900" />
+          
+          <div className="flex items-center gap-3 px-2">
+            <div className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 min-w-[280px] focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/10 transition-all">
+              <Search size={16} className="text-slate-400 flex-shrink-0" />
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by title or type..."
+                className="bg-transparent text-sm font-medium outline-none w-full placeholder-slate-400 text-slate-900" />
             </div>
           </div>
         </div>
@@ -286,30 +284,28 @@ export default function Forms({ user }: { user: User }) {
 
       {/* Form Cards Grid */}
       {filtered.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
+        <div className="text-center py-20 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm">
           <div className="max-w-md mx-auto px-6">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FileText size={32} className="text-slate-400" />
+            <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-slate-300">
+              <FileText size={40} />
             </div>
-            <h3 className="text-base font-bold text-slate-900 mb-2">
+            <h3 className="text-lg font-black text-slate-900 mb-2 uppercase tracking-tight">
               {user.role === 'teacher' ? 'No Forms Assigned' : `No ${tab} forms found`}
             </h3>
-            <p className="text-sm text-slate-500 mb-6">
+            <p className="text-sm text-slate-500 font-medium leading-relaxed mb-8">
               {user.role === 'teacher' 
-                ? "You don't have any forms assigned to you at the moment. Please contact your school functionary if you believe this is an error."
-                : tab === 'active' 
-                  ? "There are no active forms available right now."
-                  : `There are no forms in the ${tab} category.`}
+                ? "You don't have any forms assigned to you at the moment."
+                : `There are no forms in the ${tab} category currently.`}
             </p>
             {isAdmin && tab === 'active' && (
-              <button onClick={() => openCreateModal()} className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover shadow-sm transition-all">
-                <Plus size={16} /> Create Your First Form
+              <button onClick={() => openCreateModal()} className="inline-flex items-center gap-2 px-8 py-3 bg-primary text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-primary-hover shadow-xl shadow-primary/20 transition-all active:scale-95">
+                <Plus size={18} strokeWidth={3} /> Create Your First Form
               </button>
             )}
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filtered.map(row => {
             const Icon = typeIcons[row.form_type] || FileText;
             const c = typeColors[row.form_type] || typeColors.normal;
@@ -319,10 +315,10 @@ export default function Forms({ user }: { user: User }) {
 
             return (
               <div key={row.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col group relative">
+                className="bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col group overflow-hidden">
 
                 {/* Color bar top */}
-                <div className={`h-1.5 rounded-t-2xl ${
+                <div className={`h-2 ${
                   row.form_type === 'normal' ? 'bg-accent-blue' :
                   row.form_type === 'nomination' ? 'bg-success' :
                   row.form_type === 'branching' ? 'bg-accent-purple' :
@@ -330,20 +326,20 @@ export default function Forms({ user }: { user: User }) {
                   'bg-accent-red'
                 }`} />
 
-                <div className="p-5 flex-1 flex flex-col">
+                <div className="p-7 flex-1 flex flex-col">
                   {/* Type badge + menu */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold ${c.bg} ${c.text}`}>
-                      <Icon size={13} /> {typeLabels[row.form_type]}
+                  <div className="flex items-start justify-between mb-5">
+                    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${c.bg} ${c.text} ${c.border}`}>
+                      <Icon size={14} strokeWidth={2.5} /> {typeLabels[row.form_type]}
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
                       {user.role === 'teacher' ? (
                         recentSubs.some(s => s.form_id === row.id) ? (
-                          <span className="inline-flex items-center rounded-full font-semibold capitalize ring-1 ring-inset px-1.5 py-0.5 text-[9px] bg-emerald-50 text-emerald-700 ring-emerald-500/20">
+                          <span className="inline-flex items-center rounded-full font-black uppercase px-2 py-0.5 text-[9px] bg-emerald-50 text-emerald-600 ring-1 ring-emerald-500/20">
                             Submitted
                           </span>
                         ) : teacherNominationLinks[row.id] ? (
-                          <span className="inline-flex items-center rounded-full font-semibold capitalize ring-1 ring-inset px-1.5 py-0.5 text-[9px] bg-amber-50 text-amber-700 ring-amber-500/20">
+                          <span className="inline-flex items-center rounded-full font-black uppercase px-2 py-0.5 text-[9px] bg-amber-50 text-amber-600 ring-1 ring-amber-500/20">
                             Pending
                           </span>
                         ) : (
@@ -352,21 +348,22 @@ export default function Forms({ user }: { user: User }) {
                       ) : (
                         <StatusBadge status={isExpired ? 'expired' : row.status} size="xs" />
                       )}
+                      
                       {isAdmin && (
                         <div className="relative">
                           <button onClick={e => { e.stopPropagation(); setOpenMenu(openMenu === row.id ? null : row.id); }}
-                            className={`p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-900 transition-all ${openMenu === row.id ? 'bg-slate-100 text-slate-900 opacity-100' : 'opacity-40 group-hover:opacity-100'}`}>
-                            <MoreHorizontal size={16} />
+                            className={`p-1.5 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-slate-900 transition-all ${openMenu === row.id ? 'bg-slate-50 text-slate-900 opacity-100' : 'opacity-40 group-hover:opacity-100'}`}>
+                            <MoreHorizontal size={18} />
                           </button>
                           {openMenu === row.id && (
-                            <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-2xl border border-slate-200 z-[100] py-1" onClick={e => e.stopPropagation()}>
-                              <button onClick={() => openEditModal(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Settings size={13} className="text-slate-500" /> Settings</button>
-                              <button onClick={() => openBuilder(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Pencil size={13} className="text-slate-500" /> Edit Fields</button>
-                              <button onClick={() => openPreviewModal(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Eye size={13} className="text-slate-500" /> Preview</button>
-                              <button onClick={() => viewVersions(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><History size={13} className="text-slate-500" /> Versions</button>
-                              <button onClick={() => handleClone(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Copy size={13} className="text-slate-500" /> Clone</button>
-                              <div className="border-t border-slate-200 my-1" />
-                              <button onClick={() => handleDelete(row._id || row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-red-50 flex items-center gap-2.5 text-danger"><Trash2 size={13} /> Delete</button>
+                            <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[100] py-2 overflow-hidden" onClick={e => e.stopPropagation()}>
+                              <button onClick={() => openEditModal(row)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-primary flex items-center gap-3 transition-colors"><Settings size={14} /> Settings</button>
+                              <button onClick={() => openBuilder(row)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-primary flex items-center gap-3 transition-colors"><Pencil size={14} /> Edit Fields</button>
+                              <button onClick={() => openPreviewModal(row)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-primary flex items-center gap-3 transition-colors"><Eye size={14} /> Preview</button>
+                              <button onClick={() => viewVersions(row.id)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-primary flex items-center gap-3 transition-colors"><History size={14} /> Versions</button>
+                              <button onClick={() => handleClone(row.id)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-primary flex items-center gap-3 transition-colors"><Copy size={14} /> Clone</button>
+                              <div className="border-t border-slate-50 my-1" />
+                              <button onClick={() => handleDelete(row._id || row.id)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-red-500 hover:bg-red-50 flex items-center gap-3 transition-colors"><Trash2 size={14} /> Delete</button>
                             </div>
                           )}
                         </div>
@@ -375,30 +372,30 @@ export default function Forms({ user }: { user: User }) {
                   </div>
 
                   {/* Title */}
-                  <h3 className="text-base font-bold font-heading text-slate-900 leading-snug mb-1.5 line-clamp-2">
+                  <h3 className="text-lg font-black font-heading text-slate-900 leading-tight mb-2 line-clamp-2 tracking-tight">
                     {row.title || '(Untitled)'}
                   </h3>
 
                   {/* Description */}
                   {row.description && (
-                    <p className="text-xs text-slate-500 leading-relaxed mb-3 line-clamp-2">{row.description}</p>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed mb-4 line-clamp-2">{row.description}</p>
                   )}
 
                   <div className="flex-1" />
 
                   {/* Meta */}
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500 mt-3 pt-3 border-t border-slate-200">
-                    <span className="flex items-center gap-1"><Hash size={11} /> {fieldCount} fields</span>
-                    <span className="flex items-center gap-1"><Calendar size={11} /> {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : row.created_at ? new Date(row.created_at).toLocaleDateString() : '—'}</span>
+                  <div className="flex flex-wrap items-center gap-4 text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-4 pt-5 border-t border-slate-50">
+                    <span className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100"><Hash size={12} className="text-slate-300" /> {fieldCount} fields</span>
+                    <span className="flex items-center gap-1.5"><Calendar size={12} className="text-slate-300" /> {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : row.created_at ? new Date(row.created_at).toLocaleDateString() : '—'}</span>
                     {row.expires_at && (
-                      <span className={`flex items-center gap-1 ${isExpired ? 'text-danger font-semibold' : ''}`}>
-                        <Clock size={11} /> {isExpired ? 'Expired' : `Due ${new Date(row.expires_at).toLocaleDateString()}`}
+                      <span className={`flex items-center gap-1.5 ml-auto ${isExpired ? 'text-danger' : 'text-primary'}`}>
+                        <Clock size={12} /> {isExpired ? 'Expired' : `Due ${new Date(row.expires_at).toLocaleDateString()}`}
                       </span>
                     )}
                   </div>
 
                   {/* Actions */}
-                  <div className="flex flex-wrap gap-2 mt-4">
+                  <div className="flex items-center gap-2 mt-6">
                     {canFill && user.role !== 'functionary' && (
                       <button onClick={() => {
                         if (user.role === 'teacher') {
@@ -412,16 +409,16 @@ export default function Forms({ user }: { user: User }) {
                         }
                         openPreviewModal(row);
                       }}
-                        className="flex-1 min-w-[120px] py-2.5 bg-accent-green text-white rounded-xl text-sm font-bold hover:bg-accent-green-hover transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm">
-                        {user.role === 'teacher' ? <Play size={14} /> : <Eye size={14} />}
+                        className="flex-1 py-3.5 bg-accent-green text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-accent-green-hover transition-all flex items-center justify-center gap-2 shadow-lg shadow-accent-green/20 active:scale-95">
+                        {user.role === 'teacher' ? <Play size={14} fill="currentColor" /> : <Eye size={14} strokeWidth={3} />}
                         {user.role === 'teacher' ? 'Fill Form' : 'Preview'}
                       </button>
                     )}
                     
                     {canFill && user.role === 'functionary' && (
                       <button onClick={() => navigate(`/nominations?form_id=${row.id}`)}
-                        className="flex-1 min-w-[140px] py-2.5 bg-accent-green text-white rounded-xl text-sm font-bold hover:bg-accent-green-hover transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm">
-                        {row.form_type === 'nomination' ? <Play size={14} /> : <Award size={14} />}
+                        className="flex-1 py-3.5 bg-accent-green text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-accent-green-hover transition-all flex items-center justify-center gap-2 shadow-lg shadow-accent-green/20 active:scale-95">
+                        {row.form_type === 'nomination' ? <Play size={14} fill="currentColor" /> : <Award size={14} strokeWidth={2.5} />}
                         Nominate
                       </button>
                     )}
@@ -429,8 +426,8 @@ export default function Forms({ user }: { user: User }) {
                     {isAdmin && (
                       <>
                         <button onClick={() => openBuilder(row)}
-                          className="flex-1 min-w-[100px] py-2.5 px-4 bg-primary/10 text-primary rounded-xl text-sm font-bold hover:bg-primary/20 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
-                          <Pencil size={14} /> Edit
+                          className="flex-1 py-3.5 bg-primary/5 text-primary rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-primary/10 transition-all flex items-center justify-center gap-2 border border-primary/10 active:scale-95">
+                          <Pencil size={14} strokeWidth={3} /> Edit
                         </button>
                         <button onClick={(e) => { 
                           e.stopPropagation(); 
@@ -438,20 +435,20 @@ export default function Forms({ user }: { user: User }) {
                           navigator.clipboard.writeText(link);
                           alert('Form link copied to clipboard!');
                         }}
-                          className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors flex items-center justify-center min-h-[44px] border border-blue-100"
-                          title="Copy Form Link">
-                          <Copy size={16} />
+                          className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-all flex items-center justify-center border border-blue-100 active:scale-95"
+                          title="Copy Link">
+                          <Copy size={16} strokeWidth={2.5} />
                         </button>
                         <button onClick={(e) => { e.stopPropagation(); handleDelete(row._id || row.id); }}
-                          className="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center min-h-[44px] border border-red-100"
-                          title="Delete Form">
-                          <Trash2 size={16} />
+                          className="w-12 h-12 bg-red-50 text-red-500 rounded-2xl hover:bg-red-100 transition-all flex items-center justify-center border border-red-100 active:scale-95"
+                          title="Delete">
+                          <Trash2 size={16} strokeWidth={2.5} />
                         </button>
                       </>
                     )}
                     
                     {!canFill && !isAdmin && (
-                      <div className="flex-1 py-2.5 bg-slate-100 rounded-xl text-sm text-slate-500 font-medium text-center min-h-[44px] flex items-center justify-center gap-2 border border-slate-200">
+                      <div className="flex-1 py-3.5 bg-slate-50 rounded-2xl text-[10px] text-slate-400 font-black uppercase tracking-widest text-center flex items-center justify-center gap-2 border border-slate-100">
                         <Clock size={14} /> {row.status === 'draft' ? 'Not yet active' : 'Form closed'}
                       </div>
                     )}
