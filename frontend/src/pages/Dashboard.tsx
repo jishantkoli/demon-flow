@@ -147,6 +147,9 @@ export default function Dashboard({ user }: { user: User }) {
             exit={{ opacity: 0, y: -10 }}
             className="space-y-6"
           >
+            <p className="text-[11px] text-slate-400">Tip: Click on dashboard cards or list items to navigate directly to detail pages.</p>
+
+            {/* Stat Cards Grid */}
             <motion.div {...anim(0)} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {user.role === 'admin' && <>
                 <StatCard label="Total Users" value={s.totalUsers || 0} icon={Users} color="blue" onClick={() => navigate('/users')} ctaText="Manage users" />
@@ -178,45 +181,144 @@ export default function Dashboard({ user }: { user: User }) {
               </>}
             </motion.div>
 
+            {/* Main Content Area */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <motion.div {...anim(1)} className="lg:col-span-8 space-y-6">
-                <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-                  <div className="p-5 border-b border-border flex items-center justify-between bg-surface/50">
-                    <h3 className="font-bold text-sm flex items-center gap-2"><Activity size={16} className="text-primary" /> Recent Submissions</h3>
-                    <button onClick={() => navigate('/submissions')} className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider">View All</button>
-                  </div>
-                  <div className="divide-y divide-border">
-                    {recentSubs.length === 0 ? (
-                      <div className="p-10 text-center text-muted">
-                        <Inbox size={32} className="mx-auto opacity-20 mb-2" />
-                        <p className="text-xs">No recent submissions found</p>
-                      </div>
-                    ) : recentSubs.map((sub, i) => (
-                      <div
-                        key={subId(sub)}
-                        onClick={() => { if (canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }}
-                        className={`w-full text-left px-5 py-3 flex items-center gap-3 transition-colors ${canOpenSubmission(sub) ? 'hover:bg-slate-50 cursor-pointer' : ''}`}
-                      >
-                        <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
-                          {displaySubmissionNameFirstChar(sub)}
+              {/* Left Column: Recent Submissions & Progress */}
+              <div className="lg:col-span-8 space-y-6">
+                {/* Reviewer Progress */}
+                {user.role === 'reviewer' && (
+                  <motion.div {...anim(1)} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                    <h3 className="font-semibold font-heading text-lg mb-4 flex items-center gap-2">
+                      <Award size={20} className="text-primary" /> Your Review Progress
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span className="text-slate-600">Overall Completion</span>
+                          <span className="font-bold text-primary">
+                            {s.pendingReviews + s.completedReviews > 0 
+                              ? Math.round((s.completedReviews / (s.pendingReviews + s.completedReviews)) * 100) 
+                              : 0}%
+                          </span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate">{sub.form_title || 'Form Entry'}</p>
-                          <p className="text-[10px] text-muted truncate">{displaySubmissionName(sub)} • {displaySubmissionMeta(sub)}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <StatusBadge status={sub.status} size="xs" />
-                          <p className="text-[9px] text-muted mt-0.5">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Just now'}</p>
+                        <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }} 
+                            animate={{ width: `${(s.completedReviews / (Math.max(s.pendingReviews + s.completedReviews, 1))) * 100}%` }} 
+                            className="h-full bg-primary rounded-full"
+                          />
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
+                    </div>
+                  </motion.div>
+                )}
 
-              <motion.div {...anim(2)} className="lg:col-span-4 space-y-6">
-                {user.role === 'admin' ? (
-                  <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                {/* Teacher Progress */}
+                {user.role === 'teacher' && (
+                  <motion.div {...anim(1)} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                    <h3 className="font-semibold font-heading text-lg mb-4 flex items-center gap-2">
+                      <TrendingUp size={20} className="text-primary" /> Submission Progress
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span className="text-slate-600">Overall Completion</span>
+                          <span className="font-bold text-primary">
+                            {s.activeForms > 0 
+                              ? Math.round((s.totalSubmissions / Math.max(s.activeForms, 1)) * 100) 
+                              : 0}%
+                          </span>
+                        </div>
+                        <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }} 
+                            animate={{ width: `${Math.min((s.totalSubmissions / Math.max(s.activeForms, 1)) * 100, 100)}%` }} 
+                            className="h-full bg-primary rounded-full"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Admin/Functionary Recent Submissions */}
+                {(user.role === 'admin' || user.role === 'functionary') && (
+                  <motion.div {...anim(1)} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                    <div className="p-5 border-b border-border flex items-center justify-between bg-surface/50">
+                      <h3 className="font-bold text-sm flex items-center gap-2"><Activity size={16} className="text-primary" /> Recent Submissions</h3>
+                      <button onClick={() => navigate('/submissions')} className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider">View All</button>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {recentSubs.length === 0 ? (
+                        <div className="p-10 text-center text-muted">
+                          <Inbox size={32} className="mx-auto opacity-20 mb-2" />
+                          <p className="text-xs">No recent submissions found</p>
+                        </div>
+                      ) : recentSubs.map((sub, i) => (
+                        <div
+                          key={subId(sub)}
+                          onClick={() => { if (canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }}
+                          className={`w-full text-left px-5 py-3 flex items-center gap-3 transition-colors ${canOpenSubmission(sub) ? 'hover:bg-slate-50 cursor-pointer' : ''}`}
+                        >
+                          <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                            {displaySubmissionNameFirstChar(sub)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate">{sub.form_title || 'Form Entry'}</p>
+                            <p className="text-[10px] text-muted truncate">{displaySubmissionName(sub)} • {displaySubmissionMeta(sub)}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <StatusBadge status={sub.status} size="xs" />
+                            <p className="text-[9px] text-muted mt-0.5">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Just now'}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Teacher Recent Submissions */}
+                {user.role === 'teacher' && (
+                  <motion.div {...anim(2)} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+                      <h3 className="font-semibold font-heading text-sm flex items-center gap-2">
+                        <Inbox size={16} className="text-primary" /> My Recent Submissions
+                      </h3>
+                      <button className="text-[10px] text-primary font-bold hover:underline" onClick={() => navigate('/submissions')}>View all</button>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {recentSubs.filter(sub => sub.user_email === user.email).length === 0 ? (
+                        <div className="p-10 text-center">
+                          <p className="text-sm text-slate-500">You haven't submitted any forms yet.</p>
+                        </div>
+                      ) : (
+                        recentSubs.filter(sub => sub.user_email === user.email).slice(0, 4).map((sub, idx) => (
+                          <button
+                            key={subId(sub) || `teacher-sub-${idx}`}
+                            className="w-full text-left px-5 py-4 flex items-center gap-4 transition-colors hover:bg-slate-50"
+                            onClick={() => navigate(`/forms/view?submission=${subId(sub)}`)}
+                          >
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-primary flex-shrink-0">
+                              <FileText size={20} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-slate-900 truncate">{sub.form_title || 'Untitled Form'}</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">Submitted on {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'N/A'}</p>
+                            </div>
+                            <StatusBadge status={sub.status} size="xs" />
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Right Column: Audit Logs, CTA & Status */}
+              <div className="lg:col-span-4 space-y-6">
+                {/* Admin Audit Logs */}
+                {user.role === 'admin' && (
+                  <motion.div {...anim(2)} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
                     <div className="p-5 border-b border-border flex items-center justify-between bg-surface/50">
                       <h3 className="font-bold text-sm flex items-center gap-2"><Shield size={16} className="text-amber-500" /> Audit Logs</h3>
                     </div>
@@ -233,17 +335,48 @@ export default function Dashboard({ user }: { user: User }) {
                         </div>
                       ))}
                     </div>
-                  </div>
-                ) : (
-                  <div className="bg-primary/5 rounded-2xl border border-primary/10 p-6">
-                    <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary mb-4">
-                      <Award size={20} />
-                    </div>
-                    <h3 className="font-bold text-sm mb-2">Platform Notice</h3>
-                    <p className="text-xs text-slate-600 leading-relaxed">Welcome to the school management portal. Use the sidebar to manage forms, view submissions, and track nominations.</p>
-                  </div>
+                  </motion.div>
                 )}
-              </motion.div>
+
+                {/* Reviewer/Teacher CTA Cards */}
+                {(user.role === 'reviewer' || user.role === 'teacher') && (
+                  <motion.div {...anim(2)} className={`rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex flex-col justify-center ${user.role === 'reviewer' ? 'bg-gradient-to-br from-primary to-primary/80' : 'bg-gradient-to-br from-indigo-600 to-violet-700'}`}>
+                    <div className="relative z-10">
+                      <h3 className="text-2xl font-bold mb-2">{user.role === 'reviewer' ? 'Ready to start?' : 'Ready to contribute?'}</h3>
+                      <p className="text-white/80 text-sm mb-6 max-w-[280px]">
+                        {user.role === 'reviewer' 
+                          ? `You have ${s.pendingReviews || 0} submissions waiting for evaluation.` 
+                          : `There are ${s.activeForms || 0} forms available for you.`}
+                      </p>
+                      <button 
+                        onClick={() => navigate(user.role === 'reviewer' ? '/reviews' : '/forms')}
+                        className="bg-white text-primary px-8 py-3 rounded-xl font-bold text-sm hover:bg-slate-100 transition-colors shadow-sm"
+                      >
+                        {user.role === 'reviewer' ? 'Go to Review Queue' : 'Browse Forms'}
+                      </button>
+                    </div>
+                    {user.role === 'reviewer' ? <CheckSquare className="absolute -right-6 -bottom-6 text-white/10 w-48 h-48 -rotate-12" /> : <FileText className="absolute -right-6 -bottom-6 text-white/10 w-48 h-48 -rotate-12" />}
+                  </motion.div>
+                )}
+
+                {/* Admin Status Summary */}
+                {user.role === 'admin' && (
+                  <motion.div {...anim(3)} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                    <h3 className="font-semibold font-heading text-sm mb-4">Submission Status</h3>
+                    <div className="space-y-3">
+                      {[{ label: 'Submitted', value: s.submissionsByStatus?.submitted || 0, color: 'bg-blue-500' },
+                        { label: 'Under Review', value: s.submissionsByStatus?.under_review || 0, color: 'bg-indigo-500' },
+                        { label: 'Approved', value: s.submissionsByStatus?.approved || 0, color: 'bg-emerald-500' },
+                        { label: 'Rejected', value: s.submissionsByStatus?.rejected || 0, color: 'bg-red-500' }]
+                        .map(st => { const total = Math.max(s.totalSubmissions || 1, 1); return (
+                          <div key={st.label}><div className="flex justify-between text-xs mb-1"><span className="font-medium">{st.label}</span><span className="text-slate-500">{st.value}</span></div>
+                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><motion.div initial={{ width: 0 }} animate={{ width: `${(st.value / total) * 100}%` }} transition={{ delay: 0.3, duration: 0.8 }} className={`h-full rounded-full ${st.color}`} /></div>
+                          </div>
+                        ); })}
+                    </div>
+                  </motion.div>
+                )}
+              </div>
             </div>
           </motion.div>
         ) : (
@@ -272,7 +405,7 @@ export default function Dashboard({ user }: { user: User }) {
                 <select 
                   value={selectedForm} 
                   onChange={e => { setSelectedForm(e.target.value); }} 
-                  className="text-sm bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 outline-none min-w-[280px] focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer font-bold text-slate-700"
+                  className="text-sm bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 outline-none min-w-[280px] focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer font-bold text-slate-700 shadow-inner"
                 >
                   <option value="">All Forms (Overview)</option>
                   {forms.map((f: any) => (
