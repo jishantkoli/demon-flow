@@ -46,6 +46,7 @@ export default function ReviewSystem({ user }: { user: User }) {
     section_id: null as string | null, // NEW: Specific section filter
     blind_review: false,
     show_previous_reviews: false,
+    instructions: '',
     reviewer_ids: [] as string[]
   });
   const [shortlistFilter, setShortlistFilter] = useState({ filter_type: 'all', filter_value: '0', source_level_id: '', field_id: '', field_value: '' });
@@ -684,6 +685,7 @@ export default function ReviewSystem({ user }: { user: User }) {
       field_filters: cleanedFieldFilters,
       source_level_id: shortlistFilter.source_level_id,
       reviewer_ids: levelForm.reviewer_ids,
+      instructions: levelForm.instructions,
       show_previous_reviews: levelForm.show_previous_reviews
     });
     setShortlistResult(result);
@@ -2281,6 +2283,15 @@ export default function ReviewSystem({ user }: { user: User }) {
                           : "Teachers will be split equally among the assigned reviewers."}
                       </p>
                     </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wider">Instructions for Reviewers</label>
+                      <textarea
+                        value={levelForm.instructions}
+                        onChange={e => setLevelForm(p => ({ ...p, instructions: e.target.value }))}
+                        placeholder="Add specific guidelines or instructions for reviewers at this stage..."
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium outline-none focus:border-primary min-h-[80px] resize-none"
+                      />
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/50 cursor-pointer group">
                         <input type="checkbox" checked={levelForm.blind_review} onChange={e => setLevelForm(p => ({ ...p, blind_review: e.target.checked }))} className="w-4 h-4 rounded accent-primary" />
@@ -2466,8 +2477,40 @@ export default function ReviewSystem({ user }: { user: User }) {
                                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">L{lvl.level_number}</span>
                                 <span className="text-sm font-bold">{lvl.level_name}</span>
                                 <span className="text-[9px] text-slate-500">{lvl.scoring_type?.replace('_', ' ')} · {lvl.blind_review ? 'Blind' : 'Open'}</span>
+                                {lvl.assignment_type && (
+                                  <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase font-bold">
+                                    {lvl.assignment_type === 'all' ? 'Full Form' : 'Divided'}
+                                  </span>
+                                )}
                               </div>
                             </div>
+
+                            {/* Level Details (Instructions & Assigned Teachers) */}
+                            <div className="mb-4 space-y-3">
+                              {lvl.instructions && (
+                                <div className="p-3 bg-white/60 rounded-lg border border-slate-200">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Instructions</p>
+                                  <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">{lvl.instructions}</p>
+                                </div>
+                              )}
+                              
+                              <div className="flex flex-wrap gap-2">
+                                <div className="w-full">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Assigned Teachers</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {lvl.assigned_reviewers?.length > 0 ? lvl.assigned_reviewers.map((r: any) => (
+                                      <div key={r._id || r.id} className="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded-md shadow-sm">
+                                        <div className="w-4 h-4 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-[8px] font-bold">
+                                          {(r.name || '?')[0]}
+                                        </div>
+                                        <span className="text-[10px] font-medium text-slate-600">{r.name}</span>
+                                      </div>
+                                    )) : <span className="text-[10px] text-slate-400 italic">No teachers assigned yet</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
                             {lvl.total_reviewers > 0 ? (
                               <div className="space-y-2">
                                 {lvl.scores.map((s: any, i: number) => (

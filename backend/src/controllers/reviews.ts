@@ -83,7 +83,7 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
       const sub = await Submission.findById(submission_id).populate('formId').populate('nominationId');
       if (!sub) return res.status(404).json({ error: 'Submission not found' });
 
-      const levels = await Level.find({ formId: sub.formId }).sort({ levelNumber: 1 });
+      const levels = await Level.find({ formId: sub.formId }).sort({ levelNumber: 1 }).populate('assignedReviewers', 'name email');
       const reviews = await Review.find({ submission_id: submission_id as string }).populate('reviewer_id', 'name email').sort({ level: 1 });
 
       const levelData = levels.map(l => {
@@ -117,6 +117,9 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
           level_name: l.name,
           scoring_type: l.scoringType,
           blind_review: l.blindReview,
+          assignment_type: (l as any).assignmentType,
+          instructions: (l as any).instructions || '',
+          assigned_reviewers: (l as any).assignedReviewers || [],
           total_reviewers: levelReviews.length,
           average_score: avg != null ? Math.round(avg * 10) / 10 : null,
           scores
@@ -198,7 +201,15 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
 
       return res.status(200).json({
         submissions: subData,
-        levels: levels.map(l => ({ id: l._id, level_number: l.levelNumber, name: l.name }))
+        levels: levels.map(l => ({ 
+          id: l._id, 
+          level_number: l.levelNumber, 
+          name: l.name,
+          scoring_type: l.scoringType,
+          blind_review: l.blindReview,
+          instructions: (l as any).instructions || '',
+          assigned_reviewers: (l as any).assignedReviewers || []
+        }))
       });
     }
 
@@ -210,7 +221,7 @@ export const getShortlistData = async (req: AuthRequest, res: Response) => {
 
 export const createShortlist = async (req: AuthRequest, res: Response) => {
   try {
-    const { action, form_id, level_id, filter_type, filter_value, reviewer_ids, field_id, field_value, field_filters, submission_ids, show_previous_reviews } = req.body;
+    const { action, form_id, level_id, filter_type, filter_value, reviewer_ids, field_id, field_value, field_filters, submission_ids, show_previous_reviews, instructions } = req.body;
     
     if (action !== 'create-shortlist') return res.status(400).json({ error: 'Invalid action' });
 
@@ -227,6 +238,7 @@ export const createShortlist = async (req: AuthRequest, res: Response) => {
             assignmentType: assignment_type,
             sectionId: section_id,
             blindReview: blind_review,
+            instructions: instructions || '',
             showPreviousReviews: normalizedLevelNumber === 1 ? false : !!show_previous_reviews,
             assignedReviewers: reviewer_ids
         });
