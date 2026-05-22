@@ -160,10 +160,10 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
         </div>
       )}
 
-      {/* ===== SIDEBAR — Sleek Premium Corporate Design ===== */}
-      <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-[250px] bg-[#090d16] border-r border-slate-800/80 text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="p-4 flex items-center gap-2.5 border-b border-slate-800/60 bg-white/[0.01]">
-          <div className="w-10 h-10 flex items-center justify-center overflow-hidden shrink-0 rounded-lg bg-slate-800/40 p-1 border border-slate-700/30">
+      {/* ===== SIDEBAR — Sleek Premium Deep Navy Corporate Design ===== */}
+      <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-[250px] bg-[#0a2540] border-r border-white/5 text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="p-4 flex items-center gap-2.5 border-b border-white/5 bg-white/[0.01]">
+          <div className="w-10 h-10 flex items-center justify-center overflow-hidden shrink-0 rounded-lg bg-white/5 p-1 border border-white/5">
             <img src="/logo-sidebar.png" alt="Logo" className="w-full h-full object-contain" onError={(e) => {
               e.currentTarget.style.display = 'none';
               e.currentTarget.parentElement!.innerHTML = '<span class="text-white font-black text-[10px]">CISCE</span>';
@@ -171,15 +171,15 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="font-semibold text-sm leading-tight tracking-tight text-slate-100">CISCE Portal</h1>
-            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Official System</p>
+            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Official System</p>
           </div>
           <button className="lg:hidden text-slate-400 hover:text-white" onClick={() => setSidebarOpen(false)}><X size={18} /></button>
         </div>
 
         {schoolCode && (
-          <div className="mx-3 mt-3 px-3 py-1.5 rounded-lg bg-slate-800/30 border border-slate-800/60 flex items-center justify-between">
-            <span className="text-[9px] text-slate-500 uppercase tracking-wider font-bold">School Code</span>
-            <span className="text-xs font-bold text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/50">{schoolCode}</span>
+          <div className="mx-3 mt-3 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/5 flex items-center justify-between">
+            <span className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">School Code</span>
+            <span className="text-xs font-bold text-slate-200 bg-white/10 px-2 py-0.5 rounded border border-white/10">{schoolCode}</span>
           </div>
         )}
 
@@ -190,22 +190,22 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
               <Link key={item.path} to={item.path} onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 ${
                   active
-                    ? 'bg-slate-800 text-white border border-slate-700/50'
-                    : 'text-slate-400 hover:bg-slate-800/30 hover:text-slate-100'
+                    ? 'bg-white/10 text-white border border-white/5 shadow-sm'
+                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
                 }`}>
-                <item.icon size={15} className={active ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'} />
+                <item.icon size={15} className={active ? 'text-indigo-300' : 'text-slate-500 group-hover:text-slate-300'} />
                 {item.label}
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-3 border-t border-slate-800/60 bg-white/[0.01]">
+        <div className="p-3 border-t border-white/5 bg-white/[0.01]">
           <div className="flex items-center gap-2.5 px-2 py-1">
-            <div className="w-7 h-7 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[10px] font-bold border border-slate-700/50">{user.name?.charAt(0)?.toUpperCase()}</div>
+            <div className="w-7 h-7 rounded-full bg-white/10 text-slate-300 flex items-center justify-center text-[10px] font-bold border border-white/5">{user.name?.charAt(0)?.toUpperCase()}</div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold truncate text-slate-200">{user.name}</p>
-              <p className="text-[9px] text-slate-500 capitalize">{user.role}</p>
+              <p className="text-[9px] text-slate-400 capitalize">{user.role}</p>
             </div>
           </div>
         </div>
