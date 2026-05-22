@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   UserPlus, Send, Link2, Upload, RefreshCw, Trash2, 
   Search, Filter, ChevronRight, School, Inbox, CheckCircle2, 
-  Clock, AlertCircle, FileText, Plus, MoreVertical, Printer
+  Clock, AlertCircle, FileText, Plus, MoreVertical, Printer, Users
 } from 'lucide-react';
 
 export default function Nominations({ user }: { user: User }) {
