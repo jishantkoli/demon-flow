@@ -14,7 +14,6 @@ const adminNav = [
   { label: 'Form Builder', icon: FileText, path: '/forms' },
   { label: 'Submissions', icon: Inbox, path: '/submissions' },
   { label: 'Review System', icon: CheckSquare, path: '/reviews' },
-  { label: 'Analytics', icon: BarChart3, path: '/analytics' },
   { label: 'Email Center', icon: Mail, path: '/email-center' },
 ];
 const reviewerNav = [
