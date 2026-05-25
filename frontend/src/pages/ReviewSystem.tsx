@@ -3435,6 +3435,54 @@ export default function ReviewSystem({ user }: { user: User }) {
                   </div>
                 </div>
 
+                {/* Nomination Data Section */}
+                {nom && typeof nom === 'object' && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-bold flex items-center gap-2 px-1">
+                      <School size={16} className="text-amber-500" />
+                      School Functionary's Nomination Data
+                    </h4>
+                    <div className="bg-amber-50/50 rounded-2xl border border-amber-200 overflow-hidden">
+                      <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                        {[
+                          { label: 'Nominated Teacher', value: nom.teacher_name },
+                          { label: 'Teacher Email', value: nom.teacher_email },
+                          { label: 'School Code', value: nom.school_code },
+                        ].map((f, i) => (
+                          <div key={i} className="p-4 border-b border-amber-100 flex justify-between items-center">
+                            <span className="text-xs font-bold text-amber-800">{f.label}</span>
+                            <span className="text-sm font-medium text-amber-900">{f.value || '—'}</span>
+                          </div>
+                        ))}
+                        {Object.entries(nomData).map(([k, v], idx) => (
+                          <div key={k} className="p-4 border-b border-amber-100 last:border-0">
+                            <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">{nominationFieldMap[k] || k}</p>
+                            <div className="text-sm text-amber-900 font-medium">
+                              {(() => {
+                                const sVal = String(v || '');
+                                const isFile = (/\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp|csv|zip)$/i.test(sVal) || sVal.includes('res.cloudinary.com') || sVal.includes('/uploads/'));
+                                if (isFile && v) {
+                                  const isUrl = sVal.startsWith('http');
+                                  const displayFilename = sVal.split('?')[0].split('/').pop() || sVal;
+                                  const fileUrl = isUrl ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`;
+                                  return (
+                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-amber-700 font-bold hover:underline flex items-center gap-2">
+                                      <FileText size={14} />
+                                      <span className="truncate max-w-xs">{displayFilename}</span>
+                                      <ExternalLink size={12} />
+                                    </a>
+                                  );
+                                }
+                                return String(v || '—');
+                              })()}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Form Responses Section */}
                 {Object.keys(profileResponses).length > 0 && (
                   <div className="space-y-3">

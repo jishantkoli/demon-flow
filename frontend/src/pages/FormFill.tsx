@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  GraduationCap, Send, Save, CheckCircle2, Clock, AlertCircle,
+  GraduationCap, Send, Save, CircleCheck, Clock, AlertCircle,
   Loader2, ChevronLeft, ChevronRight, Upload, Wifi, WifiOff,
-  Inbox
+  Inbox, Check
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { getCleanFileName } from '../lib/utils';
@@ -15,21 +16,23 @@ type FieldType = 'text' | 'textarea' | 'number' | 'email' | 'phone' | 'date' | '
 
 type Field = {
   id: string; type: FieldType; label: string; required?: boolean; placeholder?: string;
-  options?: string[]; maxLength?: number; fileTypes?: string; maxSizeMB?: number;
+  options?: string[]; option_images?: string[]; maxLength?: number; fileTypes?: string; maxSizeMB?: number;
   correct?: number | string; marks?: number; negative?: number;
   visibleIf?: { fieldId: string; op: 'eq' | 'neq' | 'in'; value: string | string[] };
+  image?: string;
 };
 
 type Section = {
   id: string; title: string; description?: string; fields: Field[];
   visibleIf?: { fieldId: string; op: 'eq' | 'neq' | 'in'; value: string | string[] };
+  image?: string;
 };
 
 type FormData = {
   id: string; _id?: string; title: string; description: string; form_type: string;
   form_schema?: { sections: Section[] };
   schema?: { sections: Section[] };
-  settings: Record<string, unknown>;
+  settings: Record<string, any>;
   status: string; expires_at: string | null;
 };
 
@@ -291,6 +294,17 @@ export default function FormFill({ user }: { user: User }) {
     return () => clearTimeout(t);
   }, [timeLeft]);
 
+  // Handle auto-redirect if URL provided (Microsoft Forms style)
+  useEffect(() => {
+    if (step === 'submitted' && form?.settings?.redirect_url) {
+      const redirectUrl = form.settings.redirect_url as string;
+      const t = setTimeout(() => {
+        window.location.href = redirectUrl.startsWith('http') ? redirectUrl : `https://${redirectUrl}`;
+      }, 5000);
+      return () => clearTimeout(t);
+    }
+  }, [step, form?.settings?.redirect_url]);
+
   const sections = form?.schema?.sections || form?.form_schema?.sections || [];
 
   const parseObject = (raw: any): Record<string, any> => {
@@ -324,7 +338,7 @@ export default function FormFill({ user }: { user: User }) {
     });
   }, [form, answers, sections]);
 
-  const fieldVisible = (f: Field) => {
+  const fieldVisible = React.useCallback((f: Field) => {
     // New format (visibleIf)
     if (f.visibleIf) {
       return checkVisibleIf(f.visibleIf, answers, sections);
@@ -335,7 +349,7 @@ export default function FormFill({ user }: { user: User }) {
       return checkShowWhen(anyF.show_when, answers, sections);
     }
     return true;
-  };
+  }, [answers, sections]);
 
   useEffect(() => {
     const lastIdx = Math.max(visibleSections.length - 1, 0);
@@ -638,20 +652,43 @@ export default function FormFill({ user }: { user: User }) {
     const isNomination = form.form_type === 'nomination';
     const submittedBackPath = isNomination ? dashboardPath : '/forms';
     const submittedBackLabel = isNomination ? 'Back to Dashboard' : 'Back to Forms';
+    const thankYouHeading = (form.settings.thank_you_heading as string) || 'Thank You!';
+    const thankYouMsg = (form.settings.thank_you_message as string) || 'Your response has been recorded.';
+    const showScore = form.settings.show_score_after_submit !== false && receipt.max;
+    const redirectUrl = form.settings.redirect_url as string;
+    
     return (
-      <div className="min-h-screen bg-canvas grid place-items-center p-6">
-        <div className="card max-w-lg w-full text-center">
-          <div className="w-16 h-16 rounded-full bg-mint-soft text-mint grid place-items-center mx-auto mb-4"><CheckCircle2 size={34}/></div>
-          <div className="font-display text-2xl font-bold text-ink">Submission Complete!</div>
-          <p className="text-muted mt-1">Your response for "{form.title}" has been recorded.</p>
-          <div className="mt-5 bg-canvas rounded-xl p-4 text-left text-sm space-y-1">
-            <div className="flex justify-between"><span className="text-muted">Token ID</span><span className="text-xs font-mono text-muted">{receipt.id}</span></div>
-            <div className="flex justify-between"><span className="text-muted">Form</span><span>{form.title}</span></div>
-            <div className="flex justify-between"><span className="text-muted">Submitted</span><span>{fmtDate(new Date().toISOString())}</span></div>
-            {receipt.max ? <div className="flex justify-between"><span className="text-muted">Score</span><span className="font-semibold">{receipt.score}/{receipt.max}</span></div> : null}
+      <div className="min-h-screen bg-canvas grid place-items-center p-6 relative overflow-hidden" style={{ backgroundColor: (form.settings.bg_color as string) || undefined }}>
+        {form.settings.bg_image && (
+          <div className="absolute inset-0 z-0">
+            <img src={form.settings.bg_image as string} className="w-full h-full object-cover opacity-20" />
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5" />
           </div>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6">
-            <button onClick={() => nav(submittedBackPath)} className="btn btn-ghost">{submittedBackLabel}</button>
+        )}
+        <div className="card max-w-lg w-full text-center relative z-10 shadow-2xl border-0 ring-1 ring-black/5 bg-white/95 backdrop-blur-md p-8 sm:p-12">
+          <div className="w-24 h-24 rounded-full bg-mint-soft text-mint grid place-items-center mx-auto mb-8 shadow-inner ring-4 ring-mint-soft/50 animate-in zoom-in duration-500"><CircleCheck size={48}/></div>
+          <div className="font-display text-4xl font-extrabold text-ink tracking-tight mb-3 animate-in fade-in slide-in-from-bottom-2 duration-700">{thankYouHeading}</div>
+          <p className="text-muted text-lg px-4 mb-10 animate-in fade-in slide-in-from-bottom-3 duration-700 delay-100">{thankYouMsg}</p>
+          
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
+            <div className="bg-slate-50/50 rounded-2xl p-6 text-left text-sm space-y-4 border border-slate-100/50">
+              <div className="flex justify-between items-center"><span className="text-muted font-medium">Submission ID</span><span className="text-[10px] font-mono bg-white px-2 py-1 rounded border border-slate-200">{receipt.id}</span></div>
+              <div className="flex justify-between items-center"><span className="text-muted font-medium">Submitted On</span><span className="text-slate-600 font-medium">{fmtDate(new Date().toISOString())}</span></div>
+              {showScore && (
+                <div className="flex justify-between items-center pt-4 border-t border-slate-200/50">
+                  <span className="text-muted font-bold text-base">Your Result</span>
+                  <span className="font-bold text-primary text-2xl">{receipt.score} / {receipt.max}</span>
+                </div>
+              )}
+            </div>
+
+            {redirectUrl && (
+              <p className="text-xs text-muted italic">Redirecting you to <span className="text-primary font-bold">{redirectUrl}</span> in 5 seconds...</p>
+            )}
+          </div>
+          
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10 animate-in fade-in slide-in-from-bottom-5 duration-700 delay-300">
+            <button onClick={() => nav(submittedBackPath)} className="btn btn-ghost w-full sm:w-auto px-10 h-12 rounded-xl text-base">{submittedBackLabel}</button>
             {form.form_type !== 'nomination' && (
               <button 
                 onClick={() => {
@@ -662,9 +699,9 @@ export default function FormFill({ user }: { user: User }) {
                   setStep('filling');
                   setError('');
                 }} 
-                className="btn btn-primary"
+                className="btn btn-primary w-full sm:w-auto px-10 h-12 rounded-xl text-base shadow-xl shadow-primary/25 font-bold"
               >
-                Submit Another Response
+                New Response
               </button>
             )}
           </div>
@@ -744,100 +781,217 @@ export default function FormFill({ user }: { user: User }) {
   }
 
   return (
-    <div className="min-h-screen bg-canvas">
+    <div className="min-h-screen relative overflow-hidden transition-colors duration-500" 
+      style={{ backgroundColor: (form.settings.bg_color as string || undefined) }}>
+      
+      {/* Dynamic Background - Always Full Screen */}
+      {form.settings.bg_image && (
+        <div className="fixed inset-0 z-0 transition-opacity duration-700 w-full">
+          <img src={form.settings.bg_image as string} className="w-full h-full object-cover opacity-20" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5" />
+        </div>
+      )}
+
       {/* Header */}
-      <header className="bg-white border-b border-border sticky top-0 z-20">
-        <div className="max-w-3xl mx-auto px-5 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+      <header className="bg-white/80 backdrop-blur-md border-b border-border sticky top-0 z-20 shadow-sm">
+        <div className="max-w-4xl mx-auto px-5 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <button onClick={() => nav(fillBackPath)} className="p-2 hover:bg-slate-100 rounded-lg text-muted hover:text-ink transition-colors" title={fillBackLabel}>
               <ChevronLeft size={20}/>
             </button>
-            <div className="w-10 h-10 flex items-center justify-center overflow-hidden">
-              <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.parentElement!.innerHTML = '<div class="w-8 h-8 rounded-lg bg-navy text-white flex items-center justify-center"><span class="font-bold text-xs">C</span></div>';
-              }} />
-            </div>
-            <div>
-              <div className="font-display font-bold text-sm text-ink">{form.title}</div>
-              <div className="text-[11px] text-muted">Section {sectionIdx + 1} of {visibleSections.length}</div>
+            <div className="hidden sm:block">
+              <div className="font-display font-bold text-sm text-ink truncate max-w-[200px]">{form.title}</div>
             </div>
           </div>
+
           <div className="flex items-center gap-2">
             {timeLeft !== null && (
               <Badge tone={timeLeft < 60 ? 'rose' : 'amber'}>
                 <Clock size={11}/> {Math.floor(timeLeft/60)}:{String(timeLeft%60).padStart(2,'0')}
               </Badge>
             )}
-            {online
-              ? <Badge tone="green"><Wifi size={11}/> online</Badge>
-              : <Badge tone="rose"><WifiOff size={11}/> offline</Badge>
-            }
-            {saving
-              ? <Badge tone="blue"><Loader2 size={11} className="animate-spin"/> saving</Badge>
-              : lastSaved && <Badge tone="slate"><Save size={11}/> saved {relTime(lastSaved)}</Badge>
-            }
+            {saving ? (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-bold animate-pulse">
+                <Loader2 size={10} className="animate-spin"/> SAVING...
+              </div>
+            ) : lastSaved && (
+              <div className="text-[10px] text-muted font-medium hidden sm:block">Last saved {relTime(lastSaved)}</div>
+            )}
           </div>
-        </div>
-        {/* Progress bar */}
-        <div className="h-1 bg-border">
-          <div className="h-full bg-mint transition-all duration-300" style={{ width: `${progress}%` }}/>
         </div>
       </header>
 
-      {/* Content */}
-      <div className="max-w-3xl mx-auto p-5 md:p-8 space-y-5">
-        <div>
-          <div className="text-xs text-muted uppercase tracking-wider font-semibold">Section {sectionIdx + 1}</div>
-          <h2 className="font-display text-2xl font-bold text-ink mt-1">{currentSection.title}</h2>
-          {currentSection.description && <p className="text-muted mt-1">{currentSection.description}</p>}
-        </div>
-
-        <div className="space-y-4">
-          {currentSection.fields.filter(fieldVisible).map((f: Field) => (
-            <div key={f.id} className="card">
-              <FieldRenderer
-                f={f}
-                value={answers[f.id]}
-                onChange={v => setAnswers(a => ({ ...a, [f.id]: v }))}
-                onUpload={handleFileUpload}
-                uploading={!!uploadingFields[f.id]}
-                shuffle={!!form.settings.shuffle && (form.form_type === 'quiz' || form.form_type === 'multi') && f.type === 'mcq'}
-              />
+      {/* Content Container - Always Centered & Clean */}
+      <div className="relative z-10 px-5 py-8 md:py-12 max-w-4xl mx-auto">
+        <div className="bg-white rounded-[2rem] shadow-2xl overflow-hidden ring-1 ring-black/5 min-h-[80vh]">
+          
+          {/* Premium Header Card */}
+          <div className="relative">
+            <div 
+              className="relative flex flex-col justify-center transition-all p-8 sm:p-12 min-h-[200px]"
+              style={{ 
+                backgroundColor: (form.settings.header_color as string) || '#004b93',
+                backgroundImage: form.settings.header_image ? `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), url(${form.settings.header_image})` : 'none',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center'
+              }}
+            >
+              <div className="flex items-start sm:items-center gap-6 relative z-10 flex-col sm:flex-row">
+                {form.settings.logo_image && (
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/10 backdrop-blur-md rounded-2xl p-3 flex items-center justify-center border border-white/20 shrink-0">
+                    <img src={form.settings.logo_image as string} className="max-w-full max-h-full object-contain brightness-0 invert" />
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-white leading-tight tracking-tight drop-shadow-sm uppercase">
+                    {form.title}
+                  </h1>
+                </div>
+              </div>
             </div>
-          ))}
+          </div>
+
+          <div className="p-8 sm:p-16 space-y-16">
+            {sectionIdx === 0 && form.description && (
+              <div className="pb-8 border-b border-slate-100">
+                <p className="text-slate-600 text-lg font-medium leading-relaxed uppercase tracking-wide">
+                  {form.description}
+                </p>
+              </div>
+            )}
+
+            {/* Section Progress Bar */}
+            {visibleSections.length > 1 && (
+              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-8">
+                <div 
+                  className="bg-teal-500 h-full transition-all duration-500 ease-out"
+                  style={{ width: `${((sectionIdx + 1) / visibleSections.length) * 100}%` }}
+                />
+              </div>
+            )}
+
+            {/* Current Section & Questions */}
+            <div className="space-y-24">
+              {(() => {
+                // Calculate starting question index for numbering
+                let questionOffset = 0;
+                for (let i = 0; i < sectionIdx; i++) {
+                  questionOffset += visibleSections[i].fields.filter(fieldVisible).length;
+                }
+
+                const section = visibleSections[sectionIdx];
+                const sectionFields = section.fields.filter(fieldVisible);
+
+                return (
+                  <div key={section.id || sectionIdx} className="space-y-16">
+                    {/* Section Header */}
+                    <div className="pb-4 border-b-2 border-slate-100/50 flex items-center justify-between">
+                      <div>
+                        <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight uppercase">
+                          {section.title || `Section ${sectionIdx + 1}`}
+                        </h2>
+                        {section.description && (
+                          <p className="mt-2 text-slate-500 font-medium text-base">
+                            {section.description}
+                          </p>
+                        )}
+                      </div>
+                      <Badge tone="slate">Section {sectionIdx + 1} of {visibleSections.length}</Badge>
+                    </div>
+
+                    <div className="space-y-16">
+                      {sectionFields.map((f: Field, fIdx: number) => {
+                        const currentNum = questionOffset + fIdx;
+                        return (
+                          <motion.div 
+                            key={f.id} 
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: fIdx * 0.05 }}
+                            className="group/q"
+                          >
+                            <FieldRenderer
+                              f={f}
+                              value={answers[f.id]}
+                              onChange={v => setAnswers(a => ({ ...a, [f.id]: v }))}
+                              onUpload={handleFileUpload}
+                              uploading={!!uploadingFields[f.id]}
+                              shuffle={!!form.settings.shuffle && (form.form_type === 'quiz' || form.form_type === 'multi') && f.type === 'mcq'}
+                              idx={currentNum}
+                            />
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {error && (
+              <div className="mt-6 text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-5 py-4 flex items-center gap-3 shadow-sm">
+                <AlertCircle size={20} className="shrink-0"/> 
+                <span className="font-medium">{error}</span>
+              </div>
+            )}
+
+            {/* Navigation Buttons */}
+            <div className="flex items-center justify-between gap-4 mt-12 pt-8 border-t border-slate-200/60">
+              <div>
+                {sectionIdx > 0 ? (
+                  <button onClick={() => setSectionIdx(v => v - 1)} className="btn btn-ghost px-6 flex items-center gap-2">
+                    <ChevronLeft size={18}/> Previous
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      if (confirm('Are you sure you want to exit? Any unsaved changes might be lost.')) nav(fillBackPath);
+                    }} 
+                    className="btn btn-ghost px-6"
+                  >
+                    <ChevronLeft size={18}/> Exit
+                  </button>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={saveDraft} className="btn btn-ghost px-6 hidden sm:flex" title="Save Progress">
+                  <Save size={18}/> Save
+                </button>
+                
+                {sectionIdx < visibleSections.length - 1 ? (
+                  <button 
+                    onClick={() => {
+                      // Basic validation for current section before moving next
+                      const currentFields = visibleSections[sectionIdx].fields.filter(fieldVisible);
+                      for (const f of currentFields) {
+                        if (f.required && (answers[f.id] === undefined || answers[f.id] === '' || (Array.isArray(answers[f.id]) && (answers[f.id] as []).length === 0))) {
+                          setError(`"${f.label}" is required.`);
+                          return;
+                        }
+                      }
+                      setError('');
+                      setSectionIdx(v => v + 1);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }} 
+                    className="btn btn-primary px-12 shadow-lg shadow-primary/20 h-12 rounded-xl font-bold uppercase tracking-wider flex items-center gap-2"
+                  >
+                    Next <ChevronRight size={18}/>
+                  </button>
+                ) : (
+                  <button onClick={submit} className="btn btn-accent px-12 shadow-lg shadow-accent/20 h-12 rounded-xl font-bold uppercase tracking-wider">
+                    <Send size={18}/> Submit Response
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
-        {error && (
-          <div className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
-            <AlertCircle size={14} className="inline mr-1"/> {error}
-          </div>
-        )}
-
-        <div className="flex items-center justify-between flex-wrap gap-2 pt-2">
-          <button 
-            onClick={() => {
-              if (sectionIdx === 0) {
-                if (confirm('Are you sure you want to exit? Any unsaved changes might be lost.')) {
-                  nav(fillBackPath);
-                }
-              } else {
-                setSectionIdx(sectionIdx - 1);
-              }
-            }} 
-            className="btn btn-ghost"
-          >
-            <ChevronLeft size={16}/> {sectionIdx === 0 ? fillBackLabel : 'Previous'}
-          </button>
-          <div className="flex gap-2">
-            <button onClick={saveDraft} className="btn btn-ghost"><Save size={16}/> Save draft</button>
-            {sectionIdx < visibleSections.length - 1 ? (
-              <button onClick={() => { setError(''); setSectionIdx(sectionIdx + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="btn btn-primary">
-                Next <ChevronRight size={16}/>
-              </button>
-            ) : (
-              <button onClick={submit} className="btn btn-accent"><Send size={16}/> Submit</button>
-            )}
+        <div className="mt-12 text-center pb-12">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/50 backdrop-blur-sm rounded-full text-[10px] font-bold text-muted uppercase tracking-widest border border-slate-200/50 shadow-sm">
+            <img src="/logo.png" className="w-4 h-4 grayscale opacity-50" />
+            Powered by CISCE Data Collection Portal
           </div>
         </div>
       </div>
@@ -852,7 +1006,8 @@ function FieldRenderer({
   onChange,
   onUpload,
   uploading,
-  shuffle
+  shuffle,
+  idx
 }: {
   f: Field;
   value: unknown;
@@ -860,6 +1015,7 @@ function FieldRenderer({
   onUpload?: (f: Field, file: File) => Promise<void>;
   uploading?: boolean;
   shuffle?: boolean;
+  idx: number;
 }) {
   const opts = useMemo(() => {
     if (!f.options) return [];
@@ -868,43 +1024,70 @@ function FieldRenderer({
   }, [f.options, shuffle]);
 
   return (
-    <div>
-      <label className="text-sm font-semibold text-ink">{f.label}{f.required && <span className="text-rose-500"> *</span>}</label>
+    <div className="space-y-8">
+      <div className="space-y-3">
+        <label className="text-xl font-semibold text-slate-800 flex items-start gap-3 leading-snug">
+          <span className="text-slate-400 font-medium min-w-[1.5rem]">{idx + 1}.</span>
+          <span className="flex-1">{f.label}{f.required && <span className="text-rose-500 ml-1">*</span>}</span>
+        </label>
+        {f.placeholder && <p className="text-slate-400 text-sm ml-9 font-medium leading-relaxed">{f.placeholder}</p>}
+        {f.image && (
+          <div className="mt-4 ml-9 rounded-xl overflow-hidden border border-slate-100 shadow-lg max-w-2xl">
+            <img src={f.image} className="w-full h-auto object-contain" />
+          </div>
+        )}
+      </div>
+
+      <div className="ml-9">
       {(() => {
+        const baseInputClass = "w-full max-w-2xl px-4 py-2.5 bg-white border border-slate-200 rounded-md text-base text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all shadow-sm";
         switch (f.type) {
           case 'textarea':
-            return <textarea className="textarea mt-2" rows={4} placeholder={f.placeholder} maxLength={f.maxLength}
+            return <textarea className={`${baseInputClass} min-h-[120px] resize-none`} rows={4} placeholder="Enter your answer" maxLength={f.maxLength}
               value={String(value || '')} onChange={e => onChange(e.target.value)} />;
           case 'number':
-            return <input type="number" className="input mt-2" placeholder={f.placeholder}
+            return <input type="number" className={baseInputClass} placeholder="Enter your answer"
               value={String(value || '')} onChange={e => onChange(e.target.value)} />;
           case 'email':
-            return <input type="email" className="input mt-2" placeholder={f.placeholder || 'name@example.com'}
+            return <input type="email" className={baseInputClass} placeholder="Enter your answer"
               value={String(value || '')} onChange={e => onChange(e.target.value)} />;
           case 'phone':
-            return <input type="tel" className="input mt-2" placeholder={f.placeholder || '9876543210'}
+            return <input type="tel" className={baseInputClass} placeholder="Enter your answer"
               value={String(value || '')} onChange={e => onChange(e.target.value)} />;
           case 'date':
-            return <input type="date" className="input mt-2" value={String(value || '')} onChange={e => onChange(e.target.value)} />;
+            return <input type="date" className={baseInputClass}
+              value={String(value || '')} onChange={e => onChange(e.target.value)} />;
+          case 'time':
+            return <input type="time" className={baseInputClass}
+              value={String(value || '')} onChange={e => onChange(e.target.value)} />;
           case 'dropdown':
             return (
-              <select className="select mt-2" value={String(value || '')} onChange={e => onChange(e.target.value)}>
-                <option value="">— Select —</option>
+              <select className={baseInputClass} value={String(value || '')} onChange={e => onChange(e.target.value)}>
+                <option value="">Select an option</option>
                 {opts.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             );
           case 'radio':
           case 'mcq':
             return (
-              <div className="mt-2 space-y-1.5">
+              <div className="space-y-4 max-w-2xl">
                 {opts.map((o, i) => {
-                  const val = o; // Always use text value for consistency and to avoid shuffle bugs
-                  const checked = String(value) === val;
+                  const img = f.option_images?.[f.options?.indexOf(o) ?? -1];
+                  const active = value === o;
                   return (
-                    <label key={o} className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${checked ? 'border-blue bg-blue-soft' : 'border-border hover:bg-canvas'}`}>
-                      <input type="radio" name={f.id} checked={checked} onChange={() => onChange(val)} className="w-4 h-4 accent-blue"/>
-                      <span className="text-sm flex-1">{o}</span>
-                      {f.type === 'mcq' && <span className="ml-auto text-xs text-muted font-bold">{String.fromCharCode(65 + i)}</span>}
+                    <label key={i} className={`flex items-start gap-4 p-4 rounded-xl transition-all cursor-pointer border-2 group ${active ? 'border-teal-500 bg-teal-50/30' : 'border-slate-100 hover:border-slate-200 bg-white shadow-sm'}`}>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${active ? 'border-teal-500' : 'border-slate-300 bg-white group-hover:border-teal-500'}`}>
+                        {active && <div className="w-3 h-3 rounded-full bg-teal-500 shadow-sm" />}
+                      </div>
+                      <input type="radio" className="hidden" name={f.id} value={o} checked={active} onChange={() => onChange(o)} />
+                      <div className="flex-1">
+                        <span className={`text-lg font-medium transition-colors ${active ? 'text-teal-900' : 'text-slate-700'}`}>{o}</span>
+                        {img && (
+                          <div className="mt-4 rounded-xl overflow-hidden border border-inherit shadow-md max-w-sm">
+                            <img src={img} className="w-full h-auto object-cover" />
+                          </div>
+                        )}
+                      </div>
                     </label>
                   );
                 })}
@@ -912,14 +1095,34 @@ function FieldRenderer({
             );
           case 'checkbox':
             return (
-              <div className="mt-2 space-y-1.5">
-                {opts.map(o => {
-                  const arr = Array.isArray(value) ? value as string[] : [];
-                  const on = arr.includes(o);
+              <div className="space-y-4 max-w-2xl">
+                {opts.map((o, i) => {
+                  const img = f.option_images?.[f.options?.indexOf(o) ?? -1];
+                  const active = Array.isArray(value) && value.includes(o);
                   return (
-                    <label key={o} className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${on ? 'border-blue bg-blue-soft' : 'border-border hover:bg-canvas'}`}>
-                      <input type="checkbox" checked={on} onChange={() => onChange(on ? arr.filter(x => x !== o) : [...arr, o])} className="w-4 h-4 accent-blue rounded"/>
-                      <span className="text-sm">{o}</span>
+                    <label key={i} className={`flex items-start gap-4 p-4 rounded-xl transition-all cursor-pointer border-2 group ${active ? 'border-teal-500 bg-teal-50/30' : 'border-slate-100 hover:border-slate-200 bg-white shadow-sm'}`}>
+                      <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${active ? 'border-teal-500 bg-teal-500' : 'border-slate-300 bg-white group-hover:border-teal-500'}`}>
+                        {active && <Check size={14} className="text-white" strokeWidth={4} />}
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        className="hidden" 
+                        value={o} 
+                        checked={active}
+                        onChange={e => {
+                          const cur = Array.isArray(value) ? value : [];
+                          if (e.target.checked) onChange([...cur, o]);
+                          else onChange(cur.filter(x => x !== o));
+                        }} 
+                      />
+                      <div className="flex-1">
+                        <span className={`text-lg font-medium transition-colors ${active ? 'text-teal-900' : 'text-slate-700'}`}>{o}</span>
+                        {img && (
+                          <div className="mt-4 rounded-xl overflow-hidden border border-inherit shadow-md max-w-sm">
+                            <img src={img} className="w-full h-auto object-cover" />
+                          </div>
+                        )}
+                      </div>
                     </label>
                   );
                 })}
@@ -927,44 +1130,37 @@ function FieldRenderer({
             );
           case 'file':
             return (
-              <label className="mt-2 block rounded-xl border-2 border-dashed border-border p-6 text-center cursor-pointer hover:border-blue hover:bg-blue-soft transition-colors">
-                <Upload className="mx-auto text-muted" size={22}/>
-                <div className="text-sm font-bold mt-2 text-ink">
+              <label className="block rounded-xl border-2 border-dashed border-slate-200 p-8 text-center cursor-pointer hover:border-teal-500 hover:bg-teal-50/30 transition-all max-w-2xl group bg-white shadow-sm">
+                <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 group-hover:bg-teal-100 transition-all">
+                  <Upload className="text-slate-400 group-hover:text-teal-600 transition-colors" size={24}/>
+                </div>
+                <div className="text-lg font-bold text-slate-700">
                   {uploading ? (
                     <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="animate-spin" size={16}/> Uploading...
+                      <Loader2 className="animate-spin text-teal-500" size={20}/> Uploading...
                     </span>
                   ) : (value ? (
-                    <span className="text-blue flex items-center justify-center gap-2">
-                      <CheckCircle2 size={16} className="text-mint"/> 
+                    <span className="text-teal-600 flex items-center justify-center gap-2">
+                      <CircleCheck size={20} className="text-teal-500"/> 
                       {getCleanFileName(String(value))}
                     </span>
-                  ) : 'Click or drop file to upload')}
+                  ) : 'Upload File')}
                 </div>
-                <div className="text-xs text-muted mt-1">{f.fileTypes ? `Types: ${f.fileTypes}` : ''} {f.maxSizeMB ? `· Max ${f.maxSizeMB}MB` : ''}</div>
+                <div className="text-sm text-slate-400 mt-2 font-medium">{f.fileTypes ? `Accepted: ${f.fileTypes}` : ''} {f.maxSizeMB ? `· Max ${f.maxSizeMB}MB` : ''}</div>
                 <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png"
                   onChange={async e => {
                     const file = e.target.files?.[0];
-                    if (file) {
-                      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-                      if (!allowedTypes.includes(file.type)) {
-                        if (onUpload) {
-                          await onUpload(f, file);
-                        }
-                        return;
-                      }
-                      if (onUpload) await onUpload(f, file);
-                      else onChange(file.name);
-                    }
+                    if (file && onUpload) await onUpload(f, file);
                   }} />
               </label>
             );
           default:
-            return <input className="input mt-2" placeholder={f.placeholder} maxLength={f.maxLength}
+            return <input className={baseInputClass} placeholder="Enter your answer" maxLength={f.maxLength}
               value={String(value || '')} onChange={e => onChange(e.target.value)} />;
         }
       })()}
-      {f.maxLength && <div className="text-[11px] text-muted mt-1">{String(value || '').length}/{f.maxLength}</div>}
+      {f.maxLength && <div className="text-xs text-muted mt-2 ml-2 font-bold uppercase tracking-widest">{String(value || '').length} / {f.maxLength} characters</div>}
+      </div>
     </div>
   );
 }

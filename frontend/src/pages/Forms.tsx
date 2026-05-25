@@ -8,12 +8,12 @@ import FormFieldBuilder from '../components/FormFieldBuilder';
 import FormRenderer from '../components/FormRenderer';
 import type { FormField } from '../components/FormRenderer';
 import {
-  Plus, Edit2, Trash2, Copy, FileText, GitBranch, Award, HelpCircle,
+  Plus, Edit2, Trash2, Copy, FileText, GitBranch, Award, CircleHelp,
   Layers, Eye, History, Play, Settings, Pencil, MoreHorizontal,
   Clock, Search, Filter, ChevronRight, Calendar, Hash, Link2
 } from 'lucide-react';
 
-const typeIcons: Record<string, any> = { normal: FileText, nomination: Award, branching: GitBranch, quiz: HelpCircle, multi: Layers };
+const typeIcons: Record<string, any> = { normal: FileText, nomination: Award, branching: GitBranch, quiz: CircleHelp, multi: Layers };
 const typeLabels: Record<string, string> = { normal: 'Normal Form', nomination: 'Nomination', branching: 'Branching', quiz: 'Quiz', multi: 'Multi-Form' };
 const typeColors: Record<string, { bg: string; text: string; border: string }> = {
   normal: { bg: 'bg-accent-blue/10', text: 'text-accent-blue', border: 'border-accent-blue/30' },
@@ -96,6 +96,9 @@ export default function Forms({ user }: { user: User }) {
   const filtered = forms.filter(f => {
     // Functionaries should only see nomination-enabled forms.
     if (user.role === 'functionary' && f.form_type !== 'nomination') return false;
+
+    // Teachers should only see forms they are nominated for
+    if (user.role === 'teacher' && !teacherNominationLinks[String(f.id)]) return false;
 
     const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
     let effectiveStatus = f.status;
@@ -263,6 +266,7 @@ export default function Forms({ user }: { user: User }) {
                   forms.filter(f => {
                     // APPLY ROLE FILTERING TO COUNT TOO
                     if (user.role === 'functionary' && f.form_type !== 'nomination') return false;
+                    if (user.role === 'teacher' && !teacherNominationLinks[String(f.id)]) return false;
                     
                     const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
                     let finalStatus = f.status;
@@ -534,7 +538,7 @@ export default function Forms({ user }: { user: User }) {
           )}
           {form.form_type === 'quiz' && (
             <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 space-y-3">
-              <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2"><HelpCircle size={16} /> Quiz</h4>
+              <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2"><CircleHelp size={16} /> Quiz</h4>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div><label className="text-xs font-semibold text-amber-600 mb-1 block">Time (min)</label>
                   <input type="number" value={form.settings.time_limit ?? ''} onChange={e => {

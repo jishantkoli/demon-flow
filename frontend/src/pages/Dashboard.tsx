@@ -6,9 +6,9 @@ import StatusBadge from '../components/StatusBadge';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Users, FileText, Inbox, CheckSquare, Clock, TrendingUp, 
+  Users, FileText, Inbox, SquareCheck, Clock, TrendingUp, 
   Activity, Award, UserPlus, Calendar, Target, AlertTriangle, Shield,
-  ChevronRight, ArrowUpRight, School, CheckCircle2, Settings, Terminal
+  ChevronRight, ArrowUpRight, School, CircleCheck, Settings, Terminal
 } from 'lucide-react';
 
 export default function Dashboard({ user }: { user: User }) {
@@ -146,7 +146,7 @@ export default function Dashboard({ user }: { user: User }) {
               label: "Pending Reviews", 
               value: s.pendingReviews || 0, 
               subtext: `${s.completedReviews || 0} Gradings Completed`,
-              icon: CheckSquare, 
+              icon: SquareCheck, 
               color: "text-amber-600 bg-amber-50 border-amber-100/50",
               cta: "Process Reviews", 
               path: "/reviews" 
@@ -486,7 +486,7 @@ export default function Dashboard({ user }: { user: User }) {
                 {[
                   { label: 'Pending Assessment', value: s.submissionsByStatus?.submitted || 0, color: 'bg-blue-600', icon: Inbox, bg: 'bg-blue-50 text-blue-600 border-blue-100/50' },
                   { label: 'Under Review', value: s.submissionsByStatus?.under_review || 0, color: 'bg-indigo-600', icon: Clock, bg: 'bg-indigo-50 text-indigo-600 border-indigo-100/50' },
-                  { label: 'Approved Records', value: s.submissionsByStatus?.approved || 0, color: 'bg-emerald-500', icon: CheckSquare, bg: 'bg-emerald-50 text-emerald-600 border-emerald-100/50' },
+                  { label: 'Approved Records', value: s.submissionsByStatus?.approved || 0, color: 'bg-emerald-500', icon: SquareCheck, bg: 'bg-emerald-50 text-emerald-600 border-emerald-100/50' },
                   { label: 'Declined Submissions', value: s.submissionsByStatus?.rejected || 0, color: 'bg-rose-500', icon: AlertTriangle, bg: 'bg-rose-50 text-rose-600 border-rose-100/50' }
                 ].map((st, i) => { 
                   const total = Math.max(s.totalSubmissions || 1, 1); 
@@ -571,8 +571,8 @@ export default function Dashboard({ user }: { user: User }) {
 
       <motion.div {...anim(0)} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {user.role === 'reviewer' && <>
-          <StatCard label="Pending Reviews" value={s.pendingReviews || 0} icon={CheckSquare} color="amber" onClick={() => navigate('/reviews')} ctaText="Start Now" />
-          <StatCard label="Completed" value={s.completedReviews || 0} icon={CheckCircle2} color="green" />
+          <StatCard label="Pending Reviews" value={s.pendingReviews || 0} icon={SquareCheck} color="amber" onClick={() => navigate('/reviews')} ctaText="Start Now" />
+          <StatCard label="Completed" value={s.completedReviews || 0} icon={CircleCheck} color="green" />
           <StatCard label="Average Score" value={s.avgScore || 0} icon={TrendingUp} color="blue" />
           <StatCard label="Assigned Total" value={s.totalSubmissions || 0} icon={Inbox} color="purple" />
         </>}

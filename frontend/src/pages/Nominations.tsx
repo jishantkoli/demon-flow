@@ -9,7 +9,7 @@ import Modal from '../components/Modal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   UserPlus, Send, Link2, Upload, RefreshCw, Trash2, 
-  Search, Filter, ChevronRight, School, Inbox, CheckCircle2, 
+  Search, Filter, ChevronRight, School, Inbox, CircleCheck, 
   Clock, AlertCircle, FileText, Plus, MoreVertical, Printer, Users, Calendar
 } from 'lucide-react';
 
@@ -75,6 +75,19 @@ export default function Nominations({ user }: { user: User }) {
   }, [selectedForm, activeFormObj]);
 
   const nomsByForm = (formId: string) => nominations.filter(n => n.form_id === formId);
+
+  const handleFileUpload = async (fieldId: string, file: File) => {
+    try {
+      setUploading(fieldId);
+      const data: any = await api.upload('/uploads', file);
+      const uploaded = data?.url || data?.filename || file.name;
+      setAddForm(p => ({ ...p, [fieldId]: uploaded }));
+    } catch (err: any) {
+      alert(err?.message || `Failed to upload file`);
+    } finally {
+      setUploading(null);
+    }
+  };
 
   const handleAddTeacher = async () => {
     if (!selectedForm) return alert('Select a form first');
@@ -384,7 +397,7 @@ export default function Nominations({ user }: { user: User }) {
                   {Object.entries(selectedNom.additional_data).map(([key, val]) => {
                     const customField = activeSettings.nomination_custom_fields?.find((cf: any) => cf.id === key);
                     const label = customField ? customField.label : key;
-                    const isFile = customField?.type === 'file';
+                    const isFile = customField?.type === 'file' || (typeof val === 'string' && (val.includes('res.cloudinary.com') || val.includes('/uploads/') || /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp|csv|zip)$/i.test(val.split('?')[0])));
                     const fileUrl = isFile ? (typeof val === 'string' && val.startsWith('http') ? val : `${API_BASE.replace('/api/v1', '')}/uploads/${val}`) : '';
 
                     return (
@@ -455,13 +468,70 @@ export default function Nominations({ user }: { user: User }) {
                 {activeSettings.nomination_custom_fields?.map((cf: any) => (
                   <div key={cf.id} className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{cf.label}</label>
-                    <input 
-                      type="text" 
-                      value={addForm[cf.id]} 
-                      onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} 
-                      className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 bg-white text-sm font-bold outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all shadow-inner" 
-                      placeholder={`Enter ${cf.label.toLowerCase()}...`} 
-                    />
+                    {(() => {
+                      const commonClass = "w-full px-5 py-3.5 rounded-2xl border border-slate-200 bg-white text-sm font-bold outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all shadow-inner";
+                      
+                      if (cf.type === 'textarea') {
+                        return (
+                          <textarea 
+                            value={addForm[cf.id] || ''} 
+                            onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))}
+                            className={`${commonClass} min-h-[100px]`}
+                            placeholder={`Enter ${cf.label.toLowerCase()}...`}
+                          />
+                        );
+                      }
+                      
+                      if (cf.type === 'dropdown') {
+                        return (
+                          <select 
+                            value={addForm[cf.id] || ''} 
+                            onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))}
+                            className={commonClass}
+                          >
+                            <option value="">Select {cf.label}...</option>
+                            {cf.options?.map((opt: string) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        );
+                      }
+
+                      if (cf.type === 'file') {
+                        return (
+                          <div className="relative">
+                            <input 
+                              type="file" 
+                              onChange={e => {
+                                const file = e.target.files?.[0];
+                                if (file) handleFileUpload(cf.id, file);
+                              }}
+                              className="hidden"
+                              id={`file_${cf.id}`}
+                            />
+                            <label 
+                              htmlFor={`file_${cf.id}`}
+                              className={`${commonClass} flex items-center justify-between cursor-pointer hover:bg-slate-50`}
+                            >
+                              <span className={addForm[cf.id] ? 'text-slate-900' : 'text-slate-400'}>
+                                {uploading === cf.id ? 'Uploading...' : (addForm[cf.id] ? getCleanFileName(addForm[cf.id]) : 'Click to upload file...')}
+                              </span>
+                              <Upload size={16} className="text-slate-400" />
+                            </label>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <input 
+                          type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'} 
+                          value={addForm[cf.id] || ''} 
+                          onChange={e => setAddForm(p => ({ ...p, [cf.id]: e.target.value }))} 
+                          className={commonClass} 
+                          placeholder={`Enter ${cf.label.toLowerCase()}...`} 
+                        />
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

@@ -37,7 +37,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     // 1. KPI Stats
     const totalUsers = await User.countDocuments({ passwordHash: { $exists: true, $ne: null } });
     
-    // For Teacher, activeForms should only count forms they are nominated for or public forms
+    // For Teacher, activeForms should ONLY count forms they are specifically nominated for
     let activeFormsQuery: any = { status: 'active' };
     if (role === 'teacher') {
       const myNominations = await Nomination.find({ 
@@ -45,10 +45,8 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       });
       const nominatedFormIds = myNominations.map(n => n.form_id);
       activeFormsQuery = { 
-        $or: [
-          { _id: { $in: nominatedFormIds }, status: 'active' },
-          { isPublic: true, status: 'active' }
-        ]
+        _id: { $in: nominatedFormIds }, 
+        status: 'active' 
       };
     }
     const activeForms = await Form.countDocuments(activeFormsQuery);

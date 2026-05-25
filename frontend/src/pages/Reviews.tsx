@@ -166,12 +166,26 @@ export default function Reviews({ user }: { user: User }) {
             {selectedSub && Object.keys(subResponses).length > 0 && (
               <div><h4 className="text-sm font-bold mb-2">Submission Responses</h4>
                 <div className="bg-slate-100 rounded-xl p-4 space-y-2">
-                  {Object.entries(subResponses).map(([key, val]) => (
-                    <div key={key} className="flex flex-col sm:flex-row gap-1 py-1 border-b border-slate-200 last:border-0">
-                      <span className="text-xs font-semibold text-slate-500 min-w-[160px]">{key}:</span>
-                      <span className="text-sm">{Array.isArray(val) ? (val as any[]).join(', ') : String(val)}</span>
-                    </div>
-                  ))}
+                  {Object.entries(subResponses).map(([key, val]) => {
+                    const sVal = String(val || '').trim();
+                    const isFile = typeof val === 'string' && (sVal.includes('res.cloudinary.com') || sVal.includes('/uploads/') || /\.(pdf|docx|xlsx|pptx|txt|jpg|jpeg|png|gif|webp|csv|zip)$/i.test(sVal.split('?')[0]));
+                    const fileUrl = isFile ? (sVal.startsWith('http') ? sVal : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1').replace('/api/v1', '')}/uploads/${encodeURIComponent(sVal)}`) : '';
+                    
+                    return (
+                      <div key={key} className="flex flex-col sm:flex-row gap-1 py-1 border-b border-slate-200 last:border-0">
+                        <span className="text-xs font-semibold text-slate-500 min-w-[160px]">{key}:</span>
+                        <span className="text-sm">
+                          {isFile ? (
+                            <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-bold flex items-center gap-1">
+                              View File
+                            </a>
+                          ) : (
+                            Array.isArray(val) ? (val as any[]).join(', ') : String(val)
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

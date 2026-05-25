@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { User, getSessionExpiry } from '../lib/auth';
 import { api } from '../lib/api';
 import {
-  LayoutDashboard, Users, FileText, Inbox, CheckSquare, BarChart3,
+  LayoutDashboard, Users, FileText, Inbox, SquareCheck, BarChart3,
   Shield, Download, Bell, Menu, X, ChevronRight, Sun, Moon, LogOut,
   Settings, ChevronDown, AlertTriangle, UserPlus, Mail
 } from 'lucide-react';
@@ -13,12 +13,12 @@ const adminNav = [
   { label: 'User Management', icon: Users, path: '/users' },
   { label: 'Form Builder', icon: FileText, path: '/forms' },
   { label: 'Submissions', icon: Inbox, path: '/submissions' },
-  { label: 'Review System', icon: CheckSquare, path: '/reviews' },
+  { label: 'Review System', icon: SquareCheck, path: '/reviews' },
   { label: 'Email Center', icon: Mail, path: '/email-center' },
 ];
 const reviewerNav = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'My Reviews', icon: CheckSquare, path: '/reviews' },
+  { label: 'My Reviews', icon: SquareCheck, path: '/reviews' },
   { label: 'Submissions', icon: Inbox, path: '/submissions' },
 ];
 const functionaryNav = [

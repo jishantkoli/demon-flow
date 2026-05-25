@@ -219,7 +219,8 @@ export default function Submissions({ user }: { user: User }) {
         api.get('/forms').catch(() => [])
       ]);
 
-      const mappedSubs = (Array.isArray(subs) ? subs : []).map((s: any) => ({
+      const fetchedForms = Array.isArray(f) ? f : [];
+      let mappedSubs = (Array.isArray(subs) ? subs : []).map((s: any) => ({
         ...s,
         id: s._id || s.id,
         form_id: s.formId || s.form_id,
@@ -233,8 +234,82 @@ export default function Submissions({ user }: { user: User }) {
         submitted_at: s.createdAt || s.submitted_at
       }));
 
+      const selectedForm = formFilter
+        ? fetchedForms.find((form: any) => String(form.id || form._id) === String(formFilter))
+        : null;
+      const shouldMergePendingNominations = !!selectedForm
+        && (selectedForm.form_type === 'nomination' || selectedForm.formType === 'nomination')
+        && user.role !== 'teacher'
+        && user.role !== 'reviewer';
+
+      if (shouldMergePendingNominations) {
+        const formId = String(selectedForm.id || selectedForm._id || '');
+        const nominationRows = await api.get(`/nominations?form_id=${encodeURIComponent(formId)}`).catch(() => []);
+        const existingKeys = new Set(
+          mappedSubs.map((row: any) => {
+            const nomId = row.nomination_id && typeof row.nomination_id === 'object'
+              ? (row.nomination_id._id || row.nomination_id.id)
+              : row.nomination_id;
+            return [
+              String(nomId || ''),
+              `${String(row.form_id || '')}::${norm(row.user_email)}`,
+              `${String(row.form_id || '')}::${norm(row.unique_token || row.nomination_token)}`
+            ].join('|');
+          })
+        );
+
+        const searchTerm = norm(search);
+        const pendingRows = (Array.isArray(nominationRows) ? nominationRows : [])
+          .filter((nom: any) => {
+            const key = [
+              String(nom.id || nom._id || ''),
+              `${formId}::${norm(nom.teacher_email)}`,
+              `${formId}::${norm(nom.unique_token)}`
+            ].join('|');
+            if (existingKeys.has(key)) return false;
+
+            const status = String(nom.status || 'pending').toLowerCase();
+            const simplifiedStatus = ['submitted', 'under_review', 'approved', 'rejected', 'completed', 'next_level'].includes(status)
+              ? 'submitted'
+              : 'pending';
+            if (statusFilter && simplifiedStatus !== statusFilter.toLowerCase()) return false;
+
+            if (schoolFilter && norm(nom.school_code) !== norm(schoolFilter)) return false;
+            if (searchTerm) {
+              const haystack = [nom.teacher_name, nom.teacher_email, nom.school_code, selectedForm.title, nom.unique_token]
+                .map(norm)
+                .join(' ');
+              if (!haystack.includes(searchTerm)) return false;
+            }
+
+            return true;
+          })
+          .map((nom: any) => ({
+            id: `nom_${nom.id || nom._id}`,
+            form_id: formId,
+            form_title: selectedForm.title || 'Untitled',
+            nomination_id: nom,
+            nomination_token: nom.unique_token,
+            unique_token: nom.unique_token,
+            user_name: nom.teacher_name,
+            user_email: nom.teacher_email,
+            school_code: nom.school_code,
+            status: nom.status || 'pending',
+            submitted_at: nom.updatedAt || nom.invited_at || nom.createdAt,
+            responses: {},
+            score: null,
+            __nominationPlaceholder: true,
+          }));
+
+        mappedSubs = [...mappedSubs, ...pendingRows].sort((a: any, b: any) => {
+          const aTime = new Date(a.submitted_at || 0).getTime();
+          const bTime = new Date(b.submitted_at || 0).getTime();
+          return bTime - aTime;
+        });
+      }
+
       setSubmissions(mappedSubs);
-      setForms(Array.isArray(f) ? f : []);
+      setForms(fetchedForms);
 
       // Identify and load nomination forms
       const nomFormIds = new Set<string>();
@@ -1282,7 +1357,8 @@ export default function Submissions({ user }: { user: User }) {
       <DataTable columns={columns} data={submissions} loading={loading}
         searchPlaceholder="Search anything (Name, Email, Responses...)"
         searchValue={search} onSearch={setSearch}
-        onRowClick={openDetail} emptyMessage="No submissions found" emptyIcon={<Inbox size={40} />}
+        onRowClick={(row: any) => row.__nominationPlaceholder ? openNominationOnly(row) : openDetail(row)}
+        emptyMessage="No submissions found" emptyIcon={<Inbox size={40} />}
         filters={
           <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
             {(user.role as string) === 'admin' && (

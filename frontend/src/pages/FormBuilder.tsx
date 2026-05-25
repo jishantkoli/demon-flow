@@ -3,9 +3,9 @@ import { useNavigate, useParams, useSearchParams, useBlocker } from 'react-route
 import { motion, Reorder, useDragControls } from 'framer-motion';
 import {
   Save, Plus, Trash2, GripVertical, ArrowLeft, Eye, Settings2,
-  Type, AlignLeft, Hash, Mail, Phone, CalendarDays, ListChecks, CheckSquare, Radio, Upload, HelpCircle,
+  Type, AlignLeft, Hash, Mail, Phone, CalendarDays, ListChecks, SquareCheck, Radio, Upload, CircleHelp,
   Link2, QrCode, Copy, ChevronDown, ChevronRight,
-  LayoutDashboard, Pencil, Settings, History, Download, Trash, AlertCircle, PlusCircle, Check
+  LayoutDashboard, Pencil, Settings, History, Download, Trash, AlertCircle, CirclePlus, Check, CircleCheck, HelpCircle, CheckCircle2, PlusCircle, CheckSquare
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { copyToClipboard } from '../lib/utils';
@@ -15,15 +15,17 @@ type FieldType = 'text' | 'textarea' | 'number' | 'email' | 'phone' | 'date' | '
 
 type Field = {
   id: string; type: FieldType; label: string; required?: boolean; placeholder?: string;
-  options?: string[]; maxLength?: number; fileTypes?: string; maxSizeMB?: number;
+  options?: string[]; option_images?: string[]; maxLength?: number; fileTypes?: string; maxSizeMB?: number;
   correct?: number | string; marks?: number; negative?: number;
   reviewer_max_marks?: number;
   visibleIf?: { fieldId: string; op: 'eq' | 'neq'; value: string };
+  image?: string;
 };
 
 type Section = {
   id: string; title: string; description?: string; fields: Field[];
   visibleIf?: { fieldId: string; op: 'eq' | 'neq'; value: string };
+  image?: string;
 };
 
 type FormCategory = 'normal' | 'nomination' | 'branching' | 'quiz' | 'multi';
@@ -32,15 +34,15 @@ type FormState = {
   id: string; _id?: string; title: string; description: string;
   form_type: FormCategory; slug: string;
   schema: { sections: Section[] };
-  settings: Record<string, unknown>;
+  settings: Record<string, any>;
   status: 'active' | 'expired' | 'draft';
   expires_at: string | null;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const fieldIcons: Record<FieldType, React.ComponentType<{ size?: number }>> = {
+const fieldIcons: Record<FieldType, any> = {
   text: Type, textarea: AlignLeft, number: Hash, email: Mail, phone: Phone, date: CalendarDays,
-  dropdown: ListChecks, radio: Radio, checkbox: CheckSquare, file: Upload, mcq: HelpCircle,
+  dropdown: ListChecks, radio: Radio, checkbox: SquareCheck || CheckSquare || Type, file: Upload, mcq: CircleHelp || HelpCircle || Type,
 };
 
 const newId = () => Math.random().toString(36).slice(2, 9);
@@ -90,6 +92,28 @@ function Breadcrumbs({ items, onNavigate }: { items: { label: string; to?: strin
   );
 }
 
+const handleImageUpload = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const uploadUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/api/v1') + '/uploads';
+    const res = await fetch(uploadUrl, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+      }
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    const data = await res.json();
+    return data.url || data.filename;
+  } catch (err) {
+    console.error('Image upload error:', err);
+    alert('Image upload failed');
+    return null;
+  }
+};
+
 function DraggableField({ f, i, activeSection, activeField, setActiveField, updateField, removeField, moveField, form, section }: {
   f: Field; i: number; activeSection: number; activeField: string | null;
   setActiveField: (id: string | null) => void;
@@ -100,8 +124,9 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
   section: Section;
 }) {
   const controls = useDragControls();
-  const Icon = fieldIcons[f.type];
+  const Icon = fieldIcons[f.type] || CircleHelp || HelpCircle || Type;
   const open = activeField === f.id;
+  const AddIcon = CirclePlus || PlusCircle || Plus;
 
   return (
     <Reorder.Item
@@ -120,7 +145,7 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <Icon size={15} />
+            {Icon && <Icon size={15} />}
             <input className="input !py-1.5 flex-1" value={f.label}
               onChange={e => updateField(activeSection, f.id, { label: e.target.value })} placeholder="Question label" />
             {f.required && <Badge tone="rose">required</Badge>}
@@ -143,41 +168,118 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
                 </div>
               )}
 
+              <div className="pt-2 border-t border-slate-100">
+                <label className="text-xs font-bold text-muted uppercase tracking-wider mb-2 block">Question Image</label>
+                {f.image ? (
+                  <div className="relative rounded-lg overflow-hidden border border-border group w-32 h-20">
+                    <img src={f.image} className="w-full h-full object-cover" />
+                    <button onClick={() => updateField(activeSection, f.id, { image: '' })} className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Trash2 size={10}/>
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = async (e: any) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const url = await handleImageUpload(file);
+                          if (url) updateField(activeSection, f.id, { image: url });
+                        }
+                      };
+                      input.click();
+                    }}
+                    className="flex items-center gap-2 text-[11px] font-semibold text-blue hover:text-blue-700"
+                  >
+                    <Upload size={12}/> Add Image to Question
+                  </button>
+                )}
+              </div>
+
               {(f.type === 'dropdown' || f.type === 'radio' || f.type === 'checkbox' || f.type === 'mcq') && (
                 <div>
                   <div className="text-xs text-muted mb-2 font-semibold">Options</div>
                   <div className="space-y-2">
                     {f.options?.map((opt, oi) => (
-                      <div key={oi} className="flex items-center gap-2 group/opt">
-                        {f.type === 'mcq' && (
-                          <input 
-                            type="radio" 
-                            checked={f.correct === oi} 
-                            onChange={() => updateField(activeSection, f.id, { correct: oi })} 
-                            className="w-4 h-4 accent-primary" 
-                          />
-                        )}
-                        <div className="flex-1 relative">
-                          <input 
-                            className="input !py-2 pr-10 w-full focus:ring-1 focus:ring-primary/20" 
-                            value={opt}
-                            onChange={e => updateField(activeSection, f.id, { options: f.options!.map((x, j) => j === oi ? e.target.value : x) })} 
-                            placeholder={`Option ${oi + 1}`}
-                          />
-                          <button 
-                            onClick={() => updateField(activeSection, f.id, { options: f.options!.filter((_, j) => j !== oi) })} 
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover/opt:opacity-100"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                      <React.Fragment key={oi}>
+                        <div className="flex items-center gap-2 group/opt">
+                          {f.type === 'mcq' && (
+                            <input 
+                              type="radio" 
+                              checked={f.correct === oi} 
+                              onChange={() => updateField(activeSection, f.id, { correct: oi })} 
+                              className="w-4 h-4 accent-primary" 
+                            />
+                          )}
+                          <div className="flex-1 relative">
+                            <input 
+                              className="input !py-2 pr-20 w-full focus:ring-1 focus:ring-primary/20" 
+                              value={opt}
+                              onChange={e => updateField(activeSection, f.id, { options: f.options!.map((x, j) => j === oi ? e.target.value : x) })} 
+                              placeholder={`Option ${oi + 1}`}
+                            />
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                              <button 
+                                onClick={() => {
+                                  const input = document.createElement('input');
+                                  input.type = 'file';
+                                  input.accept = 'image/*';
+                                  input.onchange = async (e: any) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const url = await handleImageUpload(file);
+                                      if (url) {
+                                        const imgs = [...(f.option_images || [])];
+                                        imgs[oi] = url;
+                                        updateField(activeSection, f.id, { option_images: imgs });
+                                      }
+                                    }
+                                  };
+                                  input.click();
+                                }}
+                                className={`p-1.5 rounded-lg transition-all ${f.option_images?.[oi] ? 'text-primary bg-primary/10' : 'text-slate-300 hover:text-primary hover:bg-primary/5'}`}
+                                title="Add image to option"
+                              >
+                                <Upload size={14} />
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  const newOpts = f.options!.filter((_, j) => j !== oi);
+                                  const newImgs = (f.option_images || []).filter((_, j) => j !== oi);
+                                  updateField(activeSection, f.id, { options: newOpts, option_images: newImgs });
+                                }} 
+                                className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover/opt:opacity-100"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                        {f.option_images?.[oi] && (
+                          <div className="ml-8 mt-1 relative w-20 h-12 rounded-lg overflow-hidden border border-border group/img">
+                            <img src={f.option_images[oi]} className="w-full h-full object-cover" />
+                            <button 
+                              onClick={() => {
+                                const imgs = [...(f.option_images || [])];
+                                imgs[oi] = '';
+                                updateField(activeSection, f.id, { option_images: imgs });
+                              }}
+                              className="absolute inset-0 bg-rose-500/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </React.Fragment>
                     ))}
                     <button 
                       onClick={() => updateField(activeSection, f.id, { options: [...(f.options || []), `Option ${(f.options?.length || 0) + 1}`] })} 
                       className="flex items-center gap-2 text-xs font-bold text-primary hover:text-navy transition-colors px-1 py-1"
                     >
-                      <PlusCircle size={14} /> Add option
+                      {AddIcon && <AddIcon size={14} />} Add option
                     </button>
                   </div>
                 </div>
@@ -425,7 +527,10 @@ export default function FormBuilder() {
         const savedForm = res.data;
         if (savedForm && (savedForm.id || savedForm._id)) {
           const newId = savedForm.id || savedForm._id;
-          setForm(prev => ({ ...prev, ...savedForm, id: newId, schema: savedForm.schema || prev.schema }));
+          if (typeof savedForm.settings === 'string') {
+            try { savedForm.settings = JSON.parse(savedForm.settings); } catch {}
+          }
+          setForm(prev => ({ ...prev, ...savedForm, id: newId, schema: savedForm.schema || savedForm.form_schema || prev.schema }));
           // If we're staying on the page, update URL so subsequent saves are PUTs
           if (!shouldNavigate) {
             nav(`/forms/${newId}/builder`, { replace: true });
@@ -434,7 +539,14 @@ export default function FormBuilder() {
       } else {
         const targetId = id || form.id || form._id;
         const { id: _formId, ...formWithoutId } = form;
-        await api.put('/forms', { id: targetId, ...formWithoutId, form_schema: form.schema, settings: JSON.stringify(sanitizeSettingsForSave(form.settings)) });
+        const res: any = await api.put('/forms', { id: targetId, ...formWithoutId, form_schema: form.schema, settings: JSON.stringify(sanitizeSettingsForSave(form.settings)) });
+        const savedForm = res.data;
+        if (savedForm) {
+          if (typeof savedForm.settings === 'string') {
+            try { savedForm.settings = JSON.parse(savedForm.settings); } catch {}
+          }
+          setForm(prev => ({ ...prev, ...savedForm, schema: savedForm.schema || savedForm.form_schema || prev.schema }));
+        }
       }
       if (isManual) {
         alert('Changes saved successfully.');
@@ -497,6 +609,7 @@ export default function FormBuilder() {
     { type: 'file', label: 'File upload' },
   ];
 
+  const SuccessIcon = CircleCheck || CheckCircle2 || Check;
   const publicUrl = `${location.origin}/fill/${id || 'unsaved'}`;
   const handleCopyLink = async () => {
     const success = await copyToClipboard(publicUrl);
@@ -514,13 +627,58 @@ export default function FormBuilder() {
             items={[{ label: 'Forms', to: '/forms' }, { label: isNew ? 'New form' : 'Edit form' }]} 
             onNavigate={handleBack}
           />
-          <div className="flex items-center gap-2 mt-1">
-            <input
-              className="font-display text-2xl font-bold text-ink bg-transparent outline-none border-b-2 border-transparent focus:border-blue transition-colors"
-              value={form.title}
-              onChange={e => patch({ title: e.target.value })}
-            />
-            <Badge tone="blue">{form.form_type}</Badge>
+          <div 
+            className="mt-2 rounded-2xl overflow-hidden shadow-sm border border-border relative transition-all group/header"
+            style={{ 
+              backgroundColor: (form.settings.header_color as string) || '#ffffff',
+              backgroundImage: form.settings.header_image ? `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url(${form.settings.header_image})` : 'none',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              minHeight: form.settings.header_image ? '160px' : 'auto'
+            }}
+          >
+            <div className={`p-6 flex items-center gap-4 ${form.settings.header_image ? 'h-full' : ''}`}>
+              <div className="relative group flex-1">
+                <input
+                  className={`font-display text-2xl font-bold bg-transparent outline-none border-b-2 border-transparent focus:border-blue transition-colors w-full pr-12 ${form.settings.header_image ? 'text-white placeholder:text-white/60' : 'text-ink'}`}
+                  value={form.title}
+                  onChange={e => patch({ title: e.target.value })}
+                  placeholder="Untitled form"
+                />
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                  {form.settings.header_image ? (
+                    <button 
+                      onClick={() => patchSettings({ header_image: '' })}
+                      className="p-2 bg-rose-500 text-white rounded-lg shadow-lg hover:bg-rose-600 transition-all"
+                      title="Remove background image"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.onchange = async (e: any) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const url = await handleImageUpload(file);
+                            if (url) patchSettings({ header_image: url });
+                          }
+                        };
+                        input.click();
+                      }}
+                      className="p-2 text-primary hover:text-primary-dark transition-all bg-primary/5 hover:bg-primary/10 rounded-lg border border-primary/10"
+                      title="Add background image"
+                    >
+                      <Upload size={20} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <Badge tone={form.settings.header_image ? 'slate' : 'blue'} className="shrink-0">{form.form_type}</Badge>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -554,13 +712,16 @@ export default function FormBuilder() {
           </Card>
 
           <Card padded={false}>
-            <div className="p-3 border-b border-border text-sm font-semibold">Add field</div>
+            <div className="p-3 border-b border-border text-sm font-semibold">Add question</div>
             <div className="p-2 space-y-1">
               {fieldButtons.map(fb => {
                 const Icon = fieldIcons[fb.type];
                 return (
-                  <button key={fb.type} onClick={() => addField(fb.type)} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-blue-soft text-ink-soft">
-                    <Icon size={15} /> {fb.label}
+                  <button key={fb.type} onClick={() => addField(fb.type)} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-primary/5 hover:text-primary transition-all text-ink-soft group">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+                      <Icon size={15} />
+                    </div>
+                    <span className="font-medium">{fb.label}</span>
                   </button>
                 );
               })}
@@ -576,6 +737,37 @@ export default function FormBuilder() {
                 onChange={e => updateSection(activeSection, { title: e.target.value })} placeholder="Section Title" />
               <textarea className="textarea mt-2 !border-dashed" rows={2} placeholder="Section description (optional)"
                 value={section.description || ''} onChange={e => updateSection(activeSection, { description: e.target.value })} />
+              
+              <div className="mt-3">
+                {section.image ? (
+                  <div className="relative rounded-lg overflow-hidden border border-border group w-48 h-28">
+                    <img src={section.image} className="w-full h-full object-cover" />
+                    <button onClick={() => updateSection(activeSection, { image: '' })} className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Trash2 size={12}/>
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = async (e: any) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const url = await handleImageUpload(file);
+                          if (url) updateSection(activeSection, { image: url });
+                        }
+                      };
+                      input.click();
+                    }}
+                    className="flex items-center gap-2 text-[11px] font-semibold text-blue hover:text-blue-700"
+                  >
+                    <Upload size={14}/> Add Image to Section
+                  </button>
+                )}
+              </div>
+
               {activeSection > 0 && (
                 <div className="mt-3">
                   <BranchingEditor allFields={form.schema.sections.slice(0, activeSection).flatMap(s => s.fields)}
@@ -596,7 +788,12 @@ export default function FormBuilder() {
           </Reorder.Group>
 
           {section?.fields.length === 0 && (
-            <Card className="text-center text-muted">No fields yet. Add one from the left panel.</Card>
+            <Card className="text-center py-20 border-dashed">
+              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
+                <Plus size={32} />
+              </div>
+              <div className="text-slate-400 font-medium">Add your first question from the left panel</div>
+            </Card>
           )}
         </div>
 
@@ -618,165 +815,336 @@ export default function FormBuilder() {
               </div>
             </div>
           )}
+
+          {/* 🎨 Theme & Styles */}
           <Card>
-            <div className="flex items-center gap-2 mb-3"><Settings2 size={16}/><div className="font-semibold">Settings</div></div>
-            <label className="block text-xs"><span className="text-muted">Description</span>
-              <textarea rows={2} className="textarea mt-1" value={form.description} onChange={e => patch({ description: e.target.value })} placeholder="Form description…" /></label>
-            <div className="grid grid-cols-2 gap-2 mt-3">
-              <label className="text-xs"><span className="text-muted">Expires</span>
-                <input type="datetime-local" className="input !py-1.5 mt-1" value={form.expires_at?.slice(0,16) || ''} onChange={e => patch({ expires_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label>
-              <label className="text-xs block mt-3"><span className="text-muted">Status</span>
-                <select className="select mt-1" value={form.status} onChange={e => patch({ status: e.target.value as FormState['status'] })}>
-                  <option value="draft">Draft</option><option value="active">Active</option><option value="expired">Expired</option>
-                </select></label>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2"><LayoutDashboard size={16}/><div className="font-semibold">Styles & Themes</div></div>
+              <Toggle 
+                checked={!!form.settings.show_advanced_design} 
+                onChange={v => patchSettings({ show_advanced_design: v })} 
+                label={<span className="text-[10px] font-bold uppercase text-muted">Advanced</span>}
+              />
             </div>
-
-            {(form.form_type === 'quiz' || form.form_type === 'multi' || true) && (
-              <div className="mt-3 pt-3 border-t border-border space-y-2">
-                <div className="text-xs font-semibold text-ink">Quiz Settings</div>
-                <label className="text-xs"><span className="text-muted">Time limit (minutes)</span>
-                  <input type="number" className="input !py-1.5 mt-1" value={(form.settings.time_limit_min as string | number | undefined) ?? ''} onChange={e => patchSettings({ time_limit_min: e.target.value === '' ? undefined : (+e.target.value || 30) })} placeholder="30" /></label>
-                {form.schema.sections.some(s => s.fields.some(f => f.type === 'mcq')) && (
-                  <div className="flex items-center justify-between"><span className="text-sm">Shuffle options</span><Toggle checked={!!form.settings.shuffle} onChange={v => patchSettings({ shuffle: v })} /></div>
-                )}
-              </div>
-            )}
-
-            <div className="mt-3 pt-3 border-t border-border space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold text-ink">Nomination Mode</div>
-                <Toggle 
-                  checked={form.form_type === 'nomination'} 
-                  onChange={v => {
-                    patch({ form_type: v ? 'nomination' : 'normal' });
-                    // Automatically switch auth_mode based on nomination mode
-                    patchSettings({ auth_mode: v ? 'otp' : 'anonymous' });
-                  }} 
-                />
-              </div>
-              <p className="text-[10px] text-muted leading-tight">Enable this to use this form for school-based teacher nominations.</p>
-              
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-[10px] font-bold text-muted uppercase tracking-tight">Access Mode</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
-                   (form.settings.auth_mode as string) === 'otp' 
-                     ? 'bg-blue-50 text-blue-600 border-blue-100' 
-                     : 'bg-slate-50 text-slate-500 border-slate-100'
-                 }`}>
-                   {(form.settings.auth_mode as string) === 'otp' ? 'OTP Verification' : 'Direct Access'}
-                 </span>
-              </div>
-            </div>
-
-            {(form.form_type === 'nomination') && (
-              <div className="mt-3 pt-3 border-t border-border space-y-4">
-                <div className="text-xs font-semibold text-ink">Nomination Settings</div>
-                
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs"><span className="text-muted">Limit (per school)</span>
+            
+            <div className="space-y-6">
+              {/* Background Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-[11px] font-bold text-muted uppercase tracking-wider">Background Color</label>
+                  <div className="relative group">
                     <input 
-                      type="number" 
-                      className="input !py-1.5 mt-1" 
-                      value={(form.settings.nomination_limit as string | number | undefined) ?? ''} 
-                      placeholder="5"
-                      onChange={e => {
-                        const raw = e.target.value;
-                        if (raw === '') {
-                          patchSettings({ nomination_limit: undefined });
-                        } else {
-                          const num = parseFloat(raw);
-                          patchSettings({ nomination_limit: Number.isFinite(num) ? num : undefined });
-                        }
-                      }} 
+                      type="color" 
+                      className="w-5 h-5 rounded-full border-0 p-0 cursor-pointer overflow-hidden"
+                      value={(form.settings.bg_color as string) || '#f6f9ff'}
+                      onChange={e => patchSettings({ bg_color: e.target.value })}
                     />
-                  </label>
-                  <label className="text-xs block"><span className="text-muted">Login Type</span>
-                    <select className="select mt-1" value={(form.settings.teacher_login as string) || 'otp'} onChange={e => patchSettings({ teacher_login: e.target.value })}>
-                      <option value="otp">OTP via Link</option>
-                      <option value="direct">Direct Access</option>
-                    </select></label>
-                </div>
-                
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Email</span><Toggle checked={form.settings.require_email !== false} onChange={v => patchSettings({ require_email: v })} /></div>
-                  <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Phone</span><Toggle checked={!!form.settings.require_phone} onChange={v => patchSettings({ require_phone: v })} /></div>
-                </div>
-
-                <div className="pt-2 border-t border-border">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-[10px] font-bold uppercase text-muted">Custom Nomination Fields</div>
-                    <button 
-                      onClick={() => {
-                        const current = (form.settings.nomination_custom_fields as any[]) || [];
-                        patchSettings({ 
-                          nomination_custom_fields: [
-                            ...current, 
-                            { id: `cf_${Date.now()}`, label: '', type: 'text', required: false }
-                          ] 
-                        });
-                      }}
-                      className="text-[10px] text-primary hover:underline font-bold"
-                    >
-                      + Add Field
-                    </button>
+                    <div className="absolute right-6 top-0 hidden group-hover:block bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap">Custom Color</div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    {((form.settings.nomination_custom_fields as any[]) || []).map((cf, cfi) => (
-                      <div key={cf.id || cfi} className="flex flex-col gap-1.5 p-2 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="flex items-center gap-2">
-                          <input className="input !py-1 flex-1 text-xs" placeholder="Field Label" value={cf.label} 
-                            onChange={e => {
-                              const newFields = [...(form.settings.nomination_custom_fields as any[])];
-                              newFields[cfi] = { ...cf, label: e.target.value };
-                              patchSettings({ nomination_custom_fields: newFields });
-                            }} />
-                          <button onClick={() => {
-                            const newFields = (form.settings.nomination_custom_fields as any[]).filter((_, i) => i !== cfi);
-                            patchSettings({ nomination_custom_fields: newFields });
-                          }} className="text-rose-500 p-1 hover:bg-rose-50 rounded"><Trash2 size={12} /></button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <select className="select !py-1 text-[10px] flex-1" value={cf.type} 
-                            onChange={e => {
-                              const newFields = [...(form.settings.nomination_custom_fields as any[])];
-                              newFields[cfi] = { ...cf, type: e.target.value };
-                              patchSettings({ nomination_custom_fields: newFields });
-                            }}>
-                            <option value="text">Text</option>
-                            <option value="textarea">Paragraph</option>
-                            <option value="number">Number</option>
-                            <option value="date">Date</option>
-                            <option value="file">File Upload</option>
-                            <option value="dropdown">Dropdown</option>
-                          </select>
-                          <label className="flex items-center gap-1 text-[10px] cursor-pointer">
-                            <input type="checkbox" checked={cf.required} onChange={e => {
-                              const newFields = [...(form.settings.nomination_custom_fields as any[])];
-                              newFields[cfi] = { ...cf, required: e.target.checked };
-                              patchSettings({ nomination_custom_fields: newFields });
-                            }} /> Req
-                          </label>
-                        </div>
-                        {['dropdown', 'radio', 'checkbox'].includes(cf.type) && (
-                          <input className="input !py-1 text-[10px]" placeholder="Options (comma separated)" value={cf.optionsInput ?? (cf.options?.join(', ') || '')} 
-                            onChange={e => {
-                              const newFields = [...(form.settings.nomination_custom_fields as any[])];
-                              const raw = e.target.value;
-                              newFields[cfi] = { ...cf, optionsInput: raw, options: raw.split(',').map(s => s.trim()).filter(Boolean) };
-                              patchSettings({ nomination_custom_fields: newFields });
-                            }} />
-                        )}
+                </div>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {[
+                    { id: 'default', color: '#f6f9ff', label: 'Default' },
+                    { id: 'teal', color: '#e6f6f4', label: 'Teal' },
+                    { id: 'sky', color: '#eef2ff', label: 'Sky' },
+                    { id: 'gray', color: '#f3f4f6', label: 'Gray' },
+                    { id: 'amber', color: '#fffbeb', label: 'Amber' },
+                    { id: 'rose', color: '#fff1f2', label: 'Rose' },
+                  ].map(style => (
+                    <button
+                      key={style.id}
+                      onClick={() => patchSettings({ 
+                        bg_color: style.color,
+                        header_color: style.id === 'default' ? '#004b93' : style.color.replace('f', 'd') 
+                      })}
+                      className={`h-7 rounded-lg border-2 transition-all ${form.settings.bg_color === style.color ? 'border-primary shadow-sm scale-110' : 'border-slate-100 hover:border-slate-200'}`}
+                      style={{ backgroundColor: style.color }}
+                      title={style.label}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {form.settings.show_advanced_design && (
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 pt-4 border-t border-slate-100">
+                  {/* Background Image */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Background Image</label>
+                    {form.settings.bg_image ? (
+                      <div className="relative rounded-xl overflow-hidden border border-border group aspect-video">
+                        <img src={form.settings.bg_image as string} className="w-full h-full object-cover" />
+                        <button onClick={() => patchSettings({ bg_image: '' })} className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Trash2 size={12}/>
+                        </button>
                       </div>
-                    ))}
-                    {((form.settings.nomination_custom_fields as any[]) || []).length === 0 && (
-                      <p className="text-[10px] text-muted text-center py-2 italic">No custom fields added yet.</p>
+                    ) : (
+                      <button 
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = async (e: any) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const url = await handleImageUpload(file);
+                              if (url) patchSettings({ bg_image: url });
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="w-full py-6 border-2 border-dashed border-border rounded-xl text-muted text-xs flex flex-col items-center gap-2 hover:bg-slate-50 transition-colors"
+                      >
+                        <Upload size={18}/> Upload Background Image
+                      </button>
                     )}
                   </div>
-                </div>
-              </div>
-            )}
+
+                  {/* Logo Selection */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">School Logo</label>
+                    {form.settings.logo_image ? (
+                      <div className="relative rounded-xl overflow-hidden border border-border group w-full h-20 bg-white flex items-center justify-center">
+                        <img src={form.settings.logo_image as string} className="max-w-full max-h-full object-contain p-2" />
+                        <button onClick={() => patchSettings({ logo_image: '' })} className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Trash2 size={12}/>
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = async (e: any) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const url = await handleImageUpload(file);
+                              if (url) patchSettings({ logo_image: url });
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted text-[11px] flex flex-col items-center gap-1 hover:bg-slate-50 transition-colors"
+                      >
+                        <Upload size={16}/> Upload Logo
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </div>
           </Card>
+
+          {activeSection === 0 && (
+            <div className="space-y-4">
+              {/* 🏁 Thank You Page Settings */}
+              <Card>
+                <div className="flex items-center gap-2 mb-3">
+                  {SuccessIcon && <SuccessIcon size={16}/>}
+                  <div className="font-semibold">Thank You Page</div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Heading</label>
+                    <input 
+                      type="text" 
+                      className="input !py-1.5 text-sm" 
+                      value={form.settings.thank_you_heading as string || 'Thank You!'} 
+                      onChange={e => patchSettings({ thank_you_heading: e.target.value })}
+                      placeholder="Thank You!"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Message</label>
+                    <textarea 
+                      className="textarea text-sm" 
+                      rows={2} 
+                      value={form.settings.thank_you_message as string || ''} 
+                      onChange={e => patchSettings({ thank_you_message: e.target.value })}
+                      placeholder="Your response has been recorded."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Redirect URL (optional)</label>
+                    <input 
+                      type="text" 
+                      className="input !py-1.5 text-sm" 
+                      value={form.settings.redirect_url as string || ''} 
+                      onChange={e => patchSettings({ redirect_url: e.target.value })}
+                      placeholder="https://your-website.com"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] font-semibold text-ink">Show score after submit</span>
+                    <Toggle 
+                      checked={form.settings.show_score_after_submit !== false} 
+                      onChange={v => patchSettings({ show_score_after_submit: v })} 
+                    />
+                  </div>
+                </div>
+              </Card>
+
+              <Card>
+                <div className="flex items-center gap-2 mb-3"><Settings2 size={16}/><div className="font-semibold">Settings</div></div>
+                <label className="block text-xs"><span className="text-muted">Description</span>
+                  <textarea rows={2} className="textarea mt-1" value={form.description} onChange={e => patch({ description: e.target.value })} placeholder="Form description…" /></label>
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <label className="text-xs"><span className="text-muted">Expires</span>
+                    <input type="datetime-local" className="input !py-1.5 mt-1" value={form.expires_at?.slice(0,16) || ''} onChange={e => patch({ expires_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label>
+                  <label className="text-xs block mt-3"><span className="text-muted">Status</span>
+                    <select className="select mt-1" value={form.status} onChange={e => patch({ status: e.target.value as FormState['status'] })}>
+                      <option value="draft">Draft</option><option value="active">Active</option><option value="expired">Expired</option>
+                    </select></label>
+                </div>
+
+                {(form.form_type === 'quiz' || form.form_type === 'multi' || true) && (
+                  <div className="mt-3 pt-3 border-t border-border space-y-2">
+                    <div className="text-xs font-semibold text-ink">Quiz Settings</div>
+                    <label className="text-xs"><span className="text-muted">Time limit (minutes)</span>
+                      <input type="number" className="input !py-1.5 mt-1" value={(form.settings.time_limit_min as string | number | undefined) ?? ''} onChange={e => patchSettings({ time_limit_min: e.target.value === '' ? undefined : (+e.target.value || 30) })} placeholder="30" /></label>
+                    {form.schema.sections.some(s => s.fields.some(f => f.type === 'mcq')) && (
+                      <div className="flex items-center justify-between"><span className="text-sm">Shuffle options</span><Toggle checked={!!form.settings.shuffle} onChange={v => patchSettings({ shuffle: v })} /></div>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-3 pt-3 border-t border-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-semibold text-ink">Nomination Mode</div>
+                    <Toggle 
+                      checked={form.form_type === 'nomination'} 
+                      onChange={v => {
+                        patch({ form_type: v ? 'nomination' : 'normal' });
+                        // Automatically switch auth_mode based on nomination mode
+                        patchSettings({ auth_mode: v ? 'otp' : 'anonymous' });
+                      }} 
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted leading-tight">Enable this to use this form for school-based teacher nominations.</p>
+                  
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-[10px] font-bold text-muted uppercase tracking-tight">Access Mode</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                      (form.settings.auth_mode as string) === 'otp' 
+                        ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                        : 'bg-slate-50 text-slate-500 border-slate-100'
+                    }`}>
+                      {(form.settings.auth_mode as string) === 'otp' ? 'OTP Verification' : 'Direct Access'}
+                    </span>
+                  </div>
+                </div>
+
+                {(form.form_type === 'nomination') && (
+                  <div className="mt-3 pt-3 border-t border-border space-y-4">
+                    <div className="text-xs font-semibold text-ink">Nomination Settings</div>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-xs"><span className="text-muted">Limit (per school)</span>
+                        <input 
+                          type="number" 
+                          className="input !py-1.5 mt-1" 
+                          value={(form.settings.nomination_limit as string | number | undefined) ?? ''} 
+                          placeholder="5"
+                          onChange={e => {
+                            const raw = e.target.value;
+                            if (raw === '') {
+                              patchSettings({ nomination_limit: undefined });
+                            } else {
+                              const num = parseFloat(raw);
+                              patchSettings({ nomination_limit: Number.isFinite(num) ? num : undefined });
+                            }
+                          }} 
+                        />
+                      </label>
+                      <label className="text-xs block"><span className="text-muted">Login Type</span>
+                        <select className="select mt-1" value={(form.settings.teacher_login as string) || 'otp'} onChange={e => patchSettings({ teacher_login: e.target.value })}>
+                          <option value="otp">OTP via Link</option>
+                          <option value="direct">Direct Access</option>
+                        </select></label>
+                    </div>
+                    
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Email</span><Toggle checked={form.settings.require_email !== false} onChange={v => patchSettings({ require_email: v })} /></div>
+                      <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Phone</span><Toggle checked={!!form.settings.require_phone} onChange={v => patchSettings({ require_phone: v })} /></div>
+                    </div>
+
+                    <div className="pt-2 border-t border-border">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-[10px] font-bold uppercase text-muted">Custom Nomination Fields</div>
+                        <button 
+                          onClick={() => {
+                            const current = (form.settings.nomination_custom_fields as any[]) || [];
+                            patchSettings({ 
+                              nomination_custom_fields: [
+                                ...current, 
+                                { id: `cf_${Date.now()}`, label: '', type: 'text', required: false }
+                              ] 
+                            });
+                          }}
+                          className="text-[10px] text-primary hover:underline font-bold"
+                        >
+                          + Add Field
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        {((form.settings.nomination_custom_fields as any[]) || []).map((cf, cfi) => (
+                          <div key={cf.id || cfi} className="flex flex-col gap-1.5 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                            <div className="flex items-center gap-2">
+                              <input className="input !py-1 flex-1 text-xs" placeholder="Field Label" value={cf.label} 
+                                onChange={e => {
+                                  const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                                  newFields[cfi] = { ...cf, label: e.target.value };
+                                  patchSettings({ nomination_custom_fields: newFields });
+                                }} />
+                              <button onClick={() => {
+                                const newFields = (form.settings.nomination_custom_fields as any[]).filter((_, i) => i !== cfi);
+                                patchSettings({ nomination_custom_fields: newFields });
+                              }} className="text-rose-500 p-1 hover:bg-rose-50 rounded"><Trash2 size={12} /></button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <select className="select !py-1 text-[10px] flex-1" value={cf.type} 
+                                onChange={e => {
+                                  const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                                  newFields[cfi] = { ...cf, type: e.target.value };
+                                  patchSettings({ nomination_custom_fields: newFields });
+                                }}>
+                                <option value="text">Text</option>
+                                <option value="textarea">Paragraph</option>
+                                <option value="number">Number</option>
+                                <option value="date">Date</option>
+                                <option value="file">File Upload</option>
+                                <option value="dropdown">Dropdown</option>
+                              </select>
+                              <label className="flex items-center gap-1 text-[10px] cursor-pointer">
+                                <input type="checkbox" checked={cf.required} onChange={e => {
+                                  const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                                  newFields[cfi] = { ...cf, required: e.target.checked };
+                                  patchSettings({ nomination_custom_fields: newFields });
+                                }} /> Req
+                              </label>
+                            </div>
+                            {['dropdown', 'radio', 'checkbox'].includes(cf.type) && (
+                              <input className="input !py-1 text-[10px]" placeholder="Options (comma separated)" value={cf.optionsInput ?? (cf.options?.join(', ') || '')} 
+                                onChange={e => {
+                                  const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                                  const raw = e.target.value;
+                                  newFields[cfi] = { ...cf, optionsInput: raw, options: raw.split(',').map(s => s.trim()).filter(Boolean) };
+                                  patchSettings({ nomination_custom_fields: newFields });
+                                }} />
+                            )}
+                          </div>
+                        ))}
+                        {((form.settings.nomination_custom_fields as any[]) || []).length === 0 && (
+                          <p className="text-[10px] text-muted text-center py-2 italic">No custom fields added yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </div>
+          )}
 
           <Card>
             <div className="font-semibold mb-2 flex items-center gap-2"><Link2 size={15}/> Share</div>
@@ -851,10 +1219,29 @@ function BranchingEditor({ allFields, value, onChange }: {
 function PreviewPane({ form }: { form: FormState }) {
   return (
     <div className="card !p-0 overflow-hidden shadow-2xl">
-      <div className="bg-navy p-6 text-white">
-        <div className="text-xs uppercase tracking-widest opacity-70 mb-1">Live Preview</div>
-        <div className="font-display text-3xl font-bold">{form.title}</div>
-        {form.description && <div className="text-slate-300 mt-2">{form.description}</div>}
+      <div 
+        className="relative flex flex-col justify-center transition-all p-8 min-h-[180px]"
+        style={{ 
+          backgroundColor: (form.settings.header_color as string) || '#004b93',
+          backgroundImage: form.settings.header_image ? `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), url(${form.settings.header_image})` : 'none',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        }}
+      >
+        <div className="flex items-center gap-4 relative z-10">
+          {form.settings.logo_image && (
+            <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-xl p-2 flex items-center justify-center border border-white/20 shrink-0">
+              <img src={form.settings.logo_image as string} className="max-w-full max-h-full object-contain brightness-0 invert" />
+            </div>
+          )}
+          <div className="space-y-1">
+            <div className="text-[10px] uppercase tracking-widest text-white/70 font-bold">Live Preview</div>
+            <h1 className="text-2xl font-display font-extrabold text-white leading-tight tracking-tight drop-shadow-sm uppercase">
+              {form.title}
+            </h1>
+            {form.description && <div className="text-white/80 text-sm font-medium line-clamp-1">{form.description}</div>}
+          </div>
+        </div>
       </div>
       <div className="p-6 md:p-8 bg-canvas space-y-8">
         {form.schema.sections.map((s, si) => (

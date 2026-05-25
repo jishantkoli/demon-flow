@@ -73,13 +73,20 @@ export const getForms = async (req: AuthRequest, res: Response) => {
       if (!form) return res.status(404).json({ error: 'Form not found' });
 
       // If user is a teacher, verify they are nominated for this form
+      // ONLY if it's a nomination-type form and not set to direct/anonymous access.
       if (req.user?.role === 'teacher') {
-        const nomination = await Nomination.findOne({
-          form_id: form._id,
-          teacher_email: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
-        });
-        if (!nomination) {
-          return res.status(403).json({ error: 'You are not authorized to access this form. Please contact your school functionary for assignment.' });
+        const settings = typeof form.settings === 'string' ? JSON.parse(form.settings) : form.settings;
+        const isNominationType = form.formType === 'nomination';
+        const isDirectAccess = settings?.auth_mode === 'anonymous' || settings?.login_type === 'direct' || settings?.teacher_login === 'direct';
+
+        if (isNominationType && !isDirectAccess) {
+          const nomination = await Nomination.findOne({
+            form_id: form._id,
+            teacher_email: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
+          });
+          if (!nomination) {
+            return res.status(403).json({ error: 'You are not authorized to access this form. Please contact your school functionary for assignment.' });
+          }
         }
       }
 
@@ -94,13 +101,15 @@ export const getForms = async (req: AuthRequest, res: Response) => {
       query.status = 'active';
     }
 
-    // Teachers only see forms they are nominated for
+    // Teachers ONLY see forms they are specifically nominated for
     if (req.user?.role === 'teacher') {
       const userEmail = req.user.email;
       const nominations = await Nomination.find({ 
         teacher_email: { $regex: new RegExp(`^${userEmail}$`, 'i') } 
       });
       const assignedFormIds = nominations.map(n => n.form_id);
+      
+      // Strict filtering: Only show forms where a nomination exists for this teacher
       query._id = { $in: assignedFormIds };
     }
 
