@@ -772,30 +772,33 @@ export default function Dashboard({ user }: { user: User }) {
                   <Inbox size={40} className="mx-auto opacity-10 mb-4" />
                   <p className="text-xs font-bold uppercase tracking-widest">No activity found</p>
                 </div>
-              ) : recentSubs.map((sub, i) => (
-                <div key={subId(sub)} onClick={() => { if (canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }} className="w-full text-left px-8 py-5 flex items-center gap-5 transition-all hover:bg-slate-50 cursor-pointer group">
-                  <div className="w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center text-sm font-black transition-all border border-slate-100">
-                    {displaySubmissionNameFirstChar(sub)}
+              ) : recentSubs.map((sub, i) => {
+                const isClickable = user.role !== 'functionary' && canOpenSubmission(sub);
+                return (
+                  <div key={subId(sub)} onClick={() => { if (isClickable) navigate(`/forms/view?submission=${subId(sub)}`); }} className={`w-full text-left px-8 py-5 flex items-center gap-5 transition-all ${isClickable ? 'hover:bg-slate-50 cursor-pointer' : ''} group`}>
+                    <div className="w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center text-sm font-black transition-all border border-slate-100">
+                      {displaySubmissionNameFirstChar(sub)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate group-hover:text-primary transition-colors">{sub.form_title || 'Entry Detail'}</p>
+                      <p className="text-[11px] text-slate-400 font-medium mt-1 uppercase tracking-wider">{displaySubmissionName(sub)}</p>
+                    </div>
+                    <div className="text-right shrink-0 space-y-1.5">
+                      <StatusBadge 
+                        status={
+                          (['teacher', 'functionary'].includes(user.role) && 
+                           ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status)) 
+                          ? 'submitted' 
+                          : (user.role === 'admin' ? sub.status : (['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status) ? 'submitted' : 'pending'))
+                        } 
+                        size="xs" 
+                      />
+                      <p className="text-[9px] text-slate-300 font-black uppercase tracking-tighter">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Active'}</p>
+                    </div>
+                    {isClickable && <ChevronRight size={16} className="text-slate-200 group-hover:text-primary transition-all translate-x-0 group-hover:translate-x-1" />}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-900 truncate group-hover:text-primary transition-colors">{sub.form_title || 'Entry Detail'}</p>
-                    <p className="text-[11px] text-slate-400 font-medium mt-1 uppercase tracking-wider">{displaySubmissionName(sub)}</p>
-                  </div>
-                  <div className="text-right shrink-0 space-y-1.5">
-                    <StatusBadge 
-                      status={
-                        (['teacher', 'functionary'].includes(user.role) && 
-                         ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status)) 
-                        ? 'submitted' 
-                        : (user.role === 'admin' ? sub.status : (['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status) ? 'submitted' : 'pending'))
-                      } 
-                      size="xs" 
-                    />
-                    <p className="text-[9px] text-slate-300 font-black uppercase tracking-tighter">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Active'}</p>
-                  </div>
-                  <ChevronRight size={16} className="text-slate-200 group-hover:text-primary transition-all translate-x-0 group-hover:translate-x-1" />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </motion.div>
         </div>
