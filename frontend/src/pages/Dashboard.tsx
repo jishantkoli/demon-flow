@@ -152,11 +152,13 @@ export default function Dashboard({ user }: { user: User }) {
                   className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary cursor-pointer"
                 >
                   <option value="">All Forms</option>
-                  {forms.map((form: any) => (
-                    <option key={form._id || form.id} value={form._id || form.id}>
-                      {form.title}
-                    </option>
-                  ))}
+                  {forms
+                    .filter((form: any) => user.role !== 'functionary' || form.form_type === 'nomination')
+                    .map((form: any) => (
+                      <option key={form._id || form.id} value={form._id || form.id}>
+                        {form.title}
+                      </option>
+                    ))}
                 </select>
               </div>
             )}
