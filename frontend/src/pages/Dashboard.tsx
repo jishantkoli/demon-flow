@@ -173,44 +173,89 @@ export default function Dashboard({ user }: { user: User }) {
 
         {/* Crisp Enterprise Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[
-            { 
-              label: "Total Users", 
-              value: s.totalUsers || 0, 
-              subtext: `${s.usersByRole?.teacher || 0} Teachers • ${s.usersByRole?.reviewer || 0} Reviewers`,
-              icon: Users, 
-              color: "text-blue-600 bg-blue-50 border-blue-100/50",
-              cta: "Manage Users", 
-              path: "/users" 
-            },
-            { 
-              label: "Active Forms", 
-              value: s.activeForms || 0, 
-              subtext: `${s.draftForms || 0} Drafts • ${s.expiredForms || 0} Expired`,
-              icon: FileText, 
-              color: "text-emerald-600 bg-emerald-50 border-emerald-100/50",
-              cta: "Configure Forms", 
-              path: "/forms" 
-            },
-            { 
-              label: "Submissions Received", 
-              value: s.totalSubmissions || 0, 
-              subtext: `Success Index: ${s.totalSubmissions > 0 ? Math.round(((s.submissionsByStatus?.approved || 0) / s.totalSubmissions) * 100) : 0}%`,
-              icon: Inbox, 
-              color: "text-indigo-600 bg-indigo-50 border-indigo-100/50",
-              cta: "Browse Records", 
-              path: "/submissions" 
-            },
-            { 
-              label: "Pending Reviews", 
-              value: s.pendingReviews || 0, 
-              subtext: `${s.completedReviews || 0} Gradings Completed`,
-              icon: SquareCheck, 
-              color: "text-amber-600 bg-amber-50 border-amber-100/50",
-              cta: "Process Reviews", 
-              path: "/reviews" 
+          {(() => {
+            const defaultCards = [
+              { 
+                label: "Total Users", 
+                value: s.totalUsers || 0, 
+                subtext: `${s.usersByRole?.teacher || 0} Teachers • ${s.usersByRole?.reviewer || 0} Reviewers`,
+                icon: Users, 
+                color: "text-blue-600 bg-blue-50 border-blue-100/50",
+                cta: "Manage Users", 
+                path: "/users" 
+              },
+              { 
+                label: "Active Forms", 
+                value: s.activeForms || 0, 
+                subtext: `${s.draftForms || 0} Drafts • ${s.expiredForms || 0} Expired`,
+                icon: FileText, 
+                color: "text-emerald-600 bg-emerald-50 border-emerald-100/50",
+                cta: "Configure Forms", 
+                path: "/forms" 
+              },
+              { 
+                label: "Submissions Received", 
+                value: s.totalSubmissions || 0, 
+                subtext: `Success Index: ${s.totalSubmissions > 0 ? Math.round(((s.submissionsByStatus?.approved || 0) / s.totalSubmissions) * 100) : 0}%`,
+                icon: Inbox, 
+                color: "text-indigo-600 bg-indigo-50 border-indigo-100/50",
+                cta: "Browse Records", 
+                path: "/submissions" 
+              },
+              { 
+                label: "Pending Reviews", 
+                value: s.pendingReviews || 0, 
+                subtext: `${s.completedReviews || 0} Gradings Completed`,
+                icon: SquareCheck, 
+                color: "text-amber-600 bg-amber-50 border-amber-100/50",
+                cta: "Process Reviews", 
+                path: "/reviews" 
+              }
+            ];
+
+            if (selectedFormId) {
+              return [
+                { 
+                  label: "Submissions Received", 
+                  value: s.totalSubmissions || 0, 
+                  subtext: `Success Index: ${s.totalSubmissions > 0 ? Math.round(((s.submissionsByStatus?.approved || 0) / s.totalSubmissions) * 100) : 0}%`,
+                  icon: Inbox, 
+                  color: "text-indigo-600 bg-indigo-50 border-indigo-100/50",
+                  cta: "Browse Records", 
+                  path: "/submissions" 
+                },
+                { 
+                  label: "Approved Records", 
+                  value: s.submissionsByStatus?.approved || 0, 
+                  subtext: `${s.submissionsByStatus?.under_review || 0} Under Review`,
+                  icon: CircleCheck, 
+                  color: "text-emerald-600 bg-emerald-50 border-emerald-100/50",
+                  cta: "View Approved", 
+                  path: "/submissions" 
+                },
+                { 
+                  label: "Declined Submissions", 
+                  value: s.submissionsByStatus?.rejected || 0, 
+                  subtext: `${s.submissionsByStatus?.pending || 0} Pending`,
+                  icon: AlertTriangle, 
+                  color: "text-rose-600 bg-rose-50 border-rose-100/50",
+                  cta: "View Declined", 
+                  path: "/submissions" 
+                },
+                { 
+                  label: "Pending Reviews", 
+                  value: s.pendingReviews || 0, 
+                  subtext: `${s.completedReviews || 0} Gradings Completed`,
+                  icon: SquareCheck, 
+                  color: "text-amber-600 bg-amber-50 border-amber-100/50",
+                  cta: "Process Reviews", 
+                  path: "/reviews" 
+                }
+              ];
             }
-          ].map((card, i) => (
+
+            return defaultCards;
+          })().map((card, i) => (
             <div 
               key={card.label} 
               onClick={() => navigate(card.path)}
