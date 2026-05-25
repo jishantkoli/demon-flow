@@ -945,13 +945,16 @@ export default function FormFill({ user }: { user: User }) {
 
             {/* Section Info & Progress Bar at bottom */}
             {visibleSections.length > 1 && (
-              <div className="space-y-4">
+              <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between">
                   <Badge tone="slate">Section {sectionIdx + 1} of {visibleSections.length}</Badge>
+                  <div className="text-sm font-semibold text-slate-600">
+                    {Math.round(((sectionIdx + 1) / visibleSections.length) * 100)}% Complete
+                  </div>
                 </div>
-                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                   <div 
-                    className="bg-teal-500 h-full transition-all duration-500 ease-out"
+                    className="bg-teal-500 h-full transition-all duration-700 ease-out rounded-full"
                     style={{ width: `${((sectionIdx + 1) / visibleSections.length) * 100}%` }}
                   />
                 </div>
