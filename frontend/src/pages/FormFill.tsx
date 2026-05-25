@@ -872,16 +872,6 @@ export default function FormFill({ user }: { user: User }) {
               </div>
             )}
 
-            {/* Section Progress Bar */}
-            {visibleSections.length > 1 && (
-              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-8">
-                <div 
-                  className="bg-teal-500 h-full transition-all duration-500 ease-out"
-                  style={{ width: `${((sectionIdx + 1) / visibleSections.length) * 100}%` }}
-                />
-              </div>
-            )}
-
             {/* Current Section & Questions */}
             <div className="space-y-24">
               {(() => {
@@ -908,7 +898,6 @@ export default function FormFill({ user }: { user: User }) {
                           </p>
                         )}
                       </div>
-                      <Badge tone="slate">Section {sectionIdx + 1} of {visibleSections.length}</Badge>
                     </div>
 
                     <div className="space-y-16">
@@ -944,6 +933,21 @@ export default function FormFill({ user }: { user: User }) {
               <div className="mt-6 text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-5 py-4 flex items-center gap-3 shadow-sm">
                 <AlertCircle size={20} className="shrink-0"/> 
                 <span className="font-medium">{error}</span>
+              </div>
+            )}
+
+            {/* Section Info & Progress Bar at bottom */}
+            {visibleSections.length > 1 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Badge tone="slate">Section {sectionIdx + 1} of {visibleSections.length}</Badge>
+                </div>
+                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-teal-500 h-full transition-all duration-500 ease-out"
+                    style={{ width: `${((sectionIdx + 1) / visibleSections.length) * 100}%` }}
+                  />
+                </div>
               </div>
             )}
 
