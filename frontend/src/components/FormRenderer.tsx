@@ -77,11 +77,17 @@ export default function FormRenderer({ fields, formType, settings, initialValues
     setErrors(p => { const n = { ...p }; delete n[id]; return n; });
   }, []);
 
-  const toOptionText = useCallback((raw: any, options: string[] = []) => {
+  const getOptionValue = (opt: any): any => typeof opt === 'object' && opt !== null ? (opt.value ?? opt.label) : opt;
+  const getOptionLabel = (opt: any): string => typeof opt === 'object' && opt !== null ? (opt.label ?? opt.value) : String(opt);
+  
+  const toOptionText = useCallback((raw: any, options: any[] = []) => {
     if (raw === undefined || raw === null) return raw;
-    if (typeof raw === 'number' && options[raw] !== undefined) return options[raw];
+    const rawStr = String(raw).trim();
+    const optByValue = options.find(o => String(getOptionValue(o)) === rawStr);
+    if (optByValue) return getOptionLabel(optByValue);
+    if (typeof raw === 'number' && options[raw] !== undefined) return getOptionLabel(options[raw]);
     const n = Number(String(raw));
-    if (!Number.isNaN(n) && String(raw).trim() !== '' && options[n] !== undefined) return options[n];
+    if (!Number.isNaN(n) && String(raw).trim() !== '' && options[n] !== undefined) return getOptionLabel(options[n]);
     return raw;
   }, []);
 
@@ -402,9 +408,11 @@ export default function FormRenderer({ fields, formType, settings, initialValues
         const correctText = toOptionText(f.correct, Array.isArray(f.options) ? f.options : []);
         return wrap(
           <div className="space-y-2 mt-1">
-            {opts.map(o => {
-              const sel = String(selectedText) === String(o);
-              const isCorr = String(correctText) === String(o);
+            {opts.map((o, idx) => {
+              const optLabel = getOptionLabel(o);
+              const optValue = getOptionValue(o);
+              const sel = String(selectedText) === String(optLabel);
+              const isCorr = String(correctText) === String(optLabel);
               let cls = optCls(false);
               if (sel && !readOnly) cls = optCls(true);
               if (readOnly && showCorrect && isCorr)
@@ -417,9 +425,9 @@ export default function FormRenderer({ fields, formType, settings, initialValues
                 cls = "flex items-center gap-3 p-3.5 rounded-xl border-2 border-slate-200 bg-white min-h-[48px] pointer-events-none";
 
               return (
-                <label key={o} className={cls}>
-                  <input type="radio" name={f.id} value={o} checked={sel} onChange={() => set(f.id, o)} className="accent-blue-600 w-4 h-4" disabled={dis} />
-                  <span className="text-sm flex-1 font-medium text-slate-800">{o}</span>
+                <label key={idx} className={cls}>
+                  <input type="radio" name={f.id} value={optValue} checked={sel} onChange={() => set(f.id, optValue)} className="accent-blue-600 w-4 h-4" disabled={dis} />
+                  <span className="text-sm flex-1 font-medium text-slate-800">{optLabel}</span>
                   {readOnly && showCorrect && isCorr && <CheckCircle size={18} className="text-emerald-600 flex-shrink-0" />}
                   {readOnly && showCorrect && sel && !isCorr && <AlertCircle size={18} className="text-red-600 flex-shrink-0" />}
                 </label>

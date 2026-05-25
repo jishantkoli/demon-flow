@@ -505,16 +505,22 @@ export default function FormFill({ user }: { user: User }) {
     if (!mcqs.length) return null;
     let score = 0, max = 0;
 
-    const toOptionText = (raw: any, options: string[] = []) => {
+    const getOptionValue = (opt: any): any => typeof opt === 'object' && opt !== null ? (opt.value ?? opt.label) : opt;
+    const getOptionLabel = (opt: any): string => typeof opt === 'object' && opt !== null ? (opt.label ?? opt.value) : String(opt);
+    
+    const toOptionText = (raw: any, options: any[] = []) => {
       if (raw === undefined || raw === null) return raw;
-      if (typeof raw === 'number' && options[raw] !== undefined) return options[raw];
+      const rawStr = String(raw).trim();
+      const optByValue = options.find(o => String(getOptionValue(o)) === rawStr);
+      if (optByValue) return getOptionLabel(optByValue);
+      if (typeof raw === 'number' && options[raw] !== undefined) return getOptionLabel(options[raw]);
       const n = Number(String(raw));
-      if (!Number.isNaN(n) && String(raw).trim() !== '' && options[n] !== undefined) return options[n];
+      if (!Number.isNaN(n) && String(raw).trim() !== '' && options[n] !== undefined) return getOptionLabel(options[n]);
       return raw;
     };
 
     mcqs.forEach((f: Field) => {
-      const qMarks = f.marks || 1;
+      const qMarks = f.points ?? f.marks ?? 1;
       max += qMarks;
       const ans = answers[f.id];
       if (ans === undefined || ans === null) return;

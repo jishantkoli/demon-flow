@@ -93,11 +93,17 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     
     // ALWAYS calculate score on backend for security and accuracy
     if (form.form_schema && (form.form_schema.sections || form.form_schema.fields || Array.isArray(form.form_schema))) {
-      const toOptionText = (raw: any, options: string[] = []) => {
+      const getOptionValue = (opt: any): any => typeof opt === 'object' && opt !== null ? (opt.value ?? opt.label) : opt;
+      const getOptionLabel = (opt: any): string => typeof opt === 'object' && opt !== null ? (opt.label ?? opt.value) : String(opt);
+      
+      const toOptionText = (raw: any, options: any[] = []) => {
         if (raw === undefined || raw === null) return raw;
-        if (typeof raw === 'number' && options[raw] !== undefined) return options[raw];
+        const rawStr = String(raw).trim();
+        const optByValue = options.find(o => String(getOptionValue(o)) === rawStr);
+        if (optByValue) return getOptionLabel(optByValue);
+        if (typeof raw === 'number' && options[raw] !== undefined) return getOptionLabel(options[raw]);
         const n = Number(String(raw));
-        if (!Number.isNaN(n) && String(raw).trim() !== '' && options[n] !== undefined) return options[n];
+        if (!Number.isNaN(n) && String(raw).trim() !== '' && options[n] !== undefined) return getOptionLabel(options[n]);
         return raw;
       };
 
@@ -105,7 +111,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
         if (!Array.isArray(fields)) return;
         fields.forEach((field: any) => {
           if (field.type === 'mcq' && field.correct !== undefined) {
-            const qMarks = field.marks || 1;
+            const qMarks = field.points ?? field.marks ?? 1;
             totalPoints += qMarks;
             const resp = responses.find((r: any) => r.fieldId === field.id);
             if (resp) {

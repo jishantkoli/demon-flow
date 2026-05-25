@@ -155,24 +155,26 @@ export default function ReviewSystem({ user }: { user: User }) {
   const formatResponseLabelValue = (fieldId: string, val: any, customFieldMap?: Record<string, any>) => {
     const field = (customFieldMap && customFieldMap[fieldId]) || filterableFieldMap[fieldId];
     if (field?.options && Array.isArray(field.options)) {
+      const getOptionValue = (opt: any): any => typeof opt === 'object' && opt !== null ? (opt.value ?? opt.label) : opt;
+      const getOptionLabel = (opt: any): string => typeof opt === 'object' && opt !== null ? (opt.label ?? opt.value) : String(opt);
+      
       const getLabel = (v: any) => {
         if (v === undefined || v === null) return '';
         const vStr = String(v).trim();
 
         // Find by value (exact or string match)
-        const opt = field.options.find((o: any) => String(o.value) === vStr);
-        if (opt) return opt.label || opt.value;
+        const opt = field.options.find((o: any) => String(getOptionValue(o)) === vStr);
+        if (opt) return getOptionLabel(opt);
 
         // If the value is a number (common in MCQs), try finding by index if values are not explicit
         const idx = parseInt(vStr);
         if (!isNaN(idx) && field.options[idx]) {
-          const o = field.options[idx];
-          return typeof o === 'string' ? o : (o.label || o.value || o);
+          return getOptionLabel(field.options[idx]);
         }
 
         // Fallback: try finding by label match
-        const optByLabel = field.options.find((o: any) => String(o.label) === vStr);
-        return optByLabel ? optByLabel.label : v;
+        const optByLabel = field.options.find((o: any) => String(getOptionLabel(o)) === vStr);
+        return optByLabel ? getOptionLabel(optByLabel) : v;
       };
 
       if (Array.isArray(val)) {
