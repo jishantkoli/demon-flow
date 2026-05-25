@@ -937,53 +937,6 @@ export default function FormBuilder() {
 
           {activeSection === 0 && (
             <div className="space-y-4">
-              {/* 🏁 Thank You Page Settings */}
-              <Card>
-                <div className="flex items-center gap-2 mb-3">
-                  {SuccessIcon && <SuccessIcon size={16}/>}
-                  <div className="font-semibold">Thank You Page</div>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Heading</label>
-                    <input 
-                      type="text" 
-                      className="input !py-1.5 text-sm" 
-                      value={form.settings.thank_you_heading as string || 'Thank You!'} 
-                      onChange={e => patchSettings({ thank_you_heading: e.target.value })}
-                      placeholder="Thank You!"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Message</label>
-                    <textarea 
-                      className="textarea text-sm" 
-                      rows={2} 
-                      value={form.settings.thank_you_message as string || ''} 
-                      onChange={e => patchSettings({ thank_you_message: e.target.value })}
-                      placeholder="Your response has been recorded."
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Redirect URL (optional)</label>
-                    <input 
-                      type="text" 
-                      className="input !py-1.5 text-sm" 
-                      value={form.settings.redirect_url as string || ''} 
-                      onChange={e => patchSettings({ redirect_url: e.target.value })}
-                      placeholder="https://your-website.com"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] font-semibold text-ink">Show score after submit</span>
-                    <Toggle 
-                      checked={form.settings.show_score_after_submit !== false} 
-                      onChange={v => patchSettings({ show_score_after_submit: v })} 
-                    />
-                  </div>
-                </div>
-              </Card>
-
               <Card>
                 <div className="flex items-center gap-2 mb-3"><Settings2 size={16}/><div className="font-semibold">Settings</div></div>
                 <label className="block text-xs"><span className="text-muted">Description</span>
@@ -1142,6 +1095,53 @@ export default function FormBuilder() {
                     </div>
                   </div>
                 )}
+              </Card>
+
+              {/* 🏁 Thank You Page Settings */}
+              <Card>
+                <div className="flex items-center gap-2 mb-3">
+                  {SuccessIcon && <SuccessIcon size={16}/>}
+                  <div className="font-semibold">Thank You Page</div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Heading</label>
+                    <input 
+                      type="text" 
+                      className="input !py-1.5 text-sm" 
+                      value={form.settings.thank_you_heading as string || 'Thank You!'} 
+                      onChange={e => patchSettings({ thank_you_heading: e.target.value })}
+                      placeholder="Thank You!"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Message</label>
+                    <textarea 
+                      className="textarea text-sm" 
+                      rows={2} 
+                      value={form.settings.thank_you_message as string || ''} 
+                      onChange={e => patchSettings({ thank_you_message: e.target.value })}
+                      placeholder="Your response has been recorded."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Redirect URL (optional)</label>
+                    <input 
+                      type="text" 
+                      className="input !py-1.5 text-sm" 
+                      value={form.settings.redirect_url as string || ''} 
+                      onChange={e => patchSettings({ redirect_url: e.target.value })}
+                      placeholder="https://your-website.com"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] font-semibold text-ink">Show score after submit</span>
+                    <Toggle 
+                      checked={form.settings.show_score_after_submit !== false} 
+                      onChange={v => patchSettings({ show_score_after_submit: v })} 
+                    />
+                  </div>
+                </div>
               </Card>
             </div>
           )}
