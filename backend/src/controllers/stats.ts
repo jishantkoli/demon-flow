@@ -28,7 +28,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       nominationQuery.teacher_email = { $regex: new RegExp(`^${email}$`, 'i') };
     } else if (role === 'functionary') {
       subQuery.schoolCode = req.user.profile?.schoolCode;
-      nominationQuery.functionary_id = userId; // Filter by functionary_id for functionaries
+      nominationQuery.school_code = req.user.profile?.schoolCode;
     } else if (role === 'reviewer') {
       const myReviews = await Review.find({ reviewer_id: userId });
       subQuery._id = { $in: myReviews.map(r => r.submission_id) };
