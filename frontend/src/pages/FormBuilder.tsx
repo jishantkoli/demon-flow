@@ -641,11 +641,7 @@ export default function FormBuilder() {
             <div className={`p-6 flex items-center gap-4 ${form.settings.header_image ? 'h-full' : ''}`}>
               <div className="relative group flex-1">
                 <input
-                  className={`font-display text-2xl font-bold bg-transparent outline-none border-b-2 border-transparent focus:border-blue transition-colors w-full pr-12 ${
-                    form.settings.header_image || !isLightColor(form.settings.header_color as string) 
-                      ? 'text-white placeholder:text-white/60' 
-                      : 'text-ink placeholder:text-slate-400'
-                  }`}
+                  className={`font-display text-2xl font-bold bg-transparent outline-none border-b-2 border-transparent focus:border-blue transition-colors w-full pr-12 ${form.settings.header_image ? 'text-white placeholder:text-white/60' : 'text-ink'}`}
                   value={form.title}
                   onChange={e => patch({ title: e.target.value })}
                   placeholder="Untitled form"
