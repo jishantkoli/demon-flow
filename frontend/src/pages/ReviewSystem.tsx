@@ -3394,6 +3394,18 @@ export default function ReviewSystem({ user }: { user: User }) {
             const displayName = getSubmissionDisplayName(sub, sub.user_name);
             const profileFieldMap = getSchemaFieldMap(sub?.formId?.form_schema || sub?.formId?.schema || selectedFormObj?.form_schema || selectedFormObj?.schema);
 
+            // Handle Nomination Data
+            const nom = profileData.nomination;
+            const nomData = typeof nom?.responses === 'string' ? JSON.parse(nom.responses) : (nom?.responses || {});
+            const nominationFieldMap: Record<string, string> = {};
+            if (nom?.form_id?.schema?.sections) {
+              nom.form_id.schema.sections.forEach((s: any) => {
+                s.fields.forEach((f: any) => {
+                  nominationFieldMap[String(f.id)] = f.label;
+                });
+              });
+            }
+
             // Calculate responses for this specific profile view
             let profileResponses: Record<string, any> = {};
             if (sub?.responses) {

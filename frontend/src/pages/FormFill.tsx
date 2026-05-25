@@ -1057,9 +1057,6 @@ function FieldRenderer({
           case 'date':
             return <input type="date" className={baseInputClass}
               value={String(value || '')} onChange={e => onChange(e.target.value)} />;
-          case 'time':
-            return <input type="time" className={baseInputClass}
-              value={String(value || '')} onChange={e => onChange(e.target.value)} />;
           case 'dropdown':
             return (
               <select className={baseInputClass} value={String(value || '')} onChange={e => onChange(e.target.value)}>

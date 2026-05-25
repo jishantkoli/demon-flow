@@ -1,8 +1,8 @@
 import React, { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
-export function Badge({ tone = 'blue', children }: { tone?: 'blue' | 'green' | 'amber' | 'rose' | 'slate'; children: ReactNode }) {
-  return <span className={`badge badge-${tone}`}>{children}</span>;
+export function Badge({ tone = 'blue', children, className = '' }: { tone?: 'blue' | 'green' | 'amber' | 'rose' | 'slate'; children: ReactNode; className?: string }) {
+  return <span className={`badge badge-${tone} ${className}`}>{children}</span>;
 }
 
 export function Card({ children, className = '', padded = true }: { children: ReactNode; className?: string; padded?: boolean }) {
@@ -48,12 +48,12 @@ export function Breadcrumbs({ items }: { items: { label: string; to?: string }[]
   );
 }
 
-export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
+export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode }) {
   return (
     <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-      <span onClick={() => onChange(!checked)} className={`w-10 h-6 rounded-full transition-colors relative ${checked ? 'bg-green-500' : 'bg-slate-300'}`}>
+      <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange(!checked); }} className={`w-10 h-6 rounded-full transition-colors relative ${checked ? 'bg-green-500' : 'bg-slate-300'}`}>
         <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : ''}`} />
-      </span>
+      </div>
       {label && <span className="text-sm text-slate-700">{label}</span>}
     </label>
   );

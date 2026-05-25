@@ -53,18 +53,18 @@ const newField = (type: FieldType): Field => ({
 });
 
 // ─── Reusable UI (App 1 style) ────────────────────────────────────────────────
-function Badge({ tone = 'blue', children }: { tone?: 'blue' | 'green' | 'amber' | 'rose' | 'slate'; children: React.ReactNode }) {
-  return <span className={`badge badge-${tone}`}>{children}</span>;
+function Badge({ tone = 'blue', children, className = '' }: { tone?: 'blue' | 'green' | 'amber' | 'rose' | 'slate'; children: React.ReactNode; className?: string }) {
+  return <span className={`badge badge-${tone} ${className}`}>{children}</span>;
 }
 function Card({ children, className = '', padded = true }: { children: React.ReactNode; className?: string; padded?: boolean }) {
   return <div className={`card ${!padded ? '!p-0' : ''} ${className}`}>{children}</div>;
 }
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: React.ReactNode }) {
   return (
     <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-      <span onClick={() => onChange(!checked)} className={`w-10 h-6 rounded-full transition-colors relative ${checked ? 'bg-mint' : 'bg-slate-300'}`}>
+      <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange(!checked); }} className={`w-10 h-6 rounded-full transition-colors relative ${checked ? 'bg-mint' : 'bg-slate-300'}`}>
         <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : ''}`} />
-      </span>
+      </div>
       {label && <span className="text-sm">{label}</span>}
     </label>
   );
