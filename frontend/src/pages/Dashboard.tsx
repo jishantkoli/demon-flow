@@ -711,12 +711,23 @@ export default function Dashboard({ user }: { user: User }) {
           <StatCard label="Average Score" value={s.avgScore || 0} icon={TrendingUp} color="blue" />
           <StatCard label="Assigned Total" value={s.totalSubmissions || 0} icon={Inbox} color="purple" />
         </>}
-        {user.role === 'functionary' && <>
-          <StatCard label="Active Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} />
-          <StatCard label="Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" onClick={() => navigate('/submissions')} />
-          <StatCard label="Nominations" value={s.totalNominations || 0} icon={UserPlus} color="green" subtitle={`${s.nominationsByStatus?.completed || 0} done`} onClick={() => navigate('/nominations')} />
-          <StatCard label="School Reach" value={`${s.completionRate || 0}%`} icon={TrendingUp} color="purple" />
-        </>}
+        {user.role === 'functionary' && (() => {
+          const activeNominationFormsCount = forms.filter(f => {
+            const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
+            const isActive = f.status === 'active' && !isExpired;
+            const isNomination = f.form_type === 'nomination';
+            return isActive && isNomination;
+          }).length;
+          
+          return (
+            <>
+              <StatCard label="Active Forms" value={activeNominationFormsCount} icon={FileText} color="blue" onClick={() => navigate('/forms')} />
+              <StatCard label="Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" onClick={() => navigate('/submissions')} />
+              <StatCard label="Nominations" value={s.totalNominations || 0} icon={UserPlus} color="green" subtitle={`${s.nominationsByStatus?.completed || 0} done`} onClick={() => navigate('/nominations')} />
+              <StatCard label="School Reach" value={`${s.completionRate || 0}%`} icon={TrendingUp} color="purple" />
+            </>
+          );
+        })()}
         {user.role === 'teacher' && <>
           <StatCard label="Open Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} />
           <StatCard label="My Entries" value={s.totalSubmissions || 0} icon={Inbox} color="green" onClick={() => navigate('/submissions')} />
