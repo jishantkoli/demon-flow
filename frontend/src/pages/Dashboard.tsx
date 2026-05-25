@@ -23,12 +23,6 @@ export default function Dashboard({ user }: { user: User }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'submissions' | 'logs'>('submissions');
 
-  const isNominationFormSubmission = (sub: any, formsList: any[]) => {
-    const formId = String(sub.form_id || sub.formId || '');
-    const form = formsList.find((f: any) => String(f.id || f._id) === formId);
-    return form?.form_type === 'nomination' || form?.formType === 'nomination' || sub?.nomination_id || sub?.nominationId;
-  };
-  
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -39,14 +33,8 @@ export default function Dashboard({ user }: { user: User }) {
       ]);
       setAllStats(s || {});
       setStats(s || {});
-      
-      let allSubs = Array.isArray(subs) ? subs : [];
-      if (user.role === 'functionary') {
-        allSubs = allSubs.filter((sub: any) => isNominationFormSubmission(sub, formsList));
-      }
-      
-      setAllRecentSubs(allSubs.slice(0, 10));
-      setRecentSubs(allSubs.slice(0, 10));
+      setAllRecentSubs(Array.isArray(subs) ? subs.slice(0, 10) : []);
+      setRecentSubs(Array.isArray(subs) ? subs.slice(0, 10) : []);
       setForms(Array.isArray(formsList) ? formsList : []);
     } catch (err) {
       console.error('Error fetching dashboard stats:', err);
@@ -72,23 +60,17 @@ export default function Dashboard({ user }: { user: User }) {
       }
 
       // Fetch filtered stats for the selected form
-      const [formStats, subs, formsList] = await Promise.all([
+      const [formStats, subs] = await Promise.all([
         api.get(`/stats?form_id=${formId}`).catch(() => ({})),
-        api.get('/submissions').catch(() => []),
-        api.get('/forms').catch(() => [])
+        api.get('/submissions').catch(() => [])
       ]);
       
       setStats(formStats || {});
       
       // Filter submissions by form
-      let filteredSubs = (Array.isArray(subs) ? subs : []).filter((sub: any) => 
-        String(sub.form_id || sub.formId) === formId
+      const filteredSubs = (Array.isArray(subs) ? subs : []).filter((sub: any) => 
+        sub.form_id === formId || sub.formId === formId
       ).slice(0, 10);
-      
-      if (user.role === 'functionary') {
-        filteredSubs = filteredSubs.filter((sub: any) => isNominationFormSubmission(sub, formsList));
-      }
-      
       setRecentSubs(filteredSubs);
     } catch (err) {
       console.error('Error fetching form-specific stats:', err);
@@ -407,18 +389,20 @@ export default function Dashboard({ user }: { user: User }) {
                       <Inbox size={40} className="mx-auto opacity-20 mb-3" />
                       <p className="text-xs font-semibold uppercase tracking-wider">No submissions in queue</p>
                     </div>
-                  ) : recentSubs.map((sub, i) => (
+                  ) : recentSubs.map((sub, i) => {
+                    const isFunctionary = user.role === 'functionary';
+                    return (
                     <div 
                       key={subId(sub)} 
-                      onClick={() => { if (canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }} 
-                      className="w-full text-left px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-slate-50/50 cursor-pointer group"
+                      onClick={() => { if (!isFunctionary && canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }} 
+                      className={`w-full text-left px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${!isFunctionary ? 'hover:bg-slate-50/50 cursor-pointer group' : 'hover:bg-slate-50/50'}`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600 flex items-center justify-center text-xs font-bold transition-all border border-slate-200/80 shrink-0">
+                        <div className={`w-10 h-10 rounded-xl bg-slate-50 text-slate-600 ${!isFunctionary ? 'group-hover:bg-indigo-50 group-hover:text-indigo-600' : ''} flex items-center justify-center text-xs font-bold transition-all border border-slate-200/80 shrink-0`}>
                           {displaySubmissionNameFirstChar(sub)}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
+                          <p className={`text-sm font-semibold text-slate-900 truncate ${!isFunctionary ? 'group-hover:text-indigo-600' : ''} transition-colors`}>
                             {sub.form_title || 'Untitled Form submission'}
                           </p>
                           <div className="flex items-center gap-1.5 mt-0.5">
@@ -444,10 +428,10 @@ export default function Dashboard({ user }: { user: User }) {
                             {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : 'Today'}
                           </p>
                         </div>
-                        <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
+                        {!isFunctionary && <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />}
                       </div>
                     </div>
-                  ))
+                  );})}
                 ) : (
                   recentLogs.length === 0 ? (
                     <div className="p-16 text-center text-slate-400 bg-slate-50/50 font-mono">

@@ -308,10 +308,6 @@ export default function Submissions({ user }: { user: User }) {
         });
       }
 
-      if (user.role === 'functionary') {
-        mappedSubs = mappedSubs.filter((sub: any) => isNominationSubmission(sub));
-      }
-      
       setSubmissions(mappedSubs);
       setForms(fetchedForms);
 
@@ -1363,7 +1359,7 @@ export default function Submissions({ user }: { user: User }) {
       <DataTable columns={columns} data={submissions} loading={loading}
         searchPlaceholder="Search anything (Name, Email, Responses...)"
         searchValue={search} onSearch={setSearch}
-        onRowClick={(row: any) => row.__nominationPlaceholder ? openNominationOnly(row) : openDetail(row)}
+        onRowClick={user.role === 'functionary' ? undefined : ((row: any) => row.__nominationPlaceholder ? openNominationOnly(row) : openDetail(row))}
         emptyMessage="No submissions found" emptyIcon={<Inbox size={40} />}
         filters={
           <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
