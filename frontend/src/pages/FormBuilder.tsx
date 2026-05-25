@@ -414,6 +414,7 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+// Updated sidebar layout and strict teacher filtering
 export default function FormBuilder() {
   const { id } = useParams();
   const [sp] = useSearchParams();
