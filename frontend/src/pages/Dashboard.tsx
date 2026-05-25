@@ -710,10 +710,14 @@ export default function Dashboard({ user }: { user: User }) {
           <StatCard label="Nominations" value={s.totalNominations || 0} icon={UserPlus} color="green" subtitle={`${s.nominationsByStatus?.completed || 0} done`} onClick={() => navigate('/nominations')} />
           <StatCard label="School Reach" value={`${s.completionRate || 0}%`} icon={TrendingUp} color="purple" />
         </>}
-        {user.role === 'teacher' && <>
-          <StatCard label="Open Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} />
-          <StatCard label="My Entries" value={s.totalSubmissions || 0} icon={Inbox} color="green" onClick={() => navigate('/submissions')} />
-        </>}
+        {user.role === 'teacher' && (
+          <>
+            <StatCard label="Open Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} />
+            <StatCard label="My Entries" value={s.totalSubmissions || 0} icon={Inbox} color="green" onClick={() => navigate('/submissions')} />
+            <StatCard label="Submitted" value={s.submissionsByStatus?.submitted || 0} icon={CheckCircle} color="purple" />
+            <StatCard label="Pending" value={s.submissionsByStatus?.pending || 0} icon={Clock} color="amber" />
+          </>
+        )}
       </motion.div>
 
       <div className={`grid grid-cols-1 ${(user.role as string) === 'admin' || user.role === 'reviewer' || user.role === 'functionary' ? 'lg:grid-cols-12' : ''} gap-8`}>
