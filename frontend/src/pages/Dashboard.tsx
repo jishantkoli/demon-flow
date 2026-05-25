@@ -48,22 +48,35 @@ export default function Dashboard({ user }: { user: User }) {
     }
   };
 
-  const handleFormSelect = (formId: string | null) => {
+  const handleFormSelect = async (formId: string | null) => {
     setSelectedFormId(formId);
-    if (!formId) {
-      setStats(allStats);
-      setRecentSubs(allRecentSubs);
-      return;
+    try {
+      setLoading(true);
+      
+      if (!formId) {
+        setStats(allStats);
+        setRecentSubs(allRecentSubs);
+        return;
+      }
+
+      // Fetch filtered stats for the selected form
+      const [formStats, subs] = await Promise.all([
+        api.get(`/stats?form_id=${formId}`).catch(() => ({})),
+        api.get('/submissions').catch(() => [])
+      ]);
+      
+      setStats(formStats || {});
+      
+      // Filter submissions by form
+      const filteredSubs = (Array.isArray(subs) ? subs : []).filter((sub: any) => 
+        sub.form_id === formId || sub.formId === formId
+      ).slice(0, 10);
+      setRecentSubs(filteredSubs);
+    } catch (err) {
+      console.error('Error fetching form-specific stats:', err);
+    } finally {
+      setLoading(false);
     }
-
-    // Filter submissions by form
-    const filteredSubs = allRecentSubs.filter((sub: any) => 
-      sub.form_id === formId || sub.formId === formId
-    );
-    setRecentSubs(filteredSubs);
-
-    // TODO: We'll need a stats endpoint for specific form, but for now we'll just use all stats
-    // and note that in UI
   };
 
   useEffect(() => {
@@ -159,91 +172,73 @@ export default function Dashboard({ user }: { user: User }) {
         </div>
 
         {/* Crisp Enterprise Stats Grid */}
-        {!selectedFormId ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              { 
-                label: "Total Users", 
-                value: s.totalUsers || 0, 
-                subtext: `${s.usersByRole?.teacher || 0} Teachers • ${s.usersByRole?.reviewer || 0} Reviewers`,
-                icon: Users, 
-                color: "text-blue-600 bg-blue-50 border-blue-100/50",
-                cta: "Manage Users", 
-                path: "/users" 
-              },
-              { 
-                label: "Active Forms", 
-                value: s.activeForms || 0, 
-                subtext: `${s.draftForms || 0} Drafts • ${s.expiredForms || 0} Expired`,
-                icon: FileText, 
-                color: "text-emerald-600 bg-emerald-50 border-emerald-100/50",
-                cta: "Configure Forms", 
-                path: "/forms" 
-              },
-              { 
-                label: "Submissions Received", 
-                value: s.totalSubmissions || 0, 
-                subtext: `Success Index: ${s.totalSubmissions > 0 ? Math.round(((s.submissionsByStatus?.approved || 0) / s.totalSubmissions) * 100) : 0}%`,
-                icon: Inbox, 
-                color: "text-indigo-600 bg-indigo-50 border-indigo-100/50",
-                cta: "Browse Records", 
-                path: "/submissions" 
-              },
-              { 
-                label: "Pending Reviews", 
-                value: s.pendingReviews || 0, 
-                subtext: `${s.completedReviews || 0} Gradings Completed`,
-                icon: SquareCheck, 
-                color: "text-amber-600 bg-amber-50 border-amber-100/50",
-                cta: "Process Reviews", 
-                path: "/reviews" 
-              }
-            ].map((card, i) => (
-              <div 
-                key={card.label} 
-                onClick={() => navigate(card.path)}
-                className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:border-slate-300 hover:shadow-md transition-all duration-200 cursor-pointer group"
-              >
-                <div className="flex justify-between items-center mb-4">
-                  <div className={`w-10 h-10 rounded-xl ${card.color} border flex items-center justify-center`}>
-                    <card.icon size={18} />
-                  </div>
-                  <div className="flex items-center gap-0.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 group-hover:bg-slate-200/80 px-2.5 py-1 rounded-lg transition-colors">
-                    {card.cta}
-                    <ChevronRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
-                  </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { 
+              label: "Total Users", 
+              value: s.totalUsers || 0, 
+              subtext: `${s.usersByRole?.teacher || 0} Teachers • ${s.usersByRole?.reviewer || 0} Reviewers`,
+              icon: Users, 
+              color: "text-blue-600 bg-blue-50 border-blue-100/50",
+              cta: "Manage Users", 
+              path: "/users" 
+            },
+            { 
+              label: "Active Forms", 
+              value: s.activeForms || 0, 
+              subtext: `${s.draftForms || 0} Drafts • ${s.expiredForms || 0} Expired`,
+              icon: FileText, 
+              color: "text-emerald-600 bg-emerald-50 border-emerald-100/50",
+              cta: "Configure Forms", 
+              path: "/forms" 
+            },
+            { 
+              label: "Submissions Received", 
+              value: s.totalSubmissions || 0, 
+              subtext: `Success Index: ${s.totalSubmissions > 0 ? Math.round(((s.submissionsByStatus?.approved || 0) / s.totalSubmissions) * 100) : 0}%`,
+              icon: Inbox, 
+              color: "text-indigo-600 bg-indigo-50 border-indigo-100/50",
+              cta: "Browse Records", 
+              path: "/submissions" 
+            },
+            { 
+              label: "Pending Reviews", 
+              value: s.pendingReviews || 0, 
+              subtext: `${s.completedReviews || 0} Gradings Completed`,
+              icon: SquareCheck, 
+              color: "text-amber-600 bg-amber-50 border-amber-100/50",
+              cta: "Process Reviews", 
+              path: "/reviews" 
+            }
+          ].map((card, i) => (
+            <div 
+              key={card.label} 
+              onClick={() => navigate(card.path)}
+              className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:border-slate-300 hover:shadow-md transition-all duration-200 cursor-pointer group"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <div className={`w-10 h-10 rounded-xl ${card.color} border flex items-center justify-center`}>
+                  <card.icon size={18} />
                 </div>
-                
-                <div>
-                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{card.label}</div>
-                  <div className="text-2xl font-bold text-slate-900 mt-1">
-                    {typeof card.value === 'number' ? card.value.toLocaleString() : card.value}
-                  </div>
-                  <div className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
-                    <span className="w-1 h-1 rounded-full bg-slate-300" />
-                    {card.subtext}
-                  </div>
+                <div className="flex items-center gap-0.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 group-hover:bg-slate-200/80 px-2.5 py-1 rounded-lg transition-colors">
+                  {card.cta}
+                  <ChevronRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                <FileText size={24} />
-              </div>
+              
               <div>
-                <h3 className="text-lg font-bold text-slate-900">
-                  {forms.find((f: any) => (f._id || f.id) === selectedFormId)?.title || 'Selected Form'}
-                </h3>
-                <p className="text-sm text-slate-500">
-                  {recentSubs.length} submission{recentSubs.length !== 1 ? 's' : ''} for this form
-                </p>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{card.label}</div>
+                <div className="text-2xl font-bold text-slate-900 mt-1">
+                  {typeof card.value === 'number' ? card.value.toLocaleString() : card.value}
+                </div>
+                <div className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-slate-300" />
+                  {card.subtext}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
 
         {/* Main Dashboard Panel layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
