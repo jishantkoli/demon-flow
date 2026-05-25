@@ -23,6 +23,12 @@ export default function Dashboard({ user }: { user: User }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'submissions' | 'logs'>('submissions');
 
+  const isNominationFormSubmission = (sub: any, formsList: any[]) => {
+    const formId = String(sub.form_id || sub.formId || '');
+    const form = formsList.find((f: any) => String(f.id || f._id) === formId);
+    return form?.form_type === 'nomination' || form?.formType === 'nomination' || sub?.nomination_id || sub?.nominationId;
+  };
+  
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -33,8 +39,14 @@ export default function Dashboard({ user }: { user: User }) {
       ]);
       setAllStats(s || {});
       setStats(s || {});
-      setAllRecentSubs(Array.isArray(subs) ? subs.slice(0, 10) : []);
-      setRecentSubs(Array.isArray(subs) ? subs.slice(0, 10) : []);
+      
+      let allSubs = Array.isArray(subs) ? subs : [];
+      if (user.role === 'functionary') {
+        allSubs = allSubs.filter((sub: any) => isNominationFormSubmission(sub, formsList));
+      }
+      
+      setAllRecentSubs(allSubs.slice(0, 10));
+      setRecentSubs(allSubs.slice(0, 10));
       setForms(Array.isArray(formsList) ? formsList : []);
     } catch (err) {
       console.error('Error fetching dashboard stats:', err);
@@ -60,17 +72,23 @@ export default function Dashboard({ user }: { user: User }) {
       }
 
       // Fetch filtered stats for the selected form
-      const [formStats, subs] = await Promise.all([
+      const [formStats, subs, formsList] = await Promise.all([
         api.get(`/stats?form_id=${formId}`).catch(() => ({})),
-        api.get('/submissions').catch(() => [])
+        api.get('/submissions').catch(() => []),
+        api.get('/forms').catch(() => [])
       ]);
       
       setStats(formStats || {});
       
       // Filter submissions by form
-      const filteredSubs = (Array.isArray(subs) ? subs : []).filter((sub: any) => 
-        sub.form_id === formId || sub.formId === formId
+      let filteredSubs = (Array.isArray(subs) ? subs : []).filter((sub: any) => 
+        String(sub.form_id || sub.formId) === formId
       ).slice(0, 10);
+      
+      if (user.role === 'functionary') {
+        filteredSubs = filteredSubs.filter((sub: any) => isNominationFormSubmission(sub, formsList));
+      }
+      
       setRecentSubs(filteredSubs);
     } catch (err) {
       console.error('Error fetching form-specific stats:', err);
@@ -389,14 +407,12 @@ export default function Dashboard({ user }: { user: User }) {
                       <Inbox size={40} className="mx-auto opacity-20 mb-3" />
                       <p className="text-xs font-semibold uppercase tracking-wider">No submissions in queue</p>
                     </div>
-                  ) : recentSubs.map((sub, i) => {
-                    const isClickable = user.role !== 'functionary' && canOpenSubmission(sub);
-                    return (
-                      <div 
-                        key={subId(sub)} 
-                        onClick={() => { if (isClickable) navigate(`/forms/view?submission=${subId(sub)}`); }} 
-                        className={`w-full text-left px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${isClickable ? 'hover:bg-slate-50/50 cursor-pointer' : ''} group`}
-                      >
+                  ) : recentSubs.map((sub, i) => (
+                    <div 
+                      key={subId(sub)} 
+                      onClick={() => { if (canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }} 
+                      className="w-full text-left px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-slate-50/50 cursor-pointer group"
+                    >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600 flex items-center justify-center text-xs font-bold transition-all border border-slate-200/80 shrink-0">
                           {displaySubmissionNameFirstChar(sub)}
@@ -428,11 +444,10 @@ export default function Dashboard({ user }: { user: User }) {
                             {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : 'Today'}
                           </p>
                         </div>
-                        {isClickable && <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />}
+                        <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
                       </div>
                     </div>
-                    );
-                  })}
+                  ))
                 ) : (
                   recentLogs.length === 0 ? (
                     <div className="p-16 text-center text-slate-400 bg-slate-50/50 font-mono">
@@ -711,23 +726,12 @@ export default function Dashboard({ user }: { user: User }) {
           <StatCard label="Average Score" value={s.avgScore || 0} icon={TrendingUp} color="blue" />
           <StatCard label="Assigned Total" value={s.totalSubmissions || 0} icon={Inbox} color="purple" />
         </>}
-        {user.role === 'functionary' && (() => {
-          const activeNominationFormsCount = forms.filter(f => {
-            const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
-            const isActive = f.status === 'active' && !isExpired;
-            const isNomination = f.form_type === 'nomination';
-            return isActive && isNomination;
-          }).length;
-          
-          return (
-            <>
-              <StatCard label="Active Forms" value={activeNominationFormsCount} icon={FileText} color="blue" onClick={() => navigate('/forms')} />
-              <StatCard label="Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" onClick={() => navigate('/submissions')} />
-              <StatCard label="Nominations" value={s.totalNominations || 0} icon={UserPlus} color="green" subtitle={`${s.nominationsByStatus?.completed || 0} done`} onClick={() => navigate('/nominations')} />
-              <StatCard label="School Reach" value={`${s.completionRate || 0}%`} icon={TrendingUp} color="purple" />
-            </>
-          );
-        })()}
+        {user.role === 'functionary' && <>
+          <StatCard label="Active Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} />
+          <StatCard label="Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" onClick={() => navigate('/submissions')} />
+          <StatCard label="Nominations" value={s.totalNominations || 0} icon={UserPlus} color="green" subtitle={`${s.nominationsByStatus?.completed || 0} done`} onClick={() => navigate('/nominations')} />
+          <StatCard label="School Reach" value={`${s.completionRate || 0}%`} icon={TrendingUp} color="purple" />
+        </>}
         {user.role === 'teacher' && <>
           <StatCard label="Open Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} />
           <StatCard label="My Entries" value={s.totalSubmissions || 0} icon={Inbox} color="green" onClick={() => navigate('/submissions')} />
@@ -783,33 +787,30 @@ export default function Dashboard({ user }: { user: User }) {
                   <Inbox size={40} className="mx-auto opacity-10 mb-4" />
                   <p className="text-xs font-bold uppercase tracking-widest">No activity found</p>
                 </div>
-              ) : recentSubs.map((sub, i) => {
-                const isClickable = user.role !== 'functionary' && canOpenSubmission(sub);
-                return (
-                  <div key={subId(sub)} onClick={() => { if (isClickable) navigate(`/forms/view?submission=${subId(sub)}`); }} className={`w-full text-left px-8 py-5 flex items-center gap-5 transition-all ${isClickable ? 'hover:bg-slate-50 cursor-pointer' : ''} group`}>
-                    <div className="w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center text-sm font-black transition-all border border-slate-100">
-                      {displaySubmissionNameFirstChar(sub)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-900 truncate group-hover:text-primary transition-colors">{sub.form_title || 'Entry Detail'}</p>
-                      <p className="text-[11px] text-slate-400 font-medium mt-1 uppercase tracking-wider">{displaySubmissionName(sub)}</p>
-                    </div>
-                    <div className="text-right shrink-0 space-y-1.5">
-                      <StatusBadge 
-                        status={
-                          (['teacher', 'functionary'].includes(user.role) && 
-                           ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status)) 
-                          ? 'submitted' 
-                          : (user.role === 'admin' ? sub.status : (['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status) ? 'submitted' : 'pending'))
-                        } 
-                        size="xs" 
-                      />
-                      <p className="text-[9px] text-slate-300 font-black uppercase tracking-tighter">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Active'}</p>
-                    </div>
-                    {isClickable && <ChevronRight size={16} className="text-slate-200 group-hover:text-primary transition-all translate-x-0 group-hover:translate-x-1" />}
+              ) : recentSubs.map((sub, i) => (
+                <div key={subId(sub)} onClick={() => { if (canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }} className="w-full text-left px-8 py-5 flex items-center gap-5 transition-all hover:bg-slate-50 cursor-pointer group">
+                  <div className="w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center text-sm font-black transition-all border border-slate-100">
+                    {displaySubmissionNameFirstChar(sub)}
                   </div>
-                );
-              })}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-900 truncate group-hover:text-primary transition-colors">{sub.form_title || 'Entry Detail'}</p>
+                    <p className="text-[11px] text-slate-400 font-medium mt-1 uppercase tracking-wider">{displaySubmissionName(sub)}</p>
+                  </div>
+                  <div className="text-right shrink-0 space-y-1.5">
+                    <StatusBadge 
+                      status={
+                        (['teacher', 'functionary'].includes(user.role) && 
+                         ['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status)) 
+                        ? 'submitted' 
+                        : (user.role === 'admin' ? sub.status : (['submitted', 'under_review', 'approved', 'rejected', 'next_level', 'completed'].includes(sub.status) ? 'submitted' : 'pending'))
+                      } 
+                      size="xs" 
+                    />
+                    <p className="text-[9px] text-slate-300 font-black uppercase tracking-tighter">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Active'}</p>
+                  </div>
+                  <ChevronRight size={16} className="text-slate-200 group-hover:text-primary transition-all translate-x-0 group-hover:translate-x-1" />
+                </div>
+              ))}
             </div>
           </motion.div>
         </div>

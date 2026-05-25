@@ -308,6 +308,10 @@ export default function Submissions({ user }: { user: User }) {
         });
       }
 
+      if (user.role === 'functionary') {
+        mappedSubs = mappedSubs.filter((sub: any) => isNominationSubmission(sub));
+      }
+      
       setSubmissions(mappedSubs);
       setForms(fetchedForms);
 
