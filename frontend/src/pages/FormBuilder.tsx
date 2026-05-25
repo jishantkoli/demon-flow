@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Pencil, Settings, History, Download, Trash, AlertCircle, CirclePlus, Check, CircleCheck, HelpCircle, CheckCircle2, PlusCircle, CheckSquare
 } from 'lucide-react';
 import { api } from '../lib/api';
-import { copyToClipboard } from '../lib/utils';
+import { copyToClipboard, isLightColor } from '../lib/utils';
 
 // ─── Types (matching App 1 exactly) ───────────────────────────────────────────
 type FieldType = 'text' | 'textarea' | 'number' | 'email' | 'phone' | 'date' | 'dropdown' | 'radio' | 'checkbox' | 'file' | 'mcq';
@@ -1232,15 +1232,45 @@ function PreviewPane({ form }: { form: FormState }) {
         <div className="flex items-center gap-4 relative z-10">
           {form.settings.logo_image && (
             <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-xl p-2 flex items-center justify-center border border-white/20 shrink-0">
-              <img src={form.settings.logo_image as string} className="max-w-full max-h-full object-contain brightness-0 invert" />
+              <img 
+                src={form.settings.logo_image as string} 
+                className={`max-w-full max-h-full object-contain ${form.settings.header_image || !isLightColor(form.settings.header_color as string) ? 'brightness-0 invert' : ''}`} 
+              />
             </div>
           )}
           <div className="space-y-1">
-            <div className="text-[10px] uppercase tracking-widest text-white/70 font-bold">Live Preview</div>
-            <h1 className="text-2xl font-display font-extrabold text-white leading-tight tracking-tight drop-shadow-sm uppercase">
+            <div 
+              className="text-[10px] uppercase tracking-widest font-bold"
+              style={{ color: form.settings.header_image || !isLightColor(form.settings.header_color as string) ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)' }}
+            >
+              Live Preview
+            </div>
+            <h1 
+              className="text-2xl font-display font-extrabold leading-tight tracking-tight drop-shadow-sm uppercase"
+              style={{ 
+                color: form.settings.header_image 
+                  ? 'white' 
+                  : isLightColor(form.settings.header_color as string) 
+                    ? '#000000' 
+                    : '#ffffff' 
+              }}
+            >
               {form.title}
             </h1>
-            {form.description && <div className="text-white/80 text-sm font-medium line-clamp-1">{form.description}</div>}
+            {form.description && (
+              <div 
+                className="text-sm font-medium line-clamp-1"
+                style={{ 
+                  color: form.settings.header_image 
+                    ? 'rgba(255,255,255,0.8)' 
+                    : isLightColor(form.settings.header_color as string) 
+                      ? 'rgba(0,0,0,0.8)' 
+                      : 'rgba(255,255,255,0.8)' 
+                }}
+              >
+                {form.description}
+              </div>
+            )}
           </div>
         </div>
       </div>

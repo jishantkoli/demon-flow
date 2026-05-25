@@ -7,7 +7,7 @@ import {
   Inbox, Check
 } from 'lucide-react';
 import { api } from '../lib/api';
-import { getCleanFileName } from '../lib/utils';
+import { getCleanFileName, isLightColor } from '../lib/utils';
 
 import { User } from '../lib/auth';
 
@@ -839,11 +839,23 @@ export default function FormFill({ user }: { user: User }) {
               <div className="flex items-start sm:items-center gap-6 relative z-10 flex-col sm:flex-row">
                 {form.settings.logo_image && (
                   <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/10 backdrop-blur-md rounded-2xl p-3 flex items-center justify-center border border-white/20 shrink-0">
-                    <img src={form.settings.logo_image as string} className="max-w-full max-h-full object-contain brightness-0 invert" />
+                    <img 
+                      src={form.settings.logo_image as string} 
+                      className={`max-w-full max-h-full object-contain ${form.settings.header_image || !isLightColor(form.settings.header_color as string) ? 'brightness-0 invert' : ''}`} 
+                    />
                   </div>
                 )}
                 <div className="space-y-2">
-                  <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-white leading-tight tracking-tight drop-shadow-sm uppercase">
+                  <h1 
+                    className="text-2xl sm:text-3xl font-display font-extrabold leading-tight tracking-tight drop-shadow-sm uppercase" 
+                    style={{ 
+                      color: form.settings.header_image 
+                        ? 'white' 
+                        : isLightColor(form.settings.header_color as string) 
+                          ? '#000000' 
+                          : '#ffffff' 
+                    }}
+                  >
                     {form.title}
                   </h1>
                 </div>
