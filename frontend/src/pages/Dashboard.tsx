@@ -478,7 +478,7 @@ export default function Dashboard({ user }: { user: User }) {
             </div>
 
             {/* Quick Actions Shortcuts Board */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            {!selectedFormId && <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
               <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Administrative Utilities</div>
               <h3 className="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
                 <Settings size={16} className="text-slate-500" />
@@ -509,7 +509,7 @@ export default function Dashboard({ user }: { user: User }) {
                   </div>
                 ))}
               </div>
-            </div>
+            </div>}
 
           </div>
 
