@@ -858,19 +858,26 @@ export default function FormFill({ user }: { user: User }) {
                   >
                     {form.title}
                   </h1>
+                  {form.description && (
+                    <p 
+                      className="text-lg font-medium leading-relaxed uppercase tracking-wide"
+                      style={{ 
+                        color: form.settings.header_image 
+                          ? 'rgba(255,255,255,0.9)' 
+                          : isLightColor(form.settings.header_color as string) 
+                            ? 'rgba(0,0,0,0.7)' 
+                            : 'rgba(255,255,255,0.9)' 
+                      }}
+                    >
+                      {form.description}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
           <div className="p-8 sm:p-16 space-y-16">
-            {sectionIdx === 0 && form.description && (
-              <div className="pb-8 border-b border-slate-100">
-                <p className="text-slate-600 text-lg font-medium leading-relaxed uppercase tracking-wide">
-                  {form.description}
-                </p>
-              </div>
-            )}
 
             {/* Current Section & Questions */}
             <div className="space-y-24">
@@ -938,14 +945,11 @@ export default function FormFill({ user }: { user: User }) {
 
             {/* Section Info & Progress Bar at bottom */}
             {visibleSections.length > 1 && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <Badge tone="slate">Section {sectionIdx + 1} of {visibleSections.length}</Badge>
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                    {Math.round(((sectionIdx + 1) / visibleSections.length) * 100)}% Complete
-                  </span>
                 </div>
-                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                   <div 
                     className="bg-teal-500 h-full transition-all duration-500 ease-out"
                     style={{ width: `${((sectionIdx + 1) / visibleSections.length) * 100}%` }}
