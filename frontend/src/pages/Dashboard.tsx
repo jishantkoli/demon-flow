@@ -517,59 +517,64 @@ export default function Dashboard({ user }: { user: User }) {
           <div className="lg:col-span-4 space-y-8">
             
             {/* Highly Useful Platform Progress Widget */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm relative overflow-hidden group">
-              <div className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-1">Fulfillment Monitor</div>
-              <h3 className="font-bold text-slate-900 flex items-center gap-2 text-sm mb-6">
-                <Award size={16} className="text-slate-500" />
-                Nomination Response Rate
-              </h3>
-              
-              {/* Circular SVG Progress Indicator */}
-              <div className="flex flex-col items-center justify-center py-4 border-b border-slate-100">
-                <div className="relative w-32 h-32 flex items-center justify-center">
-                  {/* Circle SVG */}
-                  <svg className="w-28 h-28 transform -rotate-90">
-                    <circle cx="56" cy="56" r="44" stroke="#f1f5f9" strokeWidth="6" fill="transparent" />
-                    <motion.circle 
-                      cx="56" 
-                      cy="56" 
-                      r="44" 
-                      stroke="#4f46e5" 
-                      strokeWidth="6" 
-                      fill="transparent" 
-                      strokeDasharray="276"
-                      initial={{ strokeDashoffset: 276 }}
-                      animate={{ strokeDashoffset: 276 - (276 * (s.completionRate || 0)) / 100 }}
-                      transition={{ delay: 0.3, duration: 1, ease: "easeOut" }}
-                    />
-                  </svg>
-                  <div className="absolute flex flex-col items-center justify-center text-center">
-                    <span className="text-2xl font-bold text-slate-900">{s.completionRate || 0}%</span>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Finished</span>
+            {(() => {
+              const totalNominations = (s.nominationsByStatus?.invited || 0) + (s.nominationsByStatus?.in_progress || 0) + (s.nominationsByStatus?.completed || 0);
+              return totalNominations > 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm relative overflow-hidden group">
+                  <div className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-1">Fulfillment Monitor</div>
+                  <h3 className="font-bold text-slate-900 flex items-center gap-2 text-sm mb-6">
+                    <Award size={16} className="text-slate-500" />
+                    Nomination Response Rate
+                  </h3>
+                  
+                  {/* Circular SVG Progress Indicator */}
+                  <div className="flex flex-col items-center justify-center py-4 border-b border-slate-100">
+                    <div className="relative w-32 h-32 flex items-center justify-center">
+                      {/* Circle SVG */}
+                      <svg className="w-28 h-28 transform -rotate-90">
+                        <circle cx="56" cy="56" r="44" stroke="#f1f5f9" strokeWidth="6" fill="transparent" />
+                        <motion.circle 
+                          cx="56" 
+                          cy="56" 
+                          r="44" 
+                          stroke="#4f46e5" 
+                          strokeWidth="6" 
+                          fill="transparent" 
+                          strokeDasharray="276"
+                          initial={{ strokeDashoffset: 276 }}
+                          animate={{ strokeDashoffset: 276 - (276 * (s.completionRate || 0)) / 100 }}
+                          transition={{ delay: 0.3, duration: 1, ease: "easeOut" }}
+                        />
+                      </svg>
+                      <div className="absolute flex flex-col items-center justify-center text-center">
+                        <span className="text-2xl font-bold text-slate-900">{s.completionRate || 0}%</span>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Finished</span>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-4 w-full text-center mt-6">
+                      <div>
+                        <div className="text-xs font-bold text-slate-700">{s.nominationsByStatus?.invited || 0}</div>
+                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Invited</div>
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-700">{s.nominationsByStatus?.in_progress || 0}</div>
+                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Pending</div>
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-700">{s.nominationsByStatus?.completed || 0}</div>
+                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Completed</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-4 flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                    <span>Avg Graded Score</span>
+                    <span className="text-indigo-600 font-bold">{s.avgScore || 0}% Average</span>
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-3 gap-4 w-full text-center mt-6">
-                  <div>
-                    <div className="text-xs font-bold text-slate-700">{s.nominationsByStatus?.invited || 0}</div>
-                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Invited</div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-700">{s.nominationsByStatus?.in_progress || 0}</div>
-                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Pending</div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-700">{s.nominationsByStatus?.completed || 0}</div>
-                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Completed</div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="pt-4 flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                <span>Avg Graded Score</span>
-                <span className="text-indigo-600 font-bold">{s.avgScore || 0}% Average</span>
-              </div>
-            </div>
+              ) : null;
+            })()}
 
             {/* Platform Funnel */}
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm relative overflow-hidden group">
