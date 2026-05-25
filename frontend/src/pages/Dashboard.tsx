@@ -389,12 +389,14 @@ export default function Dashboard({ user }: { user: User }) {
                       <Inbox size={40} className="mx-auto opacity-20 mb-3" />
                       <p className="text-xs font-semibold uppercase tracking-wider">No submissions in queue</p>
                     </div>
-                  ) : recentSubs.map((sub, i) => (
-                    <div 
-                      key={subId(sub)} 
-                      onClick={() => { if (canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }} 
-                      className="w-full text-left px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-slate-50/50 cursor-pointer group"
-                    >
+                  ) : recentSubs.map((sub, i) => {
+                    const isClickable = user.role !== 'functionary' && canOpenSubmission(sub);
+                    return (
+                      <div 
+                        key={subId(sub)} 
+                        onClick={() => { if (isClickable) navigate(`/forms/view?submission=${subId(sub)}`); }} 
+                        className={`w-full text-left px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${isClickable ? 'hover:bg-slate-50/50 cursor-pointer' : ''} group`}
+                      >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600 flex items-center justify-center text-xs font-bold transition-all border border-slate-200/80 shrink-0">
                           {displaySubmissionNameFirstChar(sub)}
@@ -426,10 +428,11 @@ export default function Dashboard({ user }: { user: User }) {
                             {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : 'Today'}
                           </p>
                         </div>
-                        <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
+                        {isClickable && <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />}
                       </div>
                     </div>
-                  ))
+                    );
+                  })}
                 ) : (
                   recentLogs.length === 0 ? (
                     <div className="p-16 text-center text-slate-400 bg-slate-50/50 font-mono">
