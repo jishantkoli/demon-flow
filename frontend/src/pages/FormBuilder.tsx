@@ -37,6 +37,7 @@ type FormState = {
   settings: Record<string, any>;
   status: 'active' | 'expired' | 'draft';
   expires_at: string | null;
+  allowEdit?: boolean;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -428,6 +429,7 @@ export default function FormBuilder() {
     schema: { sections: [{ id: newId(), title: 'Section 1', fields: [newField('text')] }] },
     settings: { time_limit_min: 30, shuffle: true },
     status: 'draft', expires_at: null,
+    allowEdit: false,
   });
 
   const [activeSection, setActiveSection] = useState(0);
@@ -964,13 +966,29 @@ export default function FormBuilder() {
 
                 <div className="mt-3 pt-3 border-t border-border space-y-2">
                   <div className="flex items-center justify-between">
+                    <div className="text-xs font-semibold text-ink">School Functionary Only</div>
+                    <Toggle
+                      checked={!!form.settings.functionary_only}
+                      onChange={v => {
+                        patchSettings({ functionary_only: v });
+                        if (v && form.form_type === 'nomination') {
+                          patch({ form_type: 'normal' });
+                        }
+                      }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted leading-tight">Enable this to make the form visible and fillable only inside school functionary My Forms.</p>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-border space-y-2">
+                  <div className="flex items-center justify-between">
                     <div className="text-xs font-semibold text-ink">Nomination Mode</div>
                     <Toggle 
                       checked={form.form_type === 'nomination'} 
                       onChange={v => {
                         patch({ form_type: v ? 'nomination' : 'normal' });
                         // Automatically switch auth_mode based on nomination mode
-                        patchSettings({ auth_mode: v ? 'otp' : 'anonymous' });
+                        patchSettings({ auth_mode: v ? 'otp' : 'anonymous', functionary_only: v ? false : !!form.settings.functionary_only });
                       }} 
                     />
                   </div>
@@ -1140,6 +1158,13 @@ export default function FormBuilder() {
                     <Toggle 
                       checked={form.settings.show_score_after_submit !== false} 
                       onChange={v => patchSettings({ show_score_after_submit: v })} 
+                    />
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] font-semibold text-ink">Allow edit response</span>
+                    <Toggle 
+                      checked={!!form.allowEdit} 
+                      onChange={v => patch({ allowEdit: v })} 
                     />
                   </div>
                 </div>

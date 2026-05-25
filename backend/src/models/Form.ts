@@ -72,6 +72,7 @@ const formSchema = new mongoose.Schema({
     teacher_login: String,
     login_type: String,
     auth_mode: String,
+    functionary_only: { type: Boolean, default: false },
     nomination_limit: Number,
     require_email: { type: Boolean, default: true },
     require_phone: { type: Boolean, default: false },

@@ -108,7 +108,7 @@ export default function Submissions({ user }: { user: User }) {
   const effectiveForm = (formFilter ? forms.find(f => String(f.id || f._id) === String(formFilter)) : null) || (Array.isArray(selectedFormObj) ? selectedFormObj[0] : selectedFormObj);
   const isNominationForm = !!formFilter && (effectiveForm?.form_type === 'nomination' || effectiveForm?.formType === 'nomination');
 
-  const canSeeScore = user.role === 'admin' || user.role === 'reviewer' || user.role === 'functionary';
+  const canSeeScore = user.role === 'admin' || user.role === 'reviewer';
   const canViewNominationDetails = user.role !== 'teacher';
   const showNominationDetails = canViewNominationDetails && !!selectedNomination;
 
@@ -694,7 +694,7 @@ export default function Submissions({ user }: { user: User }) {
       { id: 'user_email', label: 'Email' },
       { id: 'school_code', label: 'School Code' },
       { id: 'status', label: 'Status' },
-      { id: 'score', label: 'Score' }
+      ...(canSeeScore ? [{ id: 'score', label: 'Score' }] : [])
     ];
 
     const dynamicFields = filterableFields.map(f => ({ id: f.id, label: f.label || f.id }));
@@ -739,7 +739,7 @@ export default function Submissions({ user }: { user: User }) {
       { id: 'user_email', label: 'Email' },
       { id: 'school_code', label: 'School Code' },
       { id: 'status', label: 'Status' },
-      { id: 'score', label: 'Score' }
+      ...(canSeeScore ? [{ id: 'score', label: 'Score' }] : [])
     ];
     const dynamicFields = filterableFields.map(f => ({ id: f.id, label: f.label || f.id }));
 
@@ -1193,6 +1193,10 @@ export default function Submissions({ user }: { user: User }) {
 
   const nominationAdditionalData = parseObject(selectedNomination?.additional_data);
   const nominationSettings = parseObject(selectedFormObj?.settings);
+  const isSelectedFunctionaryOnly = !!nominationSettings?.functionary_only;
+  const canFunctionaryViewOwnResponses = user.role === 'functionary'
+    && isSelectedFunctionaryOnly
+    && norm(selected?.user_email) === norm(user.email);
 
   const getFieldMap = () => {
     const out: Record<string, any> = {};
@@ -1359,7 +1363,7 @@ export default function Submissions({ user }: { user: User }) {
       <DataTable columns={columns} data={submissions} loading={loading}
         searchPlaceholder="Search anything (Name, Email, Responses...)"
         searchValue={search} onSearch={setSearch}
-        onRowClick={user.role === 'functionary' ? undefined : ((row: any) => row.__nominationPlaceholder ? openNominationOnly(row) : openDetail(row))}
+        onRowClick={(row: any) => row.__nominationPlaceholder ? openNominationOnly(row) : openDetail(row)}
         emptyMessage="No submissions found" emptyIcon={<Inbox size={40} />}
         filters={
           <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
@@ -1495,7 +1499,7 @@ export default function Submissions({ user }: { user: User }) {
                   </div>
                 </div>
               )}
-              {user.role !== 'functionary' && (
+              {(user.role !== 'functionary' || canFunctionaryViewOwnResponses) && (
                 <div className={`space-y-4 ${!showNominationDetails ? 'col-span-full' : ''}`}>
                   <h4 className="text-sm font-bold flex items-center gap-2 text-slate-700 border-b border-slate-200 pb-2"><Send size={14} /> {showNominationDetails ? '2. Teacher Form Responses' : 'Form Responses'}</h4>
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 max-h-[400px] overflow-y-auto">
@@ -1784,7 +1788,7 @@ export default function Submissions({ user }: { user: User }) {
                     { id: 'user_email', label: 'Email' },
                     { id: 'school_code', label: 'School Code' },
                     { id: 'status', label: 'Status' },
-                    { id: 'score', label: 'Score' },
+                    ...(canSeeScore ? [{ id: 'score', label: 'Score' }] : []),
                     { id: 'submitted_at', label: 'Submission Date' }
                   ]
                 },

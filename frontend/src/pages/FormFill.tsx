@@ -152,16 +152,9 @@ export default function FormFill({ user }: { user: User }) {
   useEffect(() => {
     if (!id) { setStep('error'); setError('No form specified'); return; }
     
-    // School Functionaries should not be filling forms, they should be nominating
     const query = new URLSearchParams(window.location.search);
     const token = query.get('token') || urlToken;
     if (token) setNominationToken(token);
-
-    if (user.role === 'functionary' && !token) {
-      setStep('error');
-      setError('School Functionaries cannot fill out forms. Please use the "Nominate Teachers" button on the Forms page.');
-      return;
-    }
 
     const getNomination = async () => {
       // 1. If token exists, use it (highest priority)
@@ -220,6 +213,19 @@ export default function FormFill({ user }: { user: User }) {
 
       const isNominationForm = res.form_type === 'nomination';
 
+      if (user.role === 'functionary') {
+        if (isNominationForm) {
+          setStep('error');
+          setError('School Functionaries cannot fill out nomination forms. Please use the "Nominate Teachers" button on the Forms page.');
+          return;
+        }
+        if (!res.settings?.functionary_only) {
+          setStep('error');
+          setError('School Functionaries cannot fill out this form. Please use the "Nominate Teachers" button on the Forms page.');
+          return;
+        }
+      }
+
       // Resolve login mode with precedence:
       // nomination.link_type (teacher-specific override) > form teacher_login > legacy keys.
       const resolvedLoginMode = String(
@@ -231,6 +237,12 @@ export default function FormFill({ user }: { user: User }) {
       ).toLowerCase();
       const requiresOtp = resolvedLoginMode === 'otp';
       setOtpRequired(requiresOtp);
+
+      if (res.settings?.functionary_only && user.role !== 'functionary') {
+        setStep('error');
+        setError('This form is only available for school functionaries.');
+        return;
+      }
 
       const hasToken = !!token;
 
@@ -249,10 +261,25 @@ export default function FormFill({ user }: { user: User }) {
       const existing = (subs || []).find((s: any) => !s.is_draft && !s.isDraft);
       const draft = (subs || []).find((s: any) => s.is_draft || s.isDraft);
 
-      // If it's a nomination form, we strictly check for existing submissions
-      // to prevent double-filling for the same teacher token.
-      // But if it's a normal anonymous form, we allow multiple submissions.
-      if (existing && isNominationForm) {
+      const isFunctionaryOnly = !!res.settings?.functionary_only;
+      const canEdit = !!res.allowEdit && user.id !== 'anon';
+      const blockMultiple = isNominationForm || (isFunctionaryOnly && user.role === 'functionary') || canEdit;
+
+      if (existing && blockMultiple) {
+        const existingId = existing._id || existing.id;
+        if (existingId) setSubmissionId(existingId);
+        try {
+          const respSource = existing.responses;
+          const parsed = typeof respSource === 'string' ? JSON.parse(respSource) : respSource;
+          if (Array.isArray(parsed)) {
+            const out: Record<string, unknown> = {};
+            parsed.forEach((r: any) => { if (r?.fieldId) out[r.fieldId] = r.value; });
+            setAnswers(out);
+          } else {
+            setAnswers(parsed || {});
+          }
+        } catch {}
+
         const score = typeof existing.score === 'object' && existing.score !== null
           ? existing.score.earnedPoints
           : existing.score ?? null;
@@ -695,19 +722,17 @@ export default function FormFill({ user }: { user: User }) {
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10 animate-in fade-in slide-in-from-bottom-5 duration-700 delay-300">
             <button onClick={() => nav(submittedBackPath)} className="btn btn-ghost w-full sm:w-auto px-10 h-12 rounded-xl text-base">{submittedBackLabel}</button>
-            {form.form_type !== 'nomination' && (
-              <button 
+            {form.allowEdit && (
+              <button
                 onClick={() => {
-                  setAnswers({});
-                  setSubmissionId(null);
                   setReceipt(null);
                   setSectionIdx(0);
                   setStep('filling');
                   setError('');
-                }} 
+                }}
                 className="btn btn-primary w-full sm:w-auto px-10 h-12 rounded-xl text-base shadow-xl shadow-primary/25 font-bold"
               >
-                New Response
+                Edit Response
               </button>
             )}
           </div>

@@ -35,6 +35,14 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Form not found' });
     }
 
+    const formSettings = typeof form.settings === 'string'
+      ? (() => { try { return JSON.parse(form.settings); } catch { return {}; } })()
+      : (form.settings || {});
+
+    if (formSettings.functionary_only && req.user?.role !== 'functionary') {
+      return res.status(403).json({ error: 'This form can only be filled by a school functionary.' });
+    }
+
     // ─── NOMINATION LINKING (3-layer: ID → Token → Email) ───────────────
     let linkedNomination: any = null;
 
@@ -211,8 +219,19 @@ export const updateSubmission = async (req: AuthRequest, res: Response) => {
       responses = Object.entries(responses).map(([fieldId, value]) => ({ fieldId, value }));
     }
 
-    // ─── NOMINATION LINKING ON UPDATE (if not already linked) ─────────────
     const existingSub = await Submission.findById(id);
+    if (!existingSub) return res.status(404).json({ error: 'Submission not found' });
+
+    const existingForm = await Form.findById(existingSub.formId);
+    const existingFormSettings = typeof existingForm?.settings === 'string'
+      ? (() => { try { return JSON.parse(existingForm.settings); } catch { return {}; } })()
+      : (existingForm?.settings || {});
+
+    if (existingFormSettings.functionary_only && req.user?.role !== 'functionary') {
+      return res.status(403).json({ error: 'This form can only be filled by a school functionary.' });
+    }
+
+    // ─── NOMINATION LINKING ON UPDATE (if not already linked) ─────────────
     let nominationId = req.body.nomination_id || req.body.nominationId;
     let nominationToken = req.body.nomination_token;
 
@@ -255,7 +274,6 @@ export const updateSubmission = async (req: AuthRequest, res: Response) => {
     }
 
     const submission = await Submission.findByIdAndUpdate(id, payload, { new: true });
-    if (!submission) return res.status(404).json({ error: 'Submission not found' });
 
     // Update nomination status if submitting (not drafting)
     if (submission.nominationId && is_draft === false) {
@@ -369,10 +387,40 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
         if (!query.$and) query.$and = [];
         query.$and.push({ $or: teacherOr });
       } else if (req.user.role === 'functionary') {
-        // Functionaries see submissions for teachers they nominated
         const myNominations = await Nomination.find({ functionary_id: req.user._id });
-        const teacherEmails = myNominations.map(n => n.teacher_email);
-        query.userEmail = { $in: teacherEmails.map(email => new RegExp(`^${email}$`, 'i')) };
+        const teacherEmails = myNominations.map(n => n.teacher_email).filter(Boolean);
+        const teacherEmailRegexes = teacherEmails.map(email => new RegExp(`^${email}$`, 'i'));
+
+        if (query.formId) {
+          const f = await Form.findById(query.formId).select('settings');
+          const settings = typeof f?.settings === 'string'
+            ? (() => { try { return JSON.parse(f.settings); } catch { return {}; } })()
+            : (f?.settings || {});
+
+          if (settings.functionary_only) {
+            query.userEmail = { $regex: new RegExp(`^${req.user.email}$`, 'i') };
+          } else {
+            // Functionaries see submissions for teachers they nominated
+            query.userEmail = { $in: teacherEmailRegexes };
+          }
+        } else {
+          const functionaryOnlyForms = await Form.find({ 'settings.functionary_only': true }).select('_id');
+          const functionaryOnlyFormIds = functionaryOnlyForms.map(f => f._id);
+
+          const scoped: any[] = [];
+          if (teacherEmailRegexes.length) {
+            scoped.push({ userEmail: { $in: teacherEmailRegexes } });
+          }
+          if (functionaryOnlyFormIds.length) {
+            scoped.push({
+              userEmail: { $regex: new RegExp(`^${req.user.email}$`, 'i') },
+              formId: { $in: functionaryOnlyFormIds }
+            });
+          }
+
+          if (!query.$and) query.$and = [];
+          query.$and.push({ $or: scoped.length ? scoped : [{ _id: null }] });
+        }
       } else if (req.user.role === 'reviewer' && req.query.reviewed_by_me === 'true') {
         // Reviewers can filter for only submissions they have personally reviewed
         const myReviews = await Review.find({ reviewer_id: req.user._id });

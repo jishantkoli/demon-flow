@@ -99,6 +99,17 @@ export default function Dashboard({ user }: { user: User }) {
   
   const s = stats || {};
   const anim = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.05, duration: 0.4 } });
+  const parseFormSettings = (settings: any) => {
+    if (!settings) return {};
+    if (typeof settings === 'string') {
+      try { return JSON.parse(settings); } catch { return {}; }
+    }
+    return settings;
+  };
+  const isFunctionaryAccessibleForm = (formRow: any) => {
+    const settings = parseFormSettings(formRow?.settings);
+    return formRow?.form_type === 'nomination' || !!settings?.functionary_only;
+  };
   
   const subId = (sub: any) => sub?.id || sub?._id;
   const canOpenSubmission = (sub: any) => Boolean(subId(sub));
@@ -128,6 +139,13 @@ export default function Dashboard({ user }: { user: User }) {
 
   const displaySubmissionNameFirstChar = (sub: any) => displaySubmissionName(sub).charAt(0).toUpperCase();
 
+  const functionaryVisibleActiveForms = forms.filter((form: any) => {
+    if (!isFunctionaryAccessibleForm(form)) return false;
+    const isExpired = form?.expires_at && new Date(form.expires_at) < new Date();
+    const effectiveStatus = isExpired ? 'expired' : form?.status;
+    return effectiveStatus === 'active';
+  }).length;
+
   const timeline = Object.entries(s.submissionTimeline || {}).sort(([a], [b]) => a.localeCompare(b)).slice(-10);
   const maxTimeline = Math.max(...timeline.map(([, v]) => v as number), 1);
 
@@ -153,7 +171,7 @@ export default function Dashboard({ user }: { user: User }) {
                 >
                   <option value="">All Forms</option>
                   {forms
-                    .filter((form: any) => user.role !== 'functionary' || form.form_type === 'nomination')
+                    .filter((form: any) => user.role !== 'functionary' || isFunctionaryAccessibleForm(form))
                     .map((form: any) => (
                       <option key={form._id || form.id} value={form._id || form.id}>
                         {form.title}
@@ -389,20 +407,18 @@ export default function Dashboard({ user }: { user: User }) {
                       <Inbox size={40} className="mx-auto opacity-20 mb-3" />
                       <p className="text-xs font-semibold uppercase tracking-wider">No submissions in queue</p>
                     </div>
-                  ) : recentSubs.map((sub, i) => {
-                    const isFunctionary = user.role === 'functionary';
-                    return (
+                  ) : recentSubs.map((sub, i) => (
                     <div 
                       key={subId(sub)} 
-                      onClick={() => { if (!isFunctionary && canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }} 
-                      className={`w-full text-left px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${!isFunctionary ? 'hover:bg-slate-50/50 cursor-pointer group' : 'hover:bg-slate-50/50'}`}
+                      onClick={() => { if (canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }} 
+                      className="w-full text-left px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-slate-50/50 cursor-pointer group"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl bg-slate-50 text-slate-600 ${!isFunctionary ? 'group-hover:bg-indigo-50 group-hover:text-indigo-600' : ''} flex items-center justify-center text-xs font-bold transition-all border border-slate-200/80 shrink-0`}>
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600 flex items-center justify-center text-xs font-bold transition-all border border-slate-200/80 shrink-0">
                           {displaySubmissionNameFirstChar(sub)}
                         </div>
                         <div className="min-w-0">
-                          <p className={`text-sm font-semibold text-slate-900 truncate ${!isFunctionary ? 'group-hover:text-indigo-600' : ''} transition-colors`}>
+                          <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
                             {sub.form_title || 'Untitled Form submission'}
                           </p>
                           <div className="flex items-center gap-1.5 mt-0.5">
@@ -428,10 +444,10 @@ export default function Dashboard({ user }: { user: User }) {
                             {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : 'Today'}
                           </p>
                         </div>
-                        {!isFunctionary && <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />}
+                        <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
                       </div>
                     </div>
-                  );})}
+                  ))
                 ) : (
                   recentLogs.length === 0 ? (
                     <div className="p-16 text-center text-slate-400 bg-slate-50/50 font-mono">
@@ -688,7 +704,7 @@ export default function Dashboard({ user }: { user: User }) {
               >
                 <option value="">All Forms</option>
                 {forms
-                  .filter((form: any) => user.role !== 'functionary' || form.form_type === 'nomination')
+                  .filter((form: any) => user.role !== 'functionary' || isFunctionaryAccessibleForm(form))
                   .map((form: any) => (
                     <option key={form._id || form.id} value={form._id || form.id}>
                       {form.title}
@@ -711,7 +727,7 @@ export default function Dashboard({ user }: { user: User }) {
           <StatCard label="Assigned Total" value={s.totalSubmissions || 0} icon={Inbox} color="purple" />
         </>}
         {user.role === 'functionary' && <>
-          <StatCard label="Active Forms" value={s.activeForms || 0} icon={FileText} color="blue" onClick={() => navigate('/forms')} />
+          <StatCard label="Active Forms" value={functionaryVisibleActiveForms} icon={FileText} color="blue" onClick={() => navigate('/forms')} />
           <StatCard label="Submissions" value={s.totalSubmissions || 0} icon={Inbox} color="purple" onClick={() => navigate('/submissions')} />
           <StatCard label="Nominations" value={s.totalNominations || 0} icon={UserPlus} color="green" subtitle={`${s.nominationsByStatus?.completed || 0} done`} onClick={() => navigate('/nominations')} />
           <StatCard label="School Reach" value={`${s.completionRate || 0}%`} icon={TrendingUp} color="purple" />
@@ -771,13 +787,19 @@ export default function Dashboard({ user }: { user: User }) {
                   <Inbox size={40} className="mx-auto opacity-10 mb-4" />
                   <p className="text-xs font-bold uppercase tracking-widest">No activity found</p>
                 </div>
-              ) : recentSubs.map((sub, i) => (
-                <div key={subId(sub)} onClick={() => { if (canOpenSubmission(sub)) navigate(`/forms/view?submission=${subId(sub)}`); }} className="w-full text-left px-8 py-5 flex items-center gap-5 transition-all hover:bg-slate-50 cursor-pointer group">
-                  <div className="w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center text-sm font-black transition-all border border-slate-100">
+              ) : recentSubs.map((sub, i) => {
+                const canOpenRecentSubmission = user.role !== 'functionary' && canOpenSubmission(sub);
+                return (
+                <div
+                  key={subId(sub)}
+                  onClick={() => { if (canOpenRecentSubmission) navigate(`/forms/view?submission=${subId(sub)}`); }}
+                  className={`w-full text-left px-8 py-5 flex items-center gap-5 transition-all group ${canOpenRecentSubmission ? 'hover:bg-slate-50 cursor-pointer' : ''}`}
+                >
+                  <div className={`w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center text-sm font-black transition-all border border-slate-100 ${canOpenRecentSubmission ? 'group-hover:bg-primary/10 group-hover:text-primary' : ''}`}>
                     {displaySubmissionNameFirstChar(sub)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-900 truncate group-hover:text-primary transition-colors">{sub.form_title || 'Entry Detail'}</p>
+                    <p className={`text-sm font-bold text-slate-900 truncate transition-colors ${canOpenRecentSubmission ? 'group-hover:text-primary' : ''}`}>{sub.form_title || 'Entry Detail'}</p>
                     <p className="text-[11px] text-slate-400 font-medium mt-1 uppercase tracking-wider">{displaySubmissionName(sub)}</p>
                   </div>
                   <div className="text-right shrink-0 space-y-1.5">
@@ -792,9 +814,11 @@ export default function Dashboard({ user }: { user: User }) {
                     />
                     <p className="text-[9px] text-slate-300 font-black uppercase tracking-tighter">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Active'}</p>
                   </div>
-                  <ChevronRight size={16} className="text-slate-200 group-hover:text-primary transition-all translate-x-0 group-hover:translate-x-1" />
+                  {canOpenRecentSubmission && (
+                    <ChevronRight size={16} className="text-slate-200 group-hover:text-primary transition-all translate-x-0 group-hover:translate-x-1" />
+                  )}
                 </div>
-              ))}
+              )})}
             </div>
           </motion.div>
         </div>

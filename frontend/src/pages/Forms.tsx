@@ -91,11 +91,20 @@ export default function Forms({ user }: { user: User }) {
   }, [user.role, user.email]);
 
   const isAdmin = user.role === 'admin' || user.role === 'form_creator';
+  const parseSettings = (settings: any) => {
+    if (!settings) return {};
+    if (typeof settings === 'string') {
+      try { return JSON.parse(settings); } catch { return {}; }
+    }
+    return settings;
+  };
+  const isFunctionaryOnlyForm = (formRow: any) => !!parseSettings(formRow?.settings)?.functionary_only;
+  const isFunctionaryAccessibleForm = (formRow: any) => formRow?.form_type === 'nomination' || isFunctionaryOnlyForm(formRow);
 
   // Filter
   const filtered = forms.filter(f => {
-    // Functionaries should only see nomination-enabled forms.
-    if (user.role === 'functionary' && f.form_type !== 'nomination') return false;
+    // Functionaries should only see nomination or functionary-only forms.
+    if (user.role === 'functionary' && !isFunctionaryAccessibleForm(f)) return false;
 
     // Teachers should only see forms they are nominated for
     if (user.role === 'teacher' && !teacherNominationLinks[String(f.id)]) return false;
@@ -265,7 +274,7 @@ export default function Forms({ user }: { user: User }) {
                 {t} <span className="ml-1 opacity-60">({
                   forms.filter(f => {
                     // APPLY ROLE FILTERING TO COUNT TOO
-                    if (user.role === 'functionary' && f.form_type !== 'nomination') return false;
+                    if (user.role === 'functionary' && !isFunctionaryAccessibleForm(f)) return false;
                     if (user.role === 'teacher' && !teacherNominationLinks[String(f.id)]) return false;
                     
                     const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
@@ -430,10 +439,19 @@ export default function Forms({ user }: { user: User }) {
                     )}
                     
                     {canFill && user.role === 'functionary' && (
-                      <button onClick={() => navigate(`/nominations?form_id=${row.id}`)}
+                      <button onClick={() => {
+                        if (isFunctionaryOnlyForm(row)) {
+                          const params = new URLSearchParams();
+                          if (user.school_code) params.set('sc', user.school_code);
+                          const qs = params.toString();
+                          navigate(`/fill/${row.id}${qs ? `?${qs}` : ''}`);
+                          return;
+                        }
+                        navigate(`/nominations?form_id=${row.id}`);
+                      }}
                         className="flex-1 min-w-[140px] py-2.5 bg-accent-green text-white rounded-xl text-sm font-bold hover:bg-accent-green-hover transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm">
-                        {row.form_type === 'nomination' ? <Play size={14} /> : <Award size={14} />}
-                        Nominate
+                        {isFunctionaryOnlyForm(row) ? <Play size={14} /> : <Award size={14} />}
+                        {isFunctionaryOnlyForm(row) ? 'Fill Form' : 'Nominate'}
                       </button>
                     )}
 
