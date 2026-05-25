@@ -97,7 +97,7 @@ export default function Dashboard({ user }: { user: User }) {
         {/* Clean Enterprise Corporate Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 pb-6 gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">System Command Center</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Dashboard</h1>
             <p className="text-sm text-slate-500 mt-1">Hello, {user.name}. Centralized platform status, nominations audit trail, and user analytics.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -116,7 +116,7 @@ export default function Dashboard({ user }: { user: User }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
             { 
-              label: "Platform Registry", 
+              label: "Total Users", 
               value: s.totalUsers || 0, 
               subtext: `${s.usersByRole?.teacher || 0} Teachers • ${s.usersByRole?.reviewer || 0} Reviewers`,
               icon: Users, 
@@ -125,7 +125,7 @@ export default function Dashboard({ user }: { user: User }) {
               path: "/users" 
             },
             { 
-              label: "Evaluation Surveys", 
+              label: "Active Forms", 
               value: s.activeForms || 0, 
               subtext: `${s.draftForms || 0} Drafts • ${s.expiredForms || 0} Expired`,
               icon: FileText, 
