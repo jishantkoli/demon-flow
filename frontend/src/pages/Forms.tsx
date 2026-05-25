@@ -94,9 +94,6 @@ export default function Forms({ user }: { user: User }) {
 
   // Filter
   const filtered = forms.filter(f => {
-    // Functionaries should only see nomination-enabled forms.
-    if (user.role === 'functionary' && f.form_type !== 'nomination') return false;
-
     // Teachers should only see forms they are nominated for
     if (user.role === 'teacher' && !teacherNominationLinks[String(f.id)]) return false;
 
@@ -265,7 +262,6 @@ export default function Forms({ user }: { user: User }) {
                 {t} <span className="ml-1 opacity-60">({
                   forms.filter(f => {
                     // APPLY ROLE FILTERING TO COUNT TOO
-                    if (user.role === 'functionary' && f.form_type !== 'nomination') return false;
                     if (user.role === 'teacher' && !teacherNominationLinks[String(f.id)]) return false;
                     
                     const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
@@ -430,10 +426,16 @@ export default function Forms({ user }: { user: User }) {
                     )}
                     
                     {canFill && user.role === 'functionary' && (
-                      <button onClick={() => navigate(`/nominations?form_id=${row.id}`)}
+                      <button onClick={() => {
+                        if (row.form_type === 'nomination') {
+                          navigate(`/nominations?form_id=${row.id}`);
+                        } else {
+                          navigate(`/fill/${row.id}`);
+                        }
+                      }}
                         className="flex-1 min-w-[140px] py-2.5 bg-accent-green text-white rounded-xl text-sm font-bold hover:bg-accent-green-hover transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm">
-                        {row.form_type === 'nomination' ? <Play size={14} /> : <Award size={14} />}
-                        Nominate
+                        {row.form_type === 'nomination' ? <Award size={14} /> : <Play size={14} />}
+                        {row.form_type === 'nomination' ? 'Nominate' : 'Fill Form'}
                       </button>
                     )}
 
