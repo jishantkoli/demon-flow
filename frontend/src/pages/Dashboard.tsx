@@ -14,7 +14,11 @@ import {
 export default function Dashboard({ user }: { user: User }) {
   const navigate = useNavigate();
   const [stats, setStats] = useState<any>(null);
+  const [allStats, setAllStats] = useState<any>(null);
+  const [forms, setForms] = useState<any[]>([]);
+  const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
   const [recentSubs, setRecentSubs] = useState<any[]>([]);
+  const [allRecentSubs, setAllRecentSubs] = useState<any[]>([]);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'submissions' | 'logs'>('submissions');
@@ -22,19 +26,44 @@ export default function Dashboard({ user }: { user: User }) {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [s, subs] = await Promise.all([
+      const [s, subs, formsList] = await Promise.all([
         api.get('/stats').catch(() => ({})),
-        api.get('/submissions').catch(() => [])
+        api.get('/submissions').catch(() => []),
+        api.get('/forms').catch(() => [])
       ]);
+      setAllStats(s || {});
       setStats(s || {});
+      setAllRecentSubs(Array.isArray(subs) ? subs.slice(0, 10) : []);
       setRecentSubs(Array.isArray(subs) ? subs.slice(0, 10) : []);
+      setForms(Array.isArray(formsList) ? formsList : []);
     } catch (err) {
       console.error('Error fetching dashboard stats:', err);
+      setAllStats({});
       setStats({});
+      setForms([]);
+      setAllRecentSubs([]);
       setRecentSubs([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFormSelect = (formId: string | null) => {
+    setSelectedFormId(formId);
+    if (!formId) {
+      setStats(allStats);
+      setRecentSubs(allRecentSubs);
+      return;
+    }
+
+    // Filter submissions by form
+    const filteredSubs = allRecentSubs.filter((sub: any) => 
+      sub.form_id === formId || sub.formId === formId
+    );
+    setRecentSubs(filteredSubs);
+
+    // TODO: We'll need a stats endpoint for specific form, but for now we'll just use all stats
+    // and note that in UI
   };
 
   useEffect(() => {
@@ -101,6 +130,23 @@ export default function Dashboard({ user }: { user: User }) {
             <p className="text-sm text-slate-500 mt-1">Hello, {user.name}. Centralized platform status, nominations audit trail, and user analytics.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {forms.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Filter by Form:</label>
+                <select
+                  value={selectedFormId || ''}
+                  onChange={(e) => handleFormSelect(e.target.value || null)}
+                  className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary cursor-pointer"
+                >
+                  <option value="">All Forms</option>
+                  {forms.map((form: any) => (
+                    <option key={form._id || form.id} value={form._id || form.id}>
+                      {form.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-xs font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               All Services Operational
@@ -564,8 +610,27 @@ export default function Dashboard({ user }: { user: User }) {
           </div>
         </div>
         
-        <div className="hidden md:flex items-center gap-2 text-slate-400 text-[11px] font-bold uppercase tracking-[0.2em]">
-          <Clock size={12} /> {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          {forms.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Filter by Form:</label>
+              <select
+                value={selectedFormId || ''}
+                onChange={(e) => handleFormSelect(e.target.value || null)}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary cursor-pointer"
+              >
+                <option value="">All Forms</option>
+                {forms.map((form: any) => (
+                  <option key={form._id || form.id} value={form._id || form.id}>
+                    {form.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="hidden md:flex items-center gap-2 text-slate-400 text-[11px] font-bold uppercase tracking-[0.2em]">
+            <Clock size={12} /> {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+          </div>
         </div>
       </div>
 
