@@ -1231,7 +1231,7 @@ function PreviewPane({ form }: { form: FormState }) {
       >
         <div className="flex items-center gap-4 relative z-10">
           {form.settings.logo_image && (
-            <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-xl p-2 flex items-center justify-center border border-white/20 shrink-0">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white/10 backdrop-blur-md rounded-xl p-3 flex items-center justify-center border border-white/20 shrink-0">
               <img 
                 src={form.settings.logo_image as string} 
                 className={`max-w-full max-h-full object-contain ${form.settings.header_image || !isLightColor(form.settings.header_color as string) ? 'brightness-0 invert' : ''}`} 

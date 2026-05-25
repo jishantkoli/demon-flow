@@ -838,7 +838,7 @@ export default function FormFill({ user }: { user: User }) {
             >
               <div className="flex items-start sm:items-center gap-6 relative z-10 flex-col sm:flex-row">
                 {form.settings.logo_image && (
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/10 backdrop-blur-md rounded-2xl p-3 flex items-center justify-center border border-white/20 shrink-0">
+                  <div className="w-24 h-24 sm:w-32 sm:h-32 bg-white/10 backdrop-blur-md rounded-2xl p-4 flex items-center justify-center border border-white/20 shrink-0">
                     <img 
                       src={form.settings.logo_image as string} 
                       className={`max-w-full max-h-full object-contain ${form.settings.header_image || !isLightColor(form.settings.header_color as string) ? 'brightness-0 invert' : ''}`} 
