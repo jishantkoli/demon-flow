@@ -261,23 +261,23 @@ export default function Dashboard({ user }: { user: User }) {
               onClick={() => navigate(card.path)}
               className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:border-slate-300 hover:shadow-md transition-all duration-200 cursor-pointer group"
             >
-              <div className="flex justify-between items-center mb-4">
-                <div className={`w-10 h-10 rounded-xl ${card.color} border flex items-center justify-center`}>
-                  <card.icon size={18} />
+              <div className="flex justify-between items-center mb-5">
+                <div className={`w-12 h-12 rounded-xl ${card.color} border flex items-center justify-center`}>
+                  <card.icon size={22} />
                 </div>
-                <div className="flex items-center gap-0.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 group-hover:bg-slate-200/80 px-2.5 py-1 rounded-lg transition-colors">
+                <div className="flex items-center gap-0.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 group-hover:bg-slate-200/80 px-3 py-1.5 rounded-lg transition-colors">
                   {card.cta}
-                  <ChevronRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
+                  <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </div>
               
               <div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{card.label}</div>
-                <div className="text-2xl font-bold text-slate-900 mt-1">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{card.label}</div>
+                <div className="text-3xl font-bold text-slate-900 mt-2">
                   {typeof card.value === 'number' ? card.value.toLocaleString() : card.value}
                 </div>
-                <div className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
-                  <span className="w-1 h-1 rounded-full bg-slate-300" />
+                <div className="text-[11px] font-semibold text-slate-500 mt-3 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                   {card.subtext}
                 </div>
               </div>
