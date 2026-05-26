@@ -23,6 +23,8 @@ export default function Dashboard({ user }: { user: User }) {
   const [questionAnalytics, setQuestionAnalytics] = useState<any>(null);
   const [selectedFormSubmissions, setSelectedFormSubmissions] = useState<any[]>([]);
   const [questionDetailsOpen, setQuestionDetailsOpen] = useState(false);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [statusModalType, setStatusModalType] = useState<'submitted' | 'under_review' | 'approved' | 'rejected' | null>(null);
   const [questionDetails, setQuestionDetails] = useState<any>(null);
   const [recentSubs, setRecentSubs] = useState<any[]>([]);
   const [allRecentSubs, setAllRecentSubs] = useState<any[]>([]);
@@ -485,7 +487,20 @@ export default function Dashboard({ user }: { user: User }) {
           })().map((card, i) => (
             <div 
               key={card.label} 
-              onClick={() => navigate(card.path)}
+              onClick={() => {
+                if (card.label === "Declined Submissions" && selectedFormId) {
+                  setStatusModalType('rejected');
+                  setStatusModalOpen(true);
+                } else if (card.label === "Approved Records" && selectedFormId) {
+                  setStatusModalType('approved');
+                  setStatusModalOpen(true);
+                } else if (card.label === "Submissions Received" && selectedFormId) {
+                  setStatusModalType('submitted');
+                  setStatusModalOpen(true);
+                } else {
+                  navigate(card.path);
+                }
+              }}
               className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:border-slate-300 hover:shadow-md transition-all duration-200 cursor-pointer group"
             >
               <div className="flex justify-between items-center mb-5">
@@ -880,6 +895,119 @@ export default function Dashboard({ user }: { user: User }) {
               )}
             </Modal>
 
+            <Modal
+              open={statusModalOpen}
+              onClose={() => { setStatusModalOpen(false); setStatusModalType(null); }}
+              title={
+                statusModalType === 'rejected' ? 'Declined Submissions' :
+                statusModalType === 'approved' ? 'Approved Records' :
+                statusModalType === 'under_review' ? 'Under Review' :
+                'Pending Assessment'
+              }
+              size="xl"
+            >
+              {(() => {
+                const filtered = selectedFormSubmissions.filter((s: any) => {
+                  const status = String(s.status || '').toLowerCase();
+                  const isApproved = status === 'approved' || status === 'next_level';
+                  const isRejected = status === 'rejected';
+                  const isSubmitted = status === 'submitted' || status === 'pending';
+                  const isUnderReview = status === 'under_review';
+
+                  if (statusModalType === 'approved') return isApproved;
+                  if (statusModalType === 'rejected') return isRejected;
+                  if (statusModalType === 'submitted') return isSubmitted;
+                  if (statusModalType === 'under_review') return isUnderReview;
+                  return status === statusModalType;
+                });
+
+                return (
+                  <div className="space-y-5">
+                    <div className={`border rounded-2xl p-4 flex items-center justify-between ${
+                      statusModalType === 'rejected' ? 'bg-rose-50 border-rose-100' :
+                      statusModalType === 'approved' ? 'bg-emerald-50 border-emerald-100' :
+                      statusModalType === 'under_review' ? 'bg-indigo-50 border-indigo-100' :
+                      'bg-blue-50 border-blue-100'
+                    }`}>
+                      <div>
+                        <div className={`text-[10px] font-bold uppercase tracking-widest ${
+                          statusModalType === 'rejected' ? 'text-rose-600' :
+                          statusModalType === 'approved' ? 'text-emerald-600' :
+                          statusModalType === 'under_review' ? 'text-indigo-600' :
+                          'text-blue-600'
+                        }`}>
+                          {statusModalType === 'rejected' ? 'Declined Records' :
+                           statusModalType === 'approved' ? 'Approved Records' :
+                           statusModalType === 'under_review' ? 'Under Review' :
+                           'Pending Records'}
+                        </div>
+                        <div className={`text-xl font-black mt-1 ${
+                          statusModalType === 'rejected' ? 'text-rose-900' :
+                          statusModalType === 'approved' ? 'text-emerald-900' :
+                          statusModalType === 'under_review' ? 'text-indigo-900' :
+                          'text-blue-900'
+                        }`}>
+                          {filtered.length}
+                        </div>
+                      </div>
+                      {statusModalType === 'rejected' ? <AlertTriangle className="text-rose-500" size={24} /> :
+                       statusModalType === 'approved' ? <SquareCheck className="text-emerald-500" size={24} /> :
+                       statusModalType === 'under_review' ? <Clock className="text-indigo-500" size={24} /> :
+                       <Inbox className="text-blue-500" size={24} />}
+                    </div>
+
+                    <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                      <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Responses</div>
+                        <div className="text-[10px] font-bold text-slate-500">
+                          {filtered.length}
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-left">
+                          <thead className="bg-slate-50">
+                            <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                              <th className="px-4 py-3">ID</th>
+                              <th className="px-4 py-3">Name</th>
+                              <th className="px-4 py-3">Date</th>
+                              <th className="px-4 py-3">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {filtered.length === 0 ? (
+                              <tr>
+                                <td className="px-4 py-6 text-sm text-slate-500 text-center" colSpan={4}>
+                                  No {statusModalType?.replace('_', ' ')} submissions found
+                                </td>
+                              </tr>
+                            ) : (
+                              filtered.map((sub: any, i: number) => (
+                                <tr key={subId(sub)} className="hover:bg-slate-50/50">
+                                  <td className="px-4 py-3 text-xs font-bold text-slate-500">{i + 1}</td>
+                                  <td className="px-4 py-3 text-xs font-semibold text-slate-700">{displaySubmissionName(sub)}</td>
+                                  <td className="px-4 py-3 text-xs text-slate-500">
+                                    {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : '—'}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <button
+                                      onClick={() => navigate(`/forms/view?submission=${subId(sub)}`)}
+                                      className="text-indigo-600 hover:text-indigo-700 text-xs font-semibold"
+                                    >
+                                      View Details
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </Modal>
+
             {/* Clean Tabbed Stream Center: Submissions vs System Audit Logs */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               
@@ -1137,11 +1265,23 @@ export default function Dashboard({ user }: { user: User }) {
                   const total = Math.max(s.totalSubmissions || 1, 1); 
                   const pct = (st.value / total) * 100;
                   return (
-                    <div key={st.label}>
+                    <div 
+                      key={st.label}
+                      onClick={() => {
+                        if (selectedFormId) {
+                          if (st.label === 'Declined Submissions') setStatusModalType('rejected');
+                          else if (st.label === 'Approved Records') setStatusModalType('approved');
+                          else if (st.label === 'Under Review') setStatusModalType('under_review');
+                          else if (st.label === 'Pending Assessment') setStatusModalType('submitted');
+                          setStatusModalOpen(true);
+                        }
+                      }}
+                      className={selectedFormId ? "cursor-pointer group/funnel" : ""}
+                    >
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
                           <div className={`w-6 h-6 rounded-md ${st.bg} border flex items-center justify-center`}><st.icon size={11} /></div>
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{st.label}</span>
+                          <span className={`text-[10px] font-bold text-slate-500 uppercase tracking-wider ${selectedFormId ? "group-hover/funnel:text-indigo-600 transition-colors" : ""}`}>{st.label}</span>
                         </div>
                         <span className="text-xs font-bold text-slate-900">{st.value}</span>
                       </div>

@@ -537,7 +537,7 @@ export const saveReviewScore = async (req: AuthRequest, res: Response) => {
       
       let newStatus = 'under_review';
       if (finalized.length > 0) {
-        const allApproved = finalized.every(r => r.recommendation === 'next_level');
+        const allApproved = finalized.every(r => r.recommendation === 'next_level' || r.recommendation === 'approve');
         const allRejected = finalized.every(r => r.recommendation === 'reject');
         
         if (allApproved) newStatus = 'approved';

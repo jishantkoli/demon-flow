@@ -76,14 +76,18 @@ export const getStats = async (req: AuthRequest, res: Response) => {
         const reviews = subReviews.filter(r => r.level === highestLevel);
         
         if (reviews.length > 0 && reviews.every(r => ['approved', 'rejected', 'completed'].includes(String(r.status)))) {
-          const allApproved = reviews.every(r => r.recommendation === 'next_level');
+          const allApproved = reviews.every(r => r.recommendation === 'next_level' || r.recommendation === 'approve');
           const allRejected = reviews.every(r => r.recommendation === 'reject');
           if (allApproved) {
             submissionsByStatus.approved++;
             submissionsByStatus.under_review--;
+            // Self-heal: Update DB status if it's out of sync
+            await Submission.findByIdAndUpdate(sub._id, { status: 'approved' });
           } else if (allRejected) {
             submissionsByStatus.rejected++;
             submissionsByStatus.under_review--;
+            // Self-heal: Update DB status if it's out of sync
+            await Submission.findByIdAndUpdate(sub._id, { status: 'rejected' });
           }
         }
       }
