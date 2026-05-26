@@ -17,7 +17,7 @@ type FieldType = 'text' | 'textarea' | 'number' | 'email' | 'phone' | 'date' | '
 type Field = {
   id: string; type: FieldType; label: string; required?: boolean; placeholder?: string;
   options?: string[]; option_images?: string[]; maxLength?: number; fileTypes?: string; maxSizeMB?: number;
-  correct?: number | string; marks?: number; negative?: number;
+  correct?: number | string; marks?: number; points?: number; negative?: number;
   visibleIf?: { fieldId: string; op: 'eq' | 'neq' | 'in'; value: string | string[] };
   image?: string;
 };
@@ -34,6 +34,7 @@ type FormData = {
   schema?: { sections: Section[] };
   settings: Record<string, any>;
   status: string; expires_at: string | null;
+  allowEdit?: boolean;
 };
 
 type Step = 'loading' | 'filling' | 'submitted' | 'error';
