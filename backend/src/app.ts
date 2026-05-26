@@ -6,7 +6,6 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import { rateLimit } from 'express-rate-limit';
 import mongoose from 'mongoose';
-import mongoSanitize from 'express-mongo-sanitize';
 
 import authRoutes from './routes/auth.js';
 import formRoutes from './routes/forms.js';
@@ -29,7 +28,7 @@ app.set('trust proxy', 1);
 // Security Middlewares
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
-  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false
+  contentSecurityPolicy: false
 }));
 
 // Permissive CORS for development/network access
@@ -68,7 +67,6 @@ app.use(cors({
 app.use(cookieParser(process.env.COOKIE_SECRET));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(mongoSanitize()); // Prevent NoSQL Injection
 app.use(morgan('dev'));
 
 // Rate Limiting
