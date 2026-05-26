@@ -27,8 +27,8 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       subQuery.userEmail = { $regex: new RegExp(`^${email}$`, 'i') };
       nominationQuery.teacher_email = { $regex: new RegExp(`^${email}$`, 'i') };
     } else if (role === 'functionary') {
-      subQuery.schoolCode = req.user.profile?.schoolCode;
-      nominationQuery.school_code = req.user.profile?.schoolCode;
+      subQuery.schoolCode = req.user?.profile?.schoolCode;
+      nominationQuery.school_code = req.user?.profile?.schoolCode;
     } else if (role === 'reviewer') {
       const myReviews = await Review.find({ reviewer_id: userId });
       subQuery._id = { $in: myReviews.map(r => r.submission_id) };
@@ -68,7 +68,13 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     if (role === 'admin') {
       const underReviewSubs = await Submission.find({ ...subQuery, status: 'under_review' });
       for (const sub of underReviewSubs) {
-        const reviews = await Review.find({ submission_id: sub._id, level: sub.highest_level || 1 });
+        // Fix: highest_level doesn't exist on Submission model, find it from reviews
+        const subReviews = await Review.find({ submission_id: sub._id });
+        if (subReviews.length === 0) continue;
+        
+        const highestLevel = Math.max(...subReviews.map(r => r.level));
+        const reviews = subReviews.filter(r => r.level === highestLevel);
+        
         if (reviews.length > 0 && reviews.every(r => ['approved', 'rejected', 'completed'].includes(String(r.status)))) {
           const allApproved = reviews.every(r => r.recommendation === 'next_level');
           const allRejected = reviews.every(r => r.recommendation === 'reject');
@@ -215,7 +221,7 @@ export const getFormAnalytics = async (req: AuthRequest, res: Response) => {
     })();
 
     const submissions = await Submission.find(subQuery)
-      .select('responses userEmail createdAt submitted_at')
+      .select('responses userEmail createdAt submittedAt')
       .sort({ createdAt: -1 })
       .limit(max);
 
@@ -342,7 +348,7 @@ export const getFormAnalytics = async (req: AuthRequest, res: Response) => {
             };
           })
         : Object.entries(f.counts)
-            .sort((a, b) => (b[1] as number) - (a[1] as number))
+            .sort((a, b) => Number(b[1]) - Number(a[1]))
             .slice(0, 12)
             .map(([label, count]) => ({
               label,
@@ -355,7 +361,7 @@ export const getFormAnalytics = async (req: AuthRequest, res: Response) => {
       if (opts.length) {
         const extras = Object.entries(f.counts)
           .filter(([label]) => !optionSet.has(String(label)))
-          .sort((a, b) => (b[1] as number) - (a[1] as number))
+          .sort((a, b) => Number(b[1]) - Number(a[1]))
           .slice(0, Math.max(0, 5));
         extras.forEach(([label, count]) => {
           optionEntries.push({
@@ -367,7 +373,7 @@ export const getFormAnalytics = async (req: AuthRequest, res: Response) => {
       }
 
       const dateEntries = Object.entries(f.dates)
-        .sort((a, b) => (b[1] as number) - (a[1] as number))
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
         .slice(0, 10)
         .map(([label, count]) => ({
           label,
