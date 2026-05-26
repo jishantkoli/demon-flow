@@ -180,6 +180,42 @@ export default function Dashboard({ user }: { user: User }) {
     }
   };
 
+  const isSensitiveQuestion = (_q: any) => false;
+
+  const isNameLikeQuestion = (q: any) => {
+    const label = String(q?.label || '').trim().toLowerCase();
+    const fieldId = String(q?.fieldId || '').trim().toLowerCase();
+    const hasName = label.includes('name') || fieldId.includes('name');
+    const isSchoolName = label.includes('school') && label.includes('name');
+    return hasName && !isSchoolName;
+  };
+
+  const isFileLikeQuestion = (q: any, rows?: Array<{ value: any }>) => {
+    const label = String(q?.label || '').trim().toLowerCase();
+    const type = String(q?.type || '').trim().toLowerCase();
+    const fieldId = String(q?.fieldId || '').trim().toLowerCase();
+    const hinted =
+      type.includes('file') ||
+      type.includes('upload') ||
+      type.includes('image') ||
+      type.includes('photo') ||
+      label.includes('file') ||
+      label.includes('upload') ||
+      label.includes('image') ||
+      label.includes('photo') ||
+      fieldId.includes('file') ||
+      fieldId.includes('upload') ||
+      fieldId.includes('image') ||
+      fieldId.includes('photo');
+
+    if (hinted) return true;
+    if (!rows?.length) return false;
+    const parts = rows.flatMap(r => normalizeAnswerParts(r.value));
+    if (!parts.length) return false;
+    const urlCount = parts.filter(p => isProbablyUrl(p)).length;
+    return urlCount / parts.length >= 0.7;
+  };
+
   const displaySubmissionName = (sub: any) => {
     // 1. Try explicit userName/user_name from DB (if not 'Anonymous')
     const rawName = sub?.userName || sub?.user_name;
@@ -193,12 +229,60 @@ export default function Dashboard({ user }: { user: User }) {
       return String(nomName).trim();
     }
 
-    // 3. Try parsing responses for common name fields
+    // 3. Try using the form schema to find a "name" field (e.g. field id is f1 but label is "Full Name")
     const responses = parseResponses(sub?.responses);
+    const rawFormId =
+      (typeof sub?.form_id === 'object' ? (sub?.form_id?._id || sub?.form_id?.id) : sub?.form_id) ||
+      (typeof sub?.formId === 'object' ? (sub?.formId?._id || sub?.formId?.id) : sub?.formId) ||
+      sub?.formID;
+    const formId = String(rawFormId || '');
+    const formObj = formId ? (forms || []).find((f: any) => String(f?._id || f?.id || '') === formId) : null;
+    const schemaSource = formObj?.form_schema || formObj?.schema;
+    let schemaObj: any = null;
+    if (schemaSource) {
+      schemaObj = typeof schemaSource === 'string'
+        ? (() => { try { return JSON.parse(schemaSource); } catch { return null; } })()
+        : schemaSource;
+    }
+    const fieldList: any[] = [];
+    const walk = (list: any[]) => {
+      if (!Array.isArray(list)) return;
+      list.forEach((x: any) => {
+        if (!x || typeof x !== 'object') return;
+        fieldList.push(x);
+        if (Array.isArray(x.children)) walk(x.children);
+      });
+    };
+    if (Array.isArray(schemaObj?.sections)) schemaObj.sections.forEach((s: any) => walk(s?.fields || []));
+    else if (Array.isArray(schemaObj?.fields)) walk(schemaObj.fields);
+    else if (Array.isArray(schemaObj)) walk(schemaObj);
+
+    if (fieldList.length) {
+      const pick = fieldList
+        .filter((f: any) => f?.id && f?.label)
+        .map((f: any) => {
+          const label = String(f.label || '').trim();
+          const lower = label.toLowerCase();
+          let score = 0;
+          if (/full\s*name/i.test(label)) score += 100;
+          if (lower === 'name') score += 90;
+          if (lower.startsWith('name')) score += 70;
+          if (lower.includes('name')) score += 30;
+          if (lower.includes('school') && lower.includes('name')) score -= 40;
+          return { id: String(f.id), score };
+        })
+        .sort((a, b) => b.score - a.score)[0];
+      if (pick?.id) {
+        const v = responses[pick.id];
+        if (v != null && String(v).trim()) return String(v).trim();
+      }
+    }
+
+    // 4. Try parsing responses for common name keys (legacy)
     const fromResponses = responses.full_name || responses.name || responses.teacher_name || responses.teacherName || responses.Name;
     if (fromResponses && String(fromResponses).trim()) return String(fromResponses).trim();
     
-    // 4. Fallback to email or finally Anonymous
+    // 5. Fallback to email or finally Anonymous
     return String(sub?.userEmail || sub?.user_email || 'Anonymous').trim();
   };
 
@@ -236,6 +320,8 @@ export default function Dashboard({ user }: { user: User }) {
 
   const questionDetailTop = (() => {
     if (!questionDetailsOpen || !questionDetailRows.length) return [] as Array<{ label: string; count: number }>;
+    if (isNameLikeQuestion(questionDetails)) return [] as Array<{ label: string; count: number }>;
+    if (isFileLikeQuestion(questionDetails, questionDetailRows)) return [] as Array<{ label: string; count: number }>;
     const freq = new Map<string, number>();
     questionDetailRows.forEach(r => {
       normalizeAnswerParts(r.value).forEach(p => {
@@ -253,6 +339,7 @@ export default function Dashboard({ user }: { user: User }) {
   const wordCloud = (() => {
     const t = String(questionDetails?.type || '');
     if (!questionDetailsOpen) return [] as Array<{ word: string; count: number }>;
+    if (isNameLikeQuestion(questionDetails)) return [] as Array<{ word: string; count: number }>;
     if (!['text', 'textarea'].includes(t)) return [] as Array<{ word: string; count: number }>;
     if (!questionDetailRows.length) return [] as Array<{ word: string; count: number }>;
 
@@ -293,7 +380,7 @@ export default function Dashboard({ user }: { user: User }) {
           {value.map((v, i) => (
             <span key={i} className="px-2 py-0.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700">
               {typeof v === 'string' && isProbablyUrl(v) ? (
-                <a href={v} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-700">View File</a>
+                'File uploaded'
               ) : (
                 String(v)
               )}
@@ -305,13 +392,13 @@ export default function Dashboard({ user }: { user: User }) {
     if (typeof value === 'object') {
       const url = (value as any)?.url || (value as any)?.secure_url || (value as any)?.href;
       if (typeof url === 'string' && isProbablyUrl(url)) {
-        return <a href={url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-700 text-xs font-semibold">View File</a>;
+        return <span className="text-xs font-semibold text-slate-700">File uploaded</span>;
       }
       return <span className="text-xs font-semibold text-slate-700 break-words">{JSON.stringify(value)}</span>;
     }
     const s = String(value).trim();
     if (!s) return <span className="text-slate-400">—</span>;
-    if (isProbablyUrl(s)) return <a href={s} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-700 text-xs font-semibold">View File</a>;
+    if (isProbablyUrl(s)) return <span className="text-xs font-semibold text-slate-700">File uploaded</span>;
     return <span className="text-xs font-semibold text-slate-700 break-words">{s}</span>;
   };
 
@@ -749,26 +836,23 @@ export default function Dashboard({ user }: { user: User }) {
                             <div className="bg-white border border-slate-200 rounded-xl p-4">
                               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Files Uploaded</div>
                               <div className="text-lg font-black text-slate-900 mt-1">{files.count || 0}</div>
-                              {Array.isArray(files.latest) && files.latest.length > 0 && (
-                                <div className="mt-2 space-y-1.5">
-                                  {files.latest.slice(0, 3).map((u: any, i: number) => (
-                                    <div key={`${u}-${i}`} className="text-xs font-semibold">
-                                      <a href={String(u)} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-700">View File</a>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           ) : samples ? (
                             <div className="bg-white border border-slate-200 rounded-xl p-4">
                               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Recent Responses</div>
-                              <div className="mt-2 space-y-2">
-                                {samples.slice(0, 3).map((smp: any, si: number) => (
-                                  <div key={si} className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 break-words">
-                                    {String(smp)}
-                                  </div>
-                                ))}
-                              </div>
+                              {isSensitiveQuestion(q) ? (
+                                <div className="mt-2 text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                                  Hidden for privacy
+                                </div>
+                              ) : (
+                                <div className="mt-2 space-y-2">
+                                  {samples.slice(0, 3).map((smp: any, si: number) => (
+                                    <div key={si} className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 break-words">
+                                      {String(smp)}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                               <button
                                 onClick={() => { setQuestionDetails({ ...q, idx }); setQuestionDetailsOpen(true); }}
                                 className="mt-3 text-[11px] font-semibold text-indigo-600 hover:text-indigo-700"
@@ -799,6 +883,11 @@ export default function Dashboard({ user }: { user: User }) {
                 <div className="text-sm text-slate-500">No question selected</div>
               ) : (
                 <div className="space-y-5">
+                  {isSensitiveQuestion(questionDetails) && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs font-semibold text-amber-800">
+                      This field contains sensitive data. Detailed analytics are hidden.
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                       <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Responses</div>
@@ -820,7 +909,7 @@ export default function Dashboard({ user }: { user: User }) {
                     </div>
                   </div>
 
-                  {questionDetailTop.length > 0 ? (
+                  {!isSensitiveQuestion(questionDetails) && questionDetailTop.length > 0 ? (
                     <div className="bg-white border border-slate-200 rounded-2xl p-4">
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Top Answers</div>
                       <div className="space-y-2">
@@ -845,13 +934,13 @@ export default function Dashboard({ user }: { user: User }) {
                         })()}
                       </div>
                     </div>
-                  ) : (
+                  ) : !isSensitiveQuestion(questionDetails) ? (
                     <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-6 text-center text-slate-400 text-xs font-semibold uppercase tracking-widest">
                       No chart available
                     </div>
-                  )}
+                  ) : null}
 
-                  {wordCloud.length >= 8 ? (
+                  {!isSensitiveQuestion(questionDetails) && wordCloud.length >= 8 ? (
                     <div className="bg-white border border-slate-200 rounded-2xl p-4">
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Word Cloud</div>
                       <div className="flex flex-wrap gap-x-3 gap-y-2">
@@ -901,7 +990,11 @@ export default function Dashboard({ user }: { user: User }) {
                             <tr key={r.id} className="hover:bg-slate-50/50">
                               <td className="px-4 py-3 text-xs font-bold text-slate-500">{r.id}</td>
                               <td className="px-4 py-3 text-xs font-semibold text-slate-700">{r.name || 'Anonymous'}</td>
-                              <td className="px-4 py-3">{renderAnswer(r.value)}</td>
+                              <td className="px-4 py-3">
+                                {isSensitiveQuestion(questionDetails)
+                                  ? <span className="text-xs font-semibold text-slate-500">Hidden</span>
+                                  : renderAnswer(r.value)}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
