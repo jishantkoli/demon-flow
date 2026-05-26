@@ -225,7 +225,7 @@ export const getFormAnalytics = async (req: AuthRequest, res: Response) => {
     })();
 
     const submissions = await Submission.find(subQuery)
-      .select('responses userEmail createdAt submittedAt')
+      .select('responses userEmail userName createdAt submittedAt')
       .sort({ createdAt: -1 })
       .limit(max);
 

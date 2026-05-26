@@ -163,7 +163,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
       nominationId: linkedNomination?._id || null,
       nominationToken: req.body.nomination_token || null,
       userId: req.user?._id || null,
-      userName: req.body.user_name || req.user?.profile?.fullName,
+      userName: req.body.user_name || req.user?.profile?.fullName || linkedNomination?.teacher_name,
       userEmail: req.body.user_email || req.user?.email || linkedNomination?.teacher_email,
       schoolCode: req.body.school_code || linkedNomination?.school_code || req.user?.profile?.schoolCode,
       formTitle: req.body.form_title || form.title,
@@ -457,7 +457,9 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
         id: obj._id,
         form_id: obj.formId,
         user_id: obj.userId,
-        user_name: obj.userName,
+        user_name: obj.userName && String(obj.userName).trim().toLowerCase() !== 'anonymous' 
+          ? obj.userName 
+          : (obj.nominationId?.teacher_name || obj.userName || 'Anonymous'),
         user_email: obj.userEmail,
         nomination_id: obj.nominationId,
         nomination_token: obj.nominationToken || (obj.nominationId as any)?.unique_token || null,

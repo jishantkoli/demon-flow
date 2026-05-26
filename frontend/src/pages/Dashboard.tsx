@@ -181,11 +181,15 @@ export default function Dashboard({ user }: { user: User }) {
   };
 
   const displaySubmissionName = (sub: any) => {
-    if (sub?.user_name && String(sub.user_name).trim() && String(sub.user_name).trim().toLowerCase() !== 'anonymous') {
-      return String(sub.user_name).trim();
+    const rawName = sub?.userName || sub?.user_name;
+    if (rawName && String(rawName).trim() && String(rawName).trim().toLowerCase() !== 'anonymous') {
+      return String(rawName).trim();
     }
     const responses = parseResponses(sub?.responses);
-    return String(responses.full_name || responses.name || responses.teacher_name || sub?.user_email || 'Anonymous').trim();
+    const fromResponses = responses.full_name || responses.name || responses.teacher_name || responses.teacherName;
+    if (fromResponses && String(fromResponses).trim()) return String(fromResponses).trim();
+    
+    return String(sub?.userEmail || sub?.user_email || 'Anonymous').trim();
   };
 
   const displaySubmissionNameFirstChar = (sub: any) => displaySubmissionName(sub).charAt(0).toUpperCase();
