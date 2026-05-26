@@ -377,8 +377,8 @@ export const getFormAnalytics = async (req: AuthRequest, res: Response) => {
         .slice(0, 10)
         .map(([label, count]) => ({
           label,
-          count,
-          pct: f.answeredCount ? Math.round((count / f.answeredCount) * 100) : 0
+          count: Number(count),
+          pct: f.answeredCount ? Math.round((Number(count) / f.answeredCount) * 100) : 0
         }));
 
       const numeric = f.numeric.count
