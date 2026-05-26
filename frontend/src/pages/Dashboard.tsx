@@ -28,6 +28,7 @@ export default function Dashboard({ user }: { user: User }) {
   const [questionDetails, setQuestionDetails] = useState<any>(null);
   const [recentSubs, setRecentSubs] = useState<any[]>([]);
   const [allRecentSubs, setAllRecentSubs] = useState<any[]>([]);
+  const [allSubmissions, setAllSubmissions] = useState<any[]>([]);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'submissions' | 'logs'>('submissions');
@@ -42,8 +43,10 @@ export default function Dashboard({ user }: { user: User }) {
       ]);
       setAllStats(s || {});
       setStats(s || {});
-      setAllRecentSubs(Array.isArray(subs) ? subs.slice(0, 10) : []);
-      setRecentSubs(Array.isArray(subs) ? subs.slice(0, 10) : []);
+      const subsArr = Array.isArray(subs) ? subs : [];
+      setAllSubmissions(subsArr);
+      setAllRecentSubs(subsArr.slice(0, 10));
+      setRecentSubs(subsArr.slice(0, 10));
       setForms(Array.isArray(formsList) ? formsList : []);
     } catch (err) {
       console.error('Error fetching dashboard stats:', err);
@@ -488,13 +491,13 @@ export default function Dashboard({ user }: { user: User }) {
             <div 
               key={card.label} 
               onClick={() => {
-                if (card.label === "Declined Submissions" && selectedFormId) {
+                if (card.label === "Declined Submissions") {
                   setStatusModalType('rejected');
                   setStatusModalOpen(true);
-                } else if (card.label === "Approved Records" && selectedFormId) {
+                } else if (card.label === "Approved Records") {
                   setStatusModalType('approved');
                   setStatusModalOpen(true);
-                } else if (card.label === "Submissions Received" && selectedFormId) {
+                } else if (card.label === "Submissions Received") {
                   setStatusModalType('submitted');
                   setStatusModalOpen(true);
                 } else {
@@ -907,7 +910,8 @@ export default function Dashboard({ user }: { user: User }) {
               size="xl"
             >
               {(() => {
-                const filtered = selectedFormSubmissions.filter((s: any) => {
+                const targetList = selectedFormId ? selectedFormSubmissions : allSubmissions;
+                const filtered = targetList.filter((s: any) => {
                   const status = String(s.status || '').toLowerCase();
                   const isApproved = status === 'approved' || status === 'next_level';
                   const isRejected = status === 'rejected';
@@ -1268,20 +1272,18 @@ export default function Dashboard({ user }: { user: User }) {
                     <div 
                       key={st.label}
                       onClick={() => {
-                        if (selectedFormId) {
-                          if (st.label === 'Declined Submissions') setStatusModalType('rejected');
-                          else if (st.label === 'Approved Records') setStatusModalType('approved');
-                          else if (st.label === 'Under Review') setStatusModalType('under_review');
-                          else if (st.label === 'Pending Assessment') setStatusModalType('submitted');
-                          setStatusModalOpen(true);
-                        }
+                        if (st.label === 'Declined Submissions') setStatusModalType('rejected');
+                        else if (st.label === 'Approved Records') setStatusModalType('approved');
+                        else if (st.label === 'Under Review') setStatusModalType('under_review');
+                        else if (st.label === 'Pending Assessment') setStatusModalType('submitted');
+                        setStatusModalOpen(true);
                       }}
-                      className={selectedFormId ? "cursor-pointer group/funnel" : ""}
+                      className="cursor-pointer group/funnel"
                     >
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
                           <div className={`w-6 h-6 rounded-md ${st.bg} border flex items-center justify-center`}><st.icon size={11} /></div>
-                          <span className={`text-[10px] font-bold text-slate-500 uppercase tracking-wider ${selectedFormId ? "group-hover/funnel:text-indigo-600 transition-colors" : ""}`}>{st.label}</span>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider group-hover/funnel:text-indigo-600 transition-colors">{st.label}</span>
                         </div>
                         <span className="text-xs font-bold text-slate-900">{st.value}</span>
                       </div>
