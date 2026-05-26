@@ -3,8 +3,9 @@ import { User } from '../lib/auth';
 import { api } from '../lib/api';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
+import Modal from '../components/Modal';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Users, FileText, Inbox, SquareCheck, Clock, TrendingUp, 
   Activity, Award, UserPlus, Calendar, Target, AlertTriangle, Shield,
@@ -13,10 +14,16 @@ import {
 
 export default function Dashboard({ user }: { user: User }) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [stats, setStats] = useState<any>(null);
   const [allStats, setAllStats] = useState<any>(null);
   const [forms, setForms] = useState<any[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
+  const [formInsights, setFormInsights] = useState<{ uniqueRespondents: number; lastSubmittedAt: string | null; firstSubmittedAt: string | null } | null>(null);
+  const [questionAnalytics, setQuestionAnalytics] = useState<any>(null);
+  const [selectedFormSubmissions, setSelectedFormSubmissions] = useState<any[]>([]);
+  const [questionDetailsOpen, setQuestionDetailsOpen] = useState(false);
+  const [questionDetails, setQuestionDetails] = useState<any>(null);
   const [recentSubs, setRecentSubs] = useState<any[]>([]);
   const [allRecentSubs, setAllRecentSubs] = useState<any[]>([]);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
@@ -48,30 +55,48 @@ export default function Dashboard({ user }: { user: User }) {
     }
   };
 
-  const handleFormSelect = async (formId: string | null) => {
+  const handleFormSelect = async (formId: string | null, opts?: { skipUrl?: boolean }) => {
     setSelectedFormId(formId);
     try {
       setLoading(true);
       
+      if (!opts?.skipUrl) {
+        const next = new URLSearchParams(searchParams);
+        if (formId) next.set('form_id', String(formId));
+        else next.delete('form_id');
+        setSearchParams(next, { replace: true });
+      }
+
       if (!formId) {
         setStats(allStats);
         setRecentSubs(allRecentSubs);
+        setFormInsights(null);
+        setQuestionAnalytics(null);
+        setSelectedFormSubmissions([]);
         return;
       }
 
       // Fetch filtered stats for the selected form
-      const [formStats, subs] = await Promise.all([
+      const [formStats, subs, analytics] = await Promise.all([
         api.get(`/stats?form_id=${formId}`).catch(() => ({})),
-        api.get('/submissions').catch(() => [])
+        api.get(`/submissions?form_id=${formId}`).catch(() => []),
+        api.get(`/stats/form-analytics?form_id=${formId}`).catch(() => null)
       ]);
       
       setStats(formStats || {});
+      setQuestionAnalytics(analytics);
       
-      // Filter submissions by form
-      const filteredSubs = (Array.isArray(subs) ? subs : []).filter((sub: any) => 
-        sub.form_id === formId || sub.formId === formId
-      ).slice(0, 10);
-      setRecentSubs(filteredSubs);
+      const all = Array.isArray(subs) ? subs : [];
+      setSelectedFormSubmissions(all);
+      setRecentSubs(all.slice(0, 10));
+      const emails = new Set<string>();
+      all.forEach((sub: any) => {
+        const e = sub?.user_email || sub?.userEmail;
+        if (typeof e === 'string' && e.trim()) emails.add(e.trim().toLowerCase());
+      });
+      const lastSubmittedAt = all[0]?.submitted_at || all[0]?.createdAt || all[0]?.created_at || null;
+      const firstSubmittedAt = all.length ? (all[all.length - 1]?.submitted_at || all[all.length - 1]?.createdAt || all[all.length - 1]?.created_at || null) : null;
+      setFormInsights({ uniqueRespondents: emails.size, lastSubmittedAt, firstSubmittedAt });
     } catch (err) {
       console.error('Error fetching form-specific stats:', err);
     } finally {
@@ -95,10 +120,31 @@ export default function Dashboard({ user }: { user: User }) {
     fetchLogs();
   }, [user?.role]);
 
+  useEffect(() => {
+    const formId = searchParams.get('form_id');
+    if (!formId) return;
+    if (!forms.length) return;
+    if (!allStats) return;
+    if (String(selectedFormId || '') === String(formId)) return;
+    const exists = forms.some((f: any) => String(f?._id || f?.id) === String(formId));
+    if (!exists) return;
+    handleFormSelect(String(formId), { skipUrl: true });
+  }, [searchParams, forms, allStats, selectedFormId]);
+
   if (loading && !stats) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div>;
   
   const s = stats || {};
   const anim = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.05, duration: 0.4 } });
+  const selectedForm = selectedFormId ? forms.find((f: any) => String(f?._id || f?.id) === String(selectedFormId)) : null;
+  const safeDate = (d: any): Date | null => {
+    if (!d) return null;
+    const dt = new Date(d);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  };
+  const firstDt = safeDate(formInsights?.firstSubmittedAt);
+  const lastDt = safeDate(formInsights?.lastSubmittedAt);
+  const durationDays = firstDt && lastDt ? Math.max(1, Math.ceil((lastDt.getTime() - firstDt.getTime()) / (1000 * 60 * 60 * 24)) + 1) : 0;
+  const approvalRate = s.totalSubmissions > 0 ? Math.round(((s.submissionsByStatus?.approved || 0) / s.totalSubmissions) * 100) : 0;
   const parseFormSettings = (settings: any) => {
     if (!settings) return {};
     if (typeof settings === 'string') {
@@ -138,6 +184,167 @@ export default function Dashboard({ user }: { user: User }) {
   };
 
   const displaySubmissionNameFirstChar = (sub: any) => displaySubmissionName(sub).charAt(0).toUpperCase();
+
+  const isProbablyUrl = (s: string) => /^https?:\/\//i.test(String(s || ''));
+  const normalizeAnswerParts = (value: any): string[] => {
+    if (value == null) return [];
+    if (Array.isArray(value)) return value.flatMap(v => normalizeAnswerParts(v));
+    if (typeof value === 'object') {
+      const url = (value as any)?.url || (value as any)?.secure_url || (value as any)?.href;
+      if (typeof url === 'string' && url.trim()) return [url.trim()];
+      const name = (value as any)?.name || (value as any)?.filename;
+      if (typeof name === 'string' && name.trim()) return [name.trim()];
+      return [JSON.stringify(value)];
+    }
+    const s = String(value).trim();
+    if (!s) return [];
+    return [s];
+  };
+
+  const questionDetailRows = (() => {
+    const fieldId = questionDetails?.fieldId ? String(questionDetails.fieldId) : '';
+    if (!questionDetailsOpen || !fieldId) return [] as Array<{ id: number; name: string; value: any; submittedAt?: any }>;
+    const out: Array<{ id: number; name: string; value: any; submittedAt?: any }> = [];
+    (selectedFormSubmissions || []).forEach((sub: any, i: number) => {
+      const responses = parseResponses(sub?.responses);
+      const value = responses[fieldId];
+      const has = normalizeAnswerParts(value).length > 0;
+      if (!has) return;
+      out.push({ id: out.length + 1, name: displaySubmissionName(sub), value, submittedAt: sub?.submitted_at || sub?.createdAt || sub?.created_at });
+    });
+    return out;
+  })();
+
+  const questionDetailTop = (() => {
+    if (!questionDetailsOpen || !questionDetailRows.length) return [] as Array<{ label: string; count: number }>;
+    const freq = new Map<string, number>();
+    questionDetailRows.forEach(r => {
+      normalizeAnswerParts(r.value).forEach(p => {
+        const key = String(p).trim();
+        if (!key) return;
+        freq.set(key, (freq.get(key) || 0) + 1);
+      });
+    });
+    return [...freq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([label, count]) => ({ label, count }));
+  })();
+
+  const wordCloud = (() => {
+    const t = String(questionDetails?.type || '');
+    if (!questionDetailsOpen) return [] as Array<{ word: string; count: number }>;
+    if (!['text', 'textarea'].includes(t)) return [] as Array<{ word: string; count: number }>;
+    if (!questionDetailRows.length) return [] as Array<{ word: string; count: number }>;
+
+    const stop = new Set([
+      'the', 'a', 'an', 'and', 'or', 'but', 'to', 'of', 'in', 'on', 'for', 'with', 'at', 'by', 'from', 'as', 'is', 'are', 'was', 'were',
+      'i', 'we', 'you', 'they', 'he', 'she', 'it', 'my', 'our', 'your', 'their', 'this', 'that', 'these', 'those', 'be', 'been', 'being',
+      'me', 'us', 'him', 'her', 'them', 'so', 'if', 'then', 'than', 'very', 'not', 'no', 'yes', 'ok', 'okay'
+    ]);
+
+    const freq = new Map<string, number>();
+    questionDetailRows.forEach(r => {
+      const parts = normalizeAnswerParts(r.value);
+      parts.forEach(txt => {
+        String(txt)
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, ' ')
+          .split(/\s+/)
+          .map(w => w.trim())
+          .filter(Boolean)
+          .filter(w => w.length >= 3)
+          .filter(w => !stop.has(w))
+          .forEach(w => freq.set(w, (freq.get(w) || 0) + 1));
+      });
+    });
+
+    return [...freq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 30)
+      .map(([word, count]) => ({ word, count }));
+  })();
+
+  const renderAnswer = (value: any) => {
+    if (value == null) return <span className="text-slate-400">—</span>;
+    if (Array.isArray(value)) {
+      if (value.length === 0) return <span className="text-slate-400">—</span>;
+      return (
+        <div className="flex flex-wrap gap-2">
+          {value.map((v, i) => (
+            <span key={i} className="px-2 py-0.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700">
+              {typeof v === 'string' && isProbablyUrl(v) ? (
+                <a href={v} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-700">View File</a>
+              ) : (
+                String(v)
+              )}
+            </span>
+          ))}
+        </div>
+      );
+    }
+    if (typeof value === 'object') {
+      const url = (value as any)?.url || (value as any)?.secure_url || (value as any)?.href;
+      if (typeof url === 'string' && isProbablyUrl(url)) {
+        return <a href={url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-700 text-xs font-semibold">View File</a>;
+      }
+      return <span className="text-xs font-semibold text-slate-700 break-words">{JSON.stringify(value)}</span>;
+    }
+    const s = String(value).trim();
+    if (!s) return <span className="text-slate-400">—</span>;
+    if (isProbablyUrl(s)) return <a href={s} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-700 text-xs font-semibold">View File</a>;
+    return <span className="text-xs font-semibold text-slate-700 break-words">{s}</span>;
+  };
+
+  const donutColors = [
+    '#4F46E5',
+    '#06B6D4',
+    '#10B981',
+    '#F59E0B',
+    '#EF4444',
+    '#8B5CF6',
+    '#14B8A6',
+    '#F97316'
+  ];
+
+  const DonutChart = ({ segments, total }: { segments: Array<{ label: string; count: number; color: string }>; total: number }) => {
+    const safeTotal = Math.max(1, Number(total || 0));
+    const r = 15.91549430918954;
+    let cumulative = 0;
+    return (
+      <svg viewBox="0 0 42 42" className="w-24 h-24 shrink-0">
+        <circle cx="21" cy="21" r={r} fill="transparent" stroke="#E2E8F0" strokeWidth="8" />
+        {segments.map((s, i) => {
+          const pct = (s.count / safeTotal) * 100;
+          const dash = Math.max(0, Math.min(100, pct));
+          const off = -cumulative;
+          cumulative += dash;
+          return (
+            <circle
+              key={`${s.label}-${i}`}
+              cx="21"
+              cy="21"
+              r={r}
+              fill="transparent"
+              stroke={s.color}
+              strokeWidth="8"
+              strokeDasharray={`${dash} ${100 - dash}`}
+              strokeDashoffset={off}
+              strokeLinecap="butt"
+              transform="rotate(-90 21 21)"
+            />
+          );
+        })}
+        <circle cx="21" cy="21" r="9" fill="white" />
+        <text x="21" y="20.5" textAnchor="middle" className="fill-slate-900" style={{ fontSize: '6px', fontWeight: 800 }}>
+          {Number(total || 0)}
+        </text>
+        <text x="21" y="26.5" textAnchor="middle" className="fill-slate-500" style={{ fontSize: '4px', fontWeight: 700 }}>
+          responses
+        </text>
+      </svg>
+    );
+  };
 
   const functionaryVisibleActiveForms = forms.filter((form: any) => {
     if (!isFunctionaryAccessibleForm(form)) return false;
@@ -311,58 +518,367 @@ export default function Dashboard({ user }: { user: User }) {
           {/* Left Column: Visual Analytics & Tabbed Ledger (col-span-8) */}
           <div className="lg:col-span-8 space-y-8">
             
-            {/* Custom Clean Activity Chart */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-                <div>
-                  <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Analytics Dashboard</div>
-                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 mt-1">
-                    <TrendingUp size={16} className="text-slate-500" />
-                    Submission Velocity Trend
-                  </h3>
+            {timeline.length === 0 ? null : (
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                  <div>
+                    <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Analytics</div>
+                    <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 mt-1">
+                      <TrendingUp size={16} className="text-slate-500" />
+                      Submission Trend
+                    </h3>
+                    {selectedFormId && (
+                      <div className="text-[11px] font-semibold text-slate-500 mt-1">
+                        {selectedForm?.title || 'Selected Form'} · {s.totalSubmissions || 0} responses
+                      </div>
+                    )}
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                    <Calendar size={12} className="text-slate-400" />
+                    Last 10 Days
+                  </div>
                 </div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                  <Calendar size={12} className="text-slate-400" />
-                  Temporal Analysis: Last 10 Days
+
+                <div className="flex items-end gap-3 h-48 px-2 relative">
+                  <div className="absolute inset-x-0 top-0 border-t border-slate-100 pointer-events-none" />
+                  <div className="absolute inset-x-0 top-1/3 border-t border-slate-100 pointer-events-none" />
+                  <div className="absolute inset-x-0 top-2/3 border-t border-slate-100 pointer-events-none" />
+                  
+                  {timeline.map(([date, count]) => (
+                    <div key={date} className="flex-1 group relative flex flex-col items-center gap-2 h-full justify-end z-10">
+                      <div className="absolute -top-10 opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 transition-all duration-150 bg-slate-900 text-white text-[10px] px-2.5 py-1 rounded-lg pointer-events-none z-20 shadow-md flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                        <span className="font-semibold">{count as number} Submissions</span>
+                      </div>
+                      
+                      <div 
+                        style={{ height: `${((count as number) / maxTimeline) * 85}%` }}
+                        className="w-full bg-indigo-600 rounded-md min-h-[6px] group-hover:bg-indigo-500 transition-colors duration-150"
+                      />
+                      
+                      <span className="text-[9px] font-bold text-slate-400 group-hover:text-slate-700 transition-colors mt-1">
+                        {date.split('-').slice(1).join('/')}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
+            )}
 
-              {timeline.length === 0 ? (
-                <div className="py-16 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                  <Inbox size={40} className="opacity-20 mx-auto mb-2 text-slate-400" />
-                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Waiting for system records...</p>
+            {selectedFormId && questionAnalytics?.questions?.length ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-4 mb-6">
+                  <div>
+                    <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Responses Overview</div>
+                    <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 mt-1">
+                      <FileText size={16} className="text-slate-500" />
+                      Question Analytics
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => navigate(`/submissions?form_id=${encodeURIComponent(String(selectedFormId))}`)}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 uppercase tracking-wider transition-all"
+                  >
+                    Open Responses
+                  </button>
                 </div>
-              ) : (
-                <div>
-                  <div className="flex items-end gap-3 h-48 px-2 relative">
-                    {/* Horizontal helper grid lines */}
-                    <div className="absolute inset-x-0 top-0 border-t border-slate-100 pointer-events-none" />
-                    <div className="absolute inset-x-0 top-1/3 border-t border-slate-100 pointer-events-none" />
-                    <div className="absolute inset-x-0 top-2/3 border-t border-slate-100 pointer-events-none" />
-                    
-                    {timeline.map(([date, count], i) => (
-                      <div key={date} className="flex-1 group relative flex flex-col items-center gap-2 h-full justify-end z-10">
-                        {/* Hover Tooltip card */}
-                        <div className="absolute -top-10 opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 transition-all duration-150 bg-slate-900 text-white text-[10px] px-2.5 py-1 rounded-lg pointer-events-none z-20 shadow-md flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                          <span className="font-semibold">{count as number} Submissions</span>
+
+                <div className="space-y-5">
+                  {(questionAnalytics.questions as any[]).map((q, idx) => {
+                    const answered = Number(q.answered || 0);
+                    const total = Number(q.totalResponses || 0);
+                    const pctAnswered = total ? Math.round((answered / total) * 100) : 0;
+                    const options = Array.isArray(q.options) ? q.options : null;
+                    const dates = Array.isArray(q.dates) ? q.dates : null;
+                    const samples = Array.isArray(q.samples) ? q.samples : null;
+                    const numeric = q.numeric || null;
+                    const files = q.files || null;
+                    const qType = String(q.type || '');
+
+                    return (
+                      <div key={q.fieldId || idx} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/40">
+                        <div className="p-4 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Question {idx + 1}</div>
+                            <div className="text-sm font-bold text-slate-900 mt-1 truncate">{q.label || 'Untitled question'}</div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <button
+                              onClick={() => { setQuestionDetails({ ...q, idx }); setQuestionDetailsOpen(true); }}
+                              className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700"
+                            >
+                              More details
+                            </button>
+                            <div className="text-right">
+                              <div className="text-xs font-black text-slate-900">{answered}/{total}</div>
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{pctAnswered}% answered</div>
+                            </div>
+                            <div className="w-28 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                              <div className="h-full bg-indigo-600" style={{ width: `${pctAnswered}%` }} />
+                            </div>
+                          </div>
                         </div>
-                        
-                        {/* Beautiful clean bar */}
-                        <div 
-                          style={{ height: `${((count as number) / maxTimeline) * 85}%` }}
-                          className="w-full bg-indigo-600 rounded-md min-h-[6px] group-hover:bg-indigo-500 transition-colors duration-150"
-                        />
-                        
-                        <span className="text-[9px] font-bold text-slate-400 group-hover:text-slate-700 transition-colors mt-1">
-                          {date.split('-').slice(1).join('/')}
-                        </span>
+
+                        <div className="p-4">
+                          {options ? (
+                            (() => {
+                              const isSingle = ['radio', 'select', 'dropdown', 'mcq'].includes(qType);
+                              const useDonut = isSingle && options.length > 0 && options.length <= 7;
+                              const answeredTotal = answered || 0;
+                              const sum = options.reduce((acc: number, o: any) => acc + Number(o?.count || 0), 0);
+                              const remaining = Math.max(0, answeredTotal - sum);
+                              const segmentsAll = [
+                                ...options.map((o: any, i: number) => ({
+                                  label: String(o.label || '—'),
+                                  count: Number(o.count || 0),
+                                  color: donutColors[i % donutColors.length]
+                                })),
+                                ...(remaining > 0 ? [{ label: 'Other', count: remaining, color: '#94A3B8' }] : [])
+                              ];
+                              const segmentsDraw = segmentsAll.filter(s => s.count > 0);
+
+                              if (useDonut) {
+                                return (
+                                  <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+                                    <DonutChart segments={segmentsDraw} total={answeredTotal} />
+                                    <div className="space-y-2 min-w-0 flex-1">
+                                      {segmentsAll.map((s, i) => (
+                                        <div key={`${s.label}-${i}`} className="flex items-center justify-between gap-3">
+                                          <div className="min-w-0 flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                                            <span className="text-xs font-semibold text-slate-700 truncate">{s.label}</span>
+                                          </div>
+                                          <div className="text-[10px] font-bold text-slate-500 shrink-0">
+                                            {s.count} • {Math.round((s.count / Math.max(answeredTotal, 1)) * 100)}%
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div className="space-y-2">
+                                  {segmentsAll.map((o: any, oi: number) => {
+                                    const pct = answeredTotal ? Math.round((Number(o.count || 0) / answeredTotal) * 100) : 0;
+                                    return (
+                                      <div key={`${o.label}-${oi}`} className="grid grid-cols-[1fr_auto] gap-3 items-center">
+                                        <div className="min-w-0">
+                                          <div className="flex items-center justify-between gap-3">
+                                            <div className="text-xs font-semibold text-slate-700 truncate">{o.label}</div>
+                                            <div className="text-[10px] font-bold text-slate-500 shrink-0">{o.count}</div>
+                                          </div>
+                                          <div className="mt-1 h-2 bg-white rounded-full overflow-hidden border border-slate-200">
+                                            <div className="h-full bg-indigo-500" style={{ width: `${pct}%` }} />
+                                          </div>
+                                        </div>
+                                        <div className="text-[10px] font-bold text-slate-500 w-10 text-right">{pct}%</div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()
+                          ) : dates ? (
+                            <div className="space-y-2">
+                              {dates.map((d: any, di: number) => (
+                                <div key={`${d.label}-${di}`} className="grid grid-cols-[1fr_auto] gap-3 items-center">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="text-xs font-semibold text-slate-700 truncate">{d.label}</div>
+                                      <div className="text-[10px] font-bold text-slate-500 shrink-0">{d.count}</div>
+                                    </div>
+                                    <div className="mt-1 h-2 bg-white rounded-full overflow-hidden border border-slate-200">
+                                      <div className="h-full bg-indigo-500" style={{ width: `${d.pct || 0}%` }} />
+                                    </div>
+                                  </div>
+                                  <div className="text-[10px] font-bold text-slate-500 w-10 text-right">{d.pct || 0}%</div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : numeric ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div className="bg-white border border-slate-200 rounded-xl p-4">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Average</div>
+                                <div className="text-2xl font-black text-slate-900 mt-1">{numeric.avg}</div>
+                                <div className="text-[10px] font-semibold text-slate-500 mt-1">{answered} responses</div>
+                              </div>
+                              <div className="bg-white border border-slate-200 rounded-xl p-4">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Min</div>
+                                <div className="text-lg font-black text-slate-900 mt-1">{numeric.min ?? '—'}</div>
+                              </div>
+                              <div className="bg-white border border-slate-200 rounded-xl p-4">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Max</div>
+                                <div className="text-lg font-black text-slate-900 mt-1">{numeric.max ?? '—'}</div>
+                              </div>
+                            </div>
+                          ) : files ? (
+                            <div className="bg-white border border-slate-200 rounded-xl p-4">
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Files Uploaded</div>
+                              <div className="text-lg font-black text-slate-900 mt-1">{files.count || 0}</div>
+                              {Array.isArray(files.latest) && files.latest.length > 0 && (
+                                <div className="mt-2 space-y-1.5">
+                                  {files.latest.slice(0, 3).map((u: any, i: number) => (
+                                    <div key={`${u}-${i}`} className="text-xs font-semibold">
+                                      <a href={String(u)} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-700">View File</a>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : samples ? (
+                            <div className="bg-white border border-slate-200 rounded-xl p-4">
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Recent Responses</div>
+                              <div className="mt-2 space-y-2">
+                                {samples.slice(0, 3).map((smp: any, si: number) => (
+                                  <div key={si} className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 break-words">
+                                    {String(smp)}
+                                  </div>
+                                ))}
+                              </div>
+                              <button
+                                onClick={() => { setQuestionDetails({ ...q, idx }); setQuestionDetailsOpen(true); }}
+                                className="mt-3 text-[11px] font-semibold text-indigo-600 hover:text-indigo-700"
+                              >
+                                More details
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="bg-white border border-dashed border-slate-200 rounded-xl p-6 text-center text-slate-400 text-xs font-semibold uppercase tracking-widest">
+                              No analytics available
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    ))}
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            <Modal
+              open={questionDetailsOpen}
+              onClose={() => { setQuestionDetailsOpen(false); setQuestionDetails(null); }}
+              title={questionDetails ? `Q${Number(questionDetails.idx || 0) + 1}. ${questionDetails.label || 'Question'}` : 'Question Details'}
+              size="xl"
+            >
+              {!questionDetails ? (
+                <div className="text-sm text-slate-500">No question selected</div>
+              ) : (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Responses</div>
+                      <div className="text-xl font-black text-slate-900 mt-1">{questionDetailRows.length}</div>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Submissions</div>
+                      <div className="text-xl font-black text-slate-900 mt-1">{(selectedFormSubmissions || []).length}</div>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Answered %</div>
+                      <div className="text-xl font-black text-slate-900 mt-1">
+                        {(() => {
+                          const total = Number(questionDetails.totalResponses || 0);
+                          const answered = Number(questionDetails.answered || questionDetailRows.length || 0);
+                          return total ? `${Math.round((answered / total) * 100)}%` : '—';
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {questionDetailTop.length > 0 ? (
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Top Answers</div>
+                      <div className="space-y-2">
+                        {(() => {
+                          const max = Math.max(...questionDetailTop.map(x => x.count), 1);
+                          return questionDetailTop.map((x) => (
+                            <div key={x.label} className="grid grid-cols-[1fr_auto] gap-3 items-center">
+                              <div className="min-w-0">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-xs font-semibold text-slate-700 truncate">{x.label}</div>
+                                  <div className="text-[10px] font-bold text-slate-500 shrink-0">{x.count}</div>
+                                </div>
+                                <div className="mt-1 h-2 bg-slate-50 rounded-full overflow-hidden border border-slate-200">
+                                  <div className="h-full bg-indigo-500" style={{ width: `${Math.round((x.count / max) * 100)}%` }} />
+                                </div>
+                              </div>
+                              <div className="text-[10px] font-bold text-slate-500 w-10 text-right">
+                                {Math.round((x.count / Math.max(questionDetailRows.length, 1)) * 100)}%
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-6 text-center text-slate-400 text-xs font-semibold uppercase tracking-widest">
+                      No chart available
+                    </div>
+                  )}
+
+                  {wordCloud.length >= 8 ? (
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Word Cloud</div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-2">
+                        {(() => {
+                          const max = Math.max(...wordCloud.map(w => w.count), 1);
+                          const min = Math.min(...wordCloud.map(w => w.count), max);
+                          return wordCloud.map((w) => {
+                            const t = (w.count - min) / Math.max(1, max - min);
+                            const fontSize = Math.round(12 + t * 16);
+                            const opacity = 0.6 + t * 0.4;
+                            return (
+                              <span
+                                key={w.word}
+                                className="font-black text-slate-700"
+                                style={{ fontSize: `${fontSize}px`, opacity }}
+                                title={`${w.count}`}
+                              >
+                                {w.word}
+                              </span>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                    <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Responses</div>
+                      <div className="text-[10px] font-bold text-slate-500">{questionDetailRows.length}</div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-left">
+                        <thead className="bg-slate-50">
+                          <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                            <th className="px-4 py-3">ID</th>
+                            <th className="px-4 py-3">Name</th>
+                            <th className="px-4 py-3">Response</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {questionDetailRows.length === 0 ? (
+                            <tr>
+                              <td className="px-4 py-6 text-sm text-slate-500" colSpan={3}>No responses</td>
+                            </tr>
+                          ) : questionDetailRows.map((r) => (
+                            <tr key={r.id} className="hover:bg-slate-50/50">
+                              <td className="px-4 py-3 text-xs font-bold text-slate-500">{r.id}</td>
+                              <td className="px-4 py-3 text-xs font-semibold text-slate-700">{r.name || 'Anonymous'}</td>
+                              <td className="px-4 py-3">{renderAnswer(r.value)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}
-            </div>
+            </Modal>
 
             {/* Clean Tabbed Stream Center: Submissions vs System Audit Logs */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">

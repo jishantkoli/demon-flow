@@ -34,6 +34,7 @@ type FormData = {
   schema?: { sections: Section[] };
   settings: Record<string, any>;
   status: string; expires_at: string | null;
+  allowEdit?: boolean;
 };
 
 type Step = 'loading' | 'filling' | 'submitted' | 'error';
@@ -547,7 +548,7 @@ export default function FormFill({ user }: { user: User }) {
     };
 
     mcqs.forEach((f: Field) => {
-      const qMarks = f.points ?? f.marks ?? 1;
+      const qMarks = f.marks ?? 1;
       max += qMarks;
       const ans = answers[f.id];
       if (ans === undefined || ans === null) return;

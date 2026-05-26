@@ -184,3 +184,228 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+export const getFormAnalytics = async (req: AuthRequest, res: Response) => {
+  try {
+    const { form_id, limit } = req.query;
+    const role = req.user?.role;
+    const userId = req.user?._id;
+    const email = req.user?.email;
+
+    if (!form_id) return res.status(400).json({ error: 'form_id is required' });
+
+    const form = await Form.findById(form_id);
+    if (!form) return res.status(404).json({ error: 'Form not found' });
+
+    const subQuery: any = { formId: form_id };
+
+    if (role === 'teacher') {
+      subQuery.userEmail = { $regex: new RegExp(`^${email}$`, 'i') };
+    } else if (role === 'functionary') {
+      subQuery.schoolCode = req.user?.profile?.schoolCode;
+    } else if (role === 'reviewer') {
+      const myReviews = await Review.find({ reviewer_id: userId });
+      subQuery._id = { $in: myReviews.map(r => r.submission_id) };
+    }
+
+    const max = (() => {
+      const n = Number(limit);
+      if (!Number.isFinite(n) || n <= 0) return 5000;
+      return Math.min(Math.max(1, Math.floor(n)), 5000);
+    })();
+
+    const submissions = await Submission.find(subQuery)
+      .select('responses userEmail createdAt submitted_at')
+      .sort({ createdAt: -1 })
+      .limit(max);
+
+    const schema = (form as any).form_schema || (form as any).schema || {};
+    const sections = Array.isArray(schema?.sections) ? schema.sections : [];
+    const allFields: any[] = sections.flatMap((s: any) => Array.isArray(s?.fields) ? s.fields : []);
+
+    const byField: Record<string, any> = {};
+    const fieldOrder: string[] = [];
+    allFields.forEach((f: any) => {
+      const id = String(f.id);
+      fieldOrder.push(id);
+      byField[id] = {
+        fieldId: id,
+        label: f.label || 'Untitled question',
+        type: f.type,
+        options: Array.isArray(f.options) ? f.options : [],
+        answeredCount: 0,
+        skippedCount: 0,
+        totalCount: 0,
+        counts: {} as Record<string, number>,
+        samples: [] as string[],
+        numeric: { sum: 0, count: 0, min: null as number | null, max: null as number | null },
+        dates: {} as Record<string, number>,
+        files: { count: 0, latest: [] as string[] }
+      };
+    });
+
+    const normalizeOption = (field: any, raw: any) => {
+      if (raw === undefined || raw === null) return '';
+      const opts = Array.isArray(field.options) ? field.options : [];
+      if (typeof raw === 'number' && opts[raw] !== undefined) return String(opts[raw]);
+      const rawStr = String(raw).trim();
+      const n = Number(rawStr);
+      if (!Number.isNaN(n) && rawStr !== '' && opts[n] !== undefined) return String(opts[n]);
+      return rawStr;
+    };
+
+    const isBlank = (v: any) => {
+      if (v === undefined || v === null) return true;
+      if (Array.isArray(v)) return v.length === 0;
+      if (typeof v === 'string') return v.trim() === '';
+      return false;
+    };
+
+    const unique = new Set<string>();
+
+    submissions.forEach((sub: any) => {
+      const e = sub?.userEmail;
+      if (typeof e === 'string' && e.trim()) unique.add(e.trim().toLowerCase());
+      const responses = Array.isArray(sub.responses) ? sub.responses : [];
+      const byResp: Record<string, any> = {};
+      responses.forEach((r: any) => {
+        if (!r) return;
+        const fid = String(r.fieldId);
+        byResp[fid] = r.value;
+      });
+
+      fieldOrder.forEach(fid => {
+        const field = byField[fid];
+        if (!field) return;
+        field.totalCount += 1;
+        const v = byResp[fid];
+        if (isBlank(v)) {
+          field.skippedCount += 1;
+          return;
+        }
+        field.answeredCount += 1;
+
+        const t = String(field.type || '');
+        if (t === 'radio' || t === 'mcq' || t === 'dropdown' || t === 'select') {
+          const key = normalizeOption(field, v) || '—';
+          field.counts[key] = (field.counts[key] || 0) + 1;
+          return;
+        }
+        if (t === 'checkbox') {
+          const arr = Array.isArray(v) ? v : (typeof v === 'string' ? v.split(',').map(s => s.trim()).filter(Boolean) : [v]);
+          arr.forEach(item => {
+            const key = normalizeOption(field, item) || '—';
+            field.counts[key] = (field.counts[key] || 0) + 1;
+          });
+          return;
+        }
+        if (t === 'number' || t === 'rating') {
+          const n = Number(String(v).trim());
+          if (!Number.isNaN(n)) {
+            field.numeric.sum += n;
+            field.numeric.count += 1;
+            field.numeric.min = field.numeric.min === null ? n : Math.min(field.numeric.min, n);
+            field.numeric.max = field.numeric.max === null ? n : Math.max(field.numeric.max, n);
+          }
+          return;
+        }
+        if (t === 'date') {
+          const d = String(v).slice(0, 10);
+          const key = d || '—';
+          field.dates[key] = (field.dates[key] || 0) + 1;
+          return;
+        }
+        if (t === 'file') {
+          field.files.count += 1;
+          const s = String(v).trim();
+          if (s && field.files.latest.length < 3) field.files.latest.push(s);
+          return;
+        }
+        const s = String(v).trim();
+        if (s && field.samples.length < 5) field.samples.push(s);
+      });
+    });
+
+    const questions = fieldOrder.map(fid => {
+      const f = byField[fid];
+      if (!f) return null;
+
+      const opts = Array.isArray(f.options) ? f.options.map((x: any) => String(x)) : [];
+      const optionSet = new Set(opts);
+      const optionEntries = (opts.length
+        ? opts.map((label: string) => {
+            const count = Number((f.counts as any)[label] || 0);
+            return {
+              label,
+              count,
+              pct: f.answeredCount ? Math.round((count / f.answeredCount) * 100) : 0
+            };
+          })
+        : Object.entries(f.counts)
+            .sort((a, b) => (b[1] as number) - (a[1] as number))
+            .slice(0, 12)
+            .map(([label, count]) => ({
+              label,
+              count,
+              pct: f.answeredCount ? Math.round(((count as number) / f.answeredCount) * 100) : 0
+            }))
+      );
+
+      // Include any unexpected values not in schema options (up to a small cap)
+      if (opts.length) {
+        const extras = Object.entries(f.counts)
+          .filter(([label]) => !optionSet.has(String(label)))
+          .sort((a, b) => (b[1] as number) - (a[1] as number))
+          .slice(0, Math.max(0, 5));
+        extras.forEach(([label, count]) => {
+          optionEntries.push({
+            label: String(label),
+            count: Number(count || 0),
+            pct: f.answeredCount ? Math.round((Number(count || 0) / f.answeredCount) * 100) : 0
+          });
+        });
+      }
+
+      const dateEntries = Object.entries(f.dates)
+        .sort((a, b) => (b[1] as number) - (a[1] as number))
+        .slice(0, 10)
+        .map(([label, count]) => ({
+          label,
+          count,
+          pct: f.answeredCount ? Math.round((count / f.answeredCount) * 100) : 0
+        }));
+
+      const numeric = f.numeric.count
+        ? {
+            avg: Math.round((f.numeric.sum / f.numeric.count) * 100) / 100,
+            min: f.numeric.min,
+            max: f.numeric.max
+          }
+        : null;
+
+      return {
+        fieldId: f.fieldId,
+        label: f.label,
+        type: f.type,
+        totalResponses: f.totalCount,
+        answered: f.answeredCount,
+        skipped: f.skippedCount,
+        options: optionEntries.length ? optionEntries : null,
+        dates: dateEntries.length ? dateEntries : null,
+        numeric,
+        samples: f.samples.length ? f.samples : null,
+        files: f.files.count ? { count: f.files.count, latest: f.files.latest } : null
+      };
+    }).filter(Boolean);
+
+    res.status(200).json({
+      form: { id: form._id, title: form.title, formType: (form as any).formType },
+      totalSubmissions: submissions.length,
+      uniqueRespondents: unique.size,
+      truncated: submissions.length >= max,
+      questions
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};

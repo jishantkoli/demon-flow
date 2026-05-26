@@ -10,7 +10,7 @@ import type { FormField } from '../components/FormRenderer';
 import {
   Plus, Edit2, Trash2, Copy, FileText, GitBranch, Award, CircleHelp,
   Layers, Eye, History, Play, Settings, Pencil, MoreHorizontal,
-  Clock, Search, Filter, ChevronRight, Calendar, Hash, Link2
+  Clock, Search, Filter, ChevronRight, Calendar, Hash, Link2, TrendingUp
 } from 'lucide-react';
 
 const typeIcons: Record<string, any> = { normal: FileText, nomination: Award, branching: GitBranch, quiz: CircleHelp, multi: Layers };
@@ -376,6 +376,7 @@ export default function Forms({ user }: { user: User }) {
                               <button onClick={() => openEditModal(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Settings size={13} className="text-slate-500" /> Settings</button>
                               <button onClick={() => openBuilder(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Pencil size={13} className="text-slate-500" /> Edit Fields</button>
                               <button onClick={() => openPreviewModal(row)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Eye size={13} className="text-slate-500" /> Preview</button>
+                              <button onClick={() => { navigate(`/?form_id=${encodeURIComponent(String(row.id))}`); setOpenMenu(null); }} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><TrendingUp size={13} className="text-slate-500" /> Analytics</button>
                               <button onClick={() => viewVersions(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><History size={13} className="text-slate-500" /> Versions</button>
                               <button onClick={() => handleClone(row.id)} className="w-full px-3 py-2 text-left text-xs hover:bg-slate-100 flex items-center gap-2.5"><Copy size={13} className="text-slate-500" /> Clone</button>
                               <button onClick={(e) => {
