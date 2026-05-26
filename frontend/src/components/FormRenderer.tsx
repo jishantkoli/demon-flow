@@ -182,10 +182,28 @@ export default function FormRenderer({ fields, formType, settings, initialValues
         errs[f.id] = `${f.label} is required`;
       if (f.type === 'email' && v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))
         errs[f.id] = 'Invalid email';
+      if (f.type === 'phone' && v) {
+        const digits = String(v).replace(/[^\d]/g, '');
+        if (digits.length < 10 || digits.length > 15) errs[f.id] = 'Invalid phone';
+      }
+      if (f.type === 'date' && v) {
+        const s = String(v).trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || Number.isNaN(new Date(s).getTime())) errs[f.id] = 'Invalid date';
+      }
       if (f.type === 'number' && v !== undefined && v !== '') {
         const n = Number(v);
+        if (!Number.isFinite(n)) errs[f.id] = 'Invalid number';
         if (f.min != null && n < f.min) errs[f.id] = `Minimum is ${f.min}`;
         if (f.max != null && n > f.max) errs[f.id] = `Maximum is ${f.max}`;
+      }
+      if (['select', 'dropdown', 'radio', 'mcq'].includes(f.type) && v != null && v !== '') {
+        const opts = Array.isArray(f.options) ? f.options : [];
+        if (opts.length && !opts.includes(String(v))) errs[f.id] = 'Invalid selection';
+      }
+      if (f.type === 'checkbox' && v != null && v !== '') {
+        const opts = Array.isArray(f.options) ? f.options : [];
+        const arr = Array.isArray(v) ? v : [v];
+        if (opts.length && arr.some(x => !opts.includes(String(x)))) errs[f.id] = 'Invalid selection';
       }
     };
     fields.forEach(f => { check(f); (f.children || []).forEach(check); });
@@ -342,14 +360,29 @@ export default function FormRenderer({ fields, formType, settings, initialValues
                   if (dis) return;
                   const input = document.createElement('input');
                   input.type = 'file';
-                  input.accept = '.pdf,.jpg,.jpeg,.png';
+                  const rawFormats = Array.isArray(f.allowedFormats) && f.allowedFormats.length ? f.allowedFormats : ['pdf', 'jpg', 'jpeg', 'png'];
+                  const formats = rawFormats
+                    .map(x => String(x || '').trim())
+                    .filter(Boolean)
+                    .map(x => x.toLowerCase());
+                  const accept = formats.map(x => x.includes('/') ? x : (x.startsWith('.') ? x : `.${x}`)).join(',');
+                  input.accept = accept || '.pdf,.jpg,.jpeg,.png';
                   input.onchange = async (e: any) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
                     
-                    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-                    if (!allowedTypes.includes(file.type)) {
-                      alert('Only PDF, JPG, JPEG, and PNG files are allowed!');
+                    const ext = String(file.name || '').split('.').pop()?.toLowerCase() || '';
+                    const allowMimes = formats.filter(x => x.includes('/'));
+                    const allowExts = formats.filter(x => !x.includes('/')).map(x => x.startsWith('.') ? x.slice(1) : x);
+                    const mimeOk = allowMimes.length ? allowMimes.includes(String(file.type || '').toLowerCase()) : false;
+                    const extOk = allowExts.length ? allowExts.includes(ext) : true;
+                    const typeOk = allowMimes.length ? (mimeOk || extOk) : extOk;
+                    if (!typeOk) {
+                      alert(`Only ${allowExts.length ? allowExts.map(x => x.toUpperCase()).join(', ') : 'allowed'} files are allowed!`);
+                      return;
+                    }
+                    if (f.maxSizeMB && file.size > Number(f.maxSizeMB) * 1024 * 1024) {
+                      alert(`Max file size is ${f.maxSizeMB}MB`);
                       return;
                     }
                     

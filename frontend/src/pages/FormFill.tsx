@@ -392,13 +392,45 @@ export default function FormFill({ user }: { user: User }) {
     return `otp_verified_scope:${formKey}:${emailKey}:${tokenKey}`;
   };
 
+  const parseAllowedFileTypes = (fileTypes?: string) => {
+    const raw = String(fileTypes || '').trim();
+    if (!raw) return { exts: [] as string[], mimes: [] as string[] };
+    const parts = raw
+      .split(/[,;\s]+/g)
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const exts = parts
+      .filter(p => !p.includes('/'))
+      .map(p => p.startsWith('.') ? p.slice(1) : p)
+      .map(p => p.toLowerCase())
+      .filter(Boolean);
+
+    const mimes = parts
+      .filter(p => p.includes('/'))
+      .map(p => p.toLowerCase());
+
+    return { exts: Array.from(new Set(exts)), mimes: Array.from(new Set(mimes)) };
+  };
+
   const handleFileUpload = async (field: Field, file: File) => {
-      setError('');
-      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-      if (!allowedTypes.includes(file.type)) {
-        setError('Only PDF, JPG, JPEG, and PNG files are allowed');
-        return;
-      }
+    setError('');
+    const parsed = parseAllowedFileTypes(field.fileTypes);
+    const exts = parsed.exts.length ? parsed.exts : ['pdf', 'jpg', 'jpeg', 'png'];
+    const maxBytes = field.maxSizeMB ? Number(field.maxSizeMB) * 1024 * 1024 : null;
+    const ext = String(file.name || '').split('.').pop()?.toLowerCase() || '';
+    const mimeOk = parsed.mimes.length ? parsed.mimes.includes(String(file.type || '').toLowerCase()) : false;
+    const extOk = exts.length ? exts.includes(ext) : true;
+    const typeOk = parsed.mimes.length ? (mimeOk || extOk) : extOk;
+
+    if (!typeOk) {
+      setError(`Only ${exts.map(e => e.toUpperCase()).join(', ')} files are allowed`);
+      return;
+    }
+    if (maxBytes && file.size > maxBytes) {
+      setError(`Max file size is ${field.maxSizeMB}MB`);
+      return;
+    }
     setUploadingFields(prev => ({ ...prev, [field.id]: true }));
     try {
       const data: any = await api.upload('/uploads', file);
@@ -409,6 +441,55 @@ export default function FormFill({ user }: { user: User }) {
     } finally {
       setUploadingFields(prev => ({ ...prev, [field.id]: false }));
     }
+  };
+
+  const validateField = (f: Field, v: any) => {
+    if (f.required && (v === undefined || v === '' || v === null || (Array.isArray(v) && v.length === 0))) {
+      return `"${f.label}" is required.`;
+    }
+
+    if (v === undefined || v === '' || v === null) return '';
+
+    if (f.type === 'email') {
+      const s = String(v).trim();
+      if (s && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return `"${f.label}" has invalid email.`;
+    }
+
+    if (f.type === 'phone') {
+      const s = String(v).trim();
+      const digits = s.replace(/[^\d]/g, '');
+      if (s && (digits.length < 10 || digits.length > 15)) return `"${f.label}" has invalid phone.`;
+    }
+
+    if (f.type === 'date') {
+      const s = String(v).trim();
+      if (s && !/^\d{4}-\d{2}-\d{2}$/.test(s)) return `"${f.label}" has invalid date.`;
+      if (s) {
+        const d = new Date(s);
+        if (Number.isNaN(d.getTime())) return `"${f.label}" has invalid date.`;
+      }
+    }
+
+    if (f.type === 'number') {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return `"${f.label}" has invalid number.`;
+      const anyF: any = f as any;
+      if (anyF.min != null && n < Number(anyF.min)) return `"${f.label}" minimum is ${anyF.min}.`;
+      if (anyF.max != null && n > Number(anyF.max)) return `"${f.label}" maximum is ${anyF.max}.`;
+    }
+
+    if (['dropdown', 'radio', 'mcq'].includes(f.type)) {
+      const opts = Array.isArray(f.options) ? f.options : [];
+      if (opts.length && !opts.includes(String(v))) return `"${f.label}" has invalid selection.`;
+    }
+
+    if (f.type === 'checkbox') {
+      const opts = Array.isArray(f.options) ? f.options : [];
+      const arr = Array.isArray(v) ? v : [v];
+      if (opts.length && arr.some(x => !opts.includes(String(x)))) return `"${f.label}" has invalid selection.`;
+    }
+
+    return '';
   };
 
   // If teacher already verified OTP earlier in this browser, reuse saved auth session.
@@ -598,8 +679,9 @@ export default function FormFill({ user }: { user: User }) {
     for (const s of visibleSections) {
       for (const f of s.fields) {
         if (!fieldVisible(f)) continue;
-        if (f.required && (answers[f.id] === undefined || answers[f.id] === '' || (Array.isArray(answers[f.id]) && (answers[f.id] as []).length === 0))) {
-          setError(`"${f.label}" is required.`);
+        const msg = validateField(f, answers[f.id]);
+        if (msg) {
+          setError(msg);
           const errIdx = visibleSections.findIndex((x: Section) => x.id === s.id);
           if (errIdx !== -1) setSectionIdx(errIdx);
           return;
@@ -1020,11 +1102,11 @@ export default function FormFill({ user }: { user: User }) {
                 {sectionIdx < visibleSections.length - 1 ? (
                   <button 
                     onClick={() => {
-                      // Basic validation for current section before moving next
                       const currentFields = visibleSections[sectionIdx].fields.filter(fieldVisible);
                       for (const f of currentFields) {
-                        if (f.required && (answers[f.id] === undefined || answers[f.id] === '' || (Array.isArray(answers[f.id]) && (answers[f.id] as []).length === 0))) {
-                          setError(`"${f.label}" is required.`);
+                        const msg = validateField(f, answers[f.id]);
+                        if (msg) {
+                          setError(msg);
                           return;
                         }
                       }
@@ -1080,6 +1162,24 @@ function FieldRenderer({
     if (shuffle) return [...f.options].sort(() => Math.random() - 0.5);
     return f.options;
   }, [f.options, shuffle]);
+
+  const fileAccept = useMemo(() => {
+    const raw = String(f.fileTypes || '').trim();
+    if (!raw) return '.pdf,.jpg,.jpeg,.png';
+    const parts = raw
+      .split(/[,;\s]+/g)
+      .map(s => s.trim())
+      .filter(Boolean);
+    const exts = parts
+      .filter(p => !p.includes('/'))
+      .map(p => p.startsWith('.') ? p : `.${p}`)
+      .map(p => p.toLowerCase());
+    const mimes = parts
+      .filter(p => p.includes('/'))
+      .map(p => p.toLowerCase());
+    const items = [...mimes, ...exts];
+    return Array.from(new Set(items)).join(',');
+  }, [f.fileTypes]);
 
   return (
     <div className="space-y-8">
@@ -1202,7 +1302,7 @@ function FieldRenderer({
                   ) : 'Upload File')}
                 </div>
                 <div className="text-sm text-slate-400 mt-2 font-medium">{f.fileTypes ? `Accepted: ${f.fileTypes}` : ''} {f.maxSizeMB ? `· Max ${f.maxSizeMB}MB` : ''}</div>
-                <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png"
+                <input type="file" className="hidden" accept={fileAccept}
                   onChange={async e => {
                     const file = e.target.files?.[0];
                     if (file && onUpload) await onUpload(f, file);
