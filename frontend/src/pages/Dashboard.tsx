@@ -181,14 +181,24 @@ export default function Dashboard({ user }: { user: User }) {
   };
 
   const displaySubmissionName = (sub: any) => {
+    // 1. Try explicit userName/user_name from DB (if not 'Anonymous')
     const rawName = sub?.userName || sub?.user_name;
     if (rawName && String(rawName).trim() && String(rawName).trim().toLowerCase() !== 'anonymous') {
       return String(rawName).trim();
     }
+
+    // 2. Try nomination data (teacher_name) - VERY IMPORTANT for nominated forms
+    const nomName = sub?.nominationId?.teacher_name || sub?.nomination_id?.teacher_name;
+    if (nomName && String(nomName).trim()) {
+      return String(nomName).trim();
+    }
+
+    // 3. Try parsing responses for common name fields
     const responses = parseResponses(sub?.responses);
-    const fromResponses = responses.full_name || responses.name || responses.teacher_name || responses.teacherName;
+    const fromResponses = responses.full_name || responses.name || responses.teacher_name || responses.teacherName || responses.Name;
     if (fromResponses && String(fromResponses).trim()) return String(fromResponses).trim();
     
+    // 4. Fallback to email or finally Anonymous
     return String(sub?.userEmail || sub?.user_email || 'Anonymous').trim();
   };
 
