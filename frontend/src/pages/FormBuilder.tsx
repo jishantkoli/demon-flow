@@ -16,7 +16,7 @@ type FieldType = 'text' | 'textarea' | 'number' | 'email' | 'phone' | 'date' | '
 type Field = {
   id: string; type: FieldType; label: string; required?: boolean; placeholder?: string;
   options?: string[]; option_images?: string[]; maxLength?: number; fileTypes?: string; maxSizeMB?: number;
-  correct?: number | string; marks?: number; negative?: number;
+  correct?: number | string; marks?: number; points?: number; negative?: number;
   reviewer_max_marks?: number;
   visibleIf?: { fieldId: string; op: 'eq' | 'neq'; value: string };
   image?: string;

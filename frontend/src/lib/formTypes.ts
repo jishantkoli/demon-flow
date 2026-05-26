@@ -15,6 +15,7 @@ export type Field = {
   // quiz
   correct?: number | number[] | string;
   marks?: number;
+  points?: number;
   negative?: number;
   // branching
   visibleIf?: { fieldId: string; op: 'eq' | 'neq' | 'in'; value: string | string[] };
@@ -47,4 +48,5 @@ export type Form = {
   status: 'active' | 'expired' | 'draft';
   expires_at: string | null;
   created_by: string;
+  allowEdit?: boolean;
 };
