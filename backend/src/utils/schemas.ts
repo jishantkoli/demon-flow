@@ -20,15 +20,42 @@ export const submissionSchema = z.object({
   body: z.object({
     formId: z.string().optional(),
     form_id: z.string().optional(),
-    responses: z.any(), // Accept both array and object formats (controller normalizes)
+    responses: z.union([
+      z.array(z.object({
+        fieldId: z.string().optional(),
+        value: z.any().optional()
+      }).passthrough()),
+      z.record(z.string(), z.any())
+    ]).optional(),
     user_name: z.string().optional(),
-    user_email: z.string().optional(),
+    user_email: z.union([z.string().email(), z.string().length(0)]).optional(),
     nomination_id: z.string().optional(),
     form_title: z.string().optional(),
     status: z.string().optional(),
     score: z.any().optional(),
-    is_draft: z.boolean().optional()
-  }).refine(data => data.formId || data.form_id, {
-    message: "Either formId or form_id must be provided"
+    is_draft: z.boolean().optional(),
+    isDraft: z.boolean().optional(),
+    userEmail: z.union([z.string().email(), z.string().length(0)]).optional(),
+    id: z.string().optional()
+  }).refine(data => data.formId || data.form_id || data.id, {
+    message: "A form ID or submission ID must be provided"
+  })
+});
+
+export const formSchema = z.object({
+  body: z.object({
+    id: z.string().optional(),
+    title: z.string().min(1, "Title is required"),
+    description: z.string().optional(),
+    status: z.enum(['active', 'draft', 'expired', 'archived']).optional(),
+    fields: z.array(z.object({
+      id: z.string(),
+      type: z.string(),
+      label: z.string(),
+      required: z.boolean().optional()
+    }).passthrough()).optional(),
+    expiresAt: z.union([z.string(), z.date()]).optional(),
+    settings: z.record(z.string(), z.any()).optional(),
+    review_workflow: z.any().optional()
   })
 });

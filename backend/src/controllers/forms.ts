@@ -4,6 +4,7 @@ import { Nomination } from '../models/Nomination.js';
 import { Submission } from '../models/Submission.js';
 import { Review } from '../models/Review.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { escapeRegex } from '../utils/escape.js';
 import archiver from 'archiver';
 import axios from 'axios';
 import fs from 'fs';
@@ -82,7 +83,7 @@ export const getForms = async (req: AuthRequest, res: Response) => {
         if (isNominationType && !isDirectAccess) {
           const nomination = await Nomination.findOne({
             form_id: form._id,
-            teacher_email: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
+            teacher_email: { $regex: new RegExp(`^${escapeRegex(req.user.email)}$`, 'i') }
           });
           if (!nomination) {
             return res.status(403).json({ error: 'You are not authorized to access this form. Please contact your school functionary for assignment.' });
@@ -105,7 +106,7 @@ export const getForms = async (req: AuthRequest, res: Response) => {
     if (req.user?.role === 'teacher') {
       const userEmail = req.user.email;
       const nominations = await Nomination.find({ 
-        teacher_email: { $regex: new RegExp(`^${userEmail}$`, 'i') } 
+        teacher_email: { $regex: new RegExp(`^${escapeRegex(userEmail)}$`, 'i') } 
       });
       const assignedFormIds = nominations.map(n => n.form_id);
       
@@ -272,7 +273,7 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
     const selectedFields = fieldsJson ? JSON.parse(fieldsJson as string) : null;
 
     if (status) query.status = status;
-    if (school_code) query.schoolCode = { $regex: new RegExp(`^${school_code}$`, 'i') };
+    if (school_code) query.schoolCode = { $regex: new RegExp(`^${escapeRegex(String(school_code))}$`, 'i') };
     if (level !== undefined && level !== '') query.currentLevel = Number(level);
 
     // Filter by Shortlisted candidates at a specific level
@@ -287,7 +288,7 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
     }
 
     if (search) {
-      const searchRegex = { $regex: new RegExp(String(search), 'i') };
+      const searchRegex = { $regex: new RegExp(escapeRegex(String(search)), 'i') };
       const searchOr = [
         { userName: searchRegex },
         { userEmail: searchRegex },
@@ -296,7 +297,7 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
         { 
           responses: { 
             $elemMatch: { 
-              value: { $regex: new RegExp(String(search), 'i') } 
+              value: { $regex: new RegExp(escapeRegex(String(search)), 'i') } 
             } 
           } 
         }
@@ -316,7 +317,7 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
             responses: {
               $elemMatch: {
                 fieldId,
-                value: { $regex: new RegExp(String(val), 'i') }
+                value: { $regex: new RegExp(escapeRegex(String(val)), 'i') }
               }
             }
           });

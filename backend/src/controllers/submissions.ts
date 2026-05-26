@@ -4,6 +4,7 @@ import { Form } from '../models/Form.js';
 import { Review } from '../models/Review.js';
 import { Nomination } from '../models/Nomination.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { escapeRegex } from '../utils/escape.js';
 
 export const submitForm = async (req: AuthRequest, res: Response) => {
   try {
@@ -76,7 +77,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     if (!linkedNomination && searchEmail) {
       linkedNomination = await Nomination.findOne({
         form_id: form._id,
-        teacher_email: { $regex: new RegExp(`^${String(searchEmail).trim()}$`, 'i') }
+        teacher_email: { $regex: new RegExp(`^${escapeRegex(String(searchEmail).trim())}$`, 'i') }
       });
       if (linkedNomination) {
         console.log('✅ Nomination linked via EMAIL:', searchEmail, '→', linkedNomination._id);
@@ -183,7 +184,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     if (!submissionData.isDraft) {
       const existingSub = await Submission.findOne({
         formId: form._id,
-        userEmail: { $regex: new RegExp(`^${String(submissionData.userEmail || '').trim()}$`, 'i') },
+        userEmail: { $regex: new RegExp(`^${escapeRegex(String(submissionData.userEmail || '').trim())}$`, 'i') },
         isDraft: false
       });
 
@@ -307,9 +308,9 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
     }
 
     if (user_id) query.userId = user_id;
-    if (user_email) query.userEmail = { $regex: new RegExp(`^${user_email}$`, 'i') };
+    if (user_email) query.userEmail = { $regex: new RegExp(`^${escapeRegex(String(user_email))}$`, 'i') };
     if (status) query.status = status;
-    if (school_code) query.schoolCode = { $regex: new RegExp(`^${school_code}$`, 'i') };
+    if (school_code) query.schoolCode = { $regex: new RegExp(`^${escapeRegex(String(school_code))}$`, 'i') };
     
     // Support multiple levels (comma separated)
     if (level !== undefined && level !== '') {
@@ -334,7 +335,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
 
     // Search in multiple fields (Global Super Search)
     if (search) {
-      const searchRegex = { $regex: new RegExp(String(search), 'i') };
+      const searchRegex = { $regex: new RegExp(escapeRegex(String(search)), 'i') };
       const searchOr = [
         { userName: searchRegex },
         { userEmail: searchRegex },
@@ -343,7 +344,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
         { 
           responses: { 
             $elemMatch: { 
-              value: { $regex: new RegExp(String(search), 'i') } 
+              value: { $regex: new RegExp(escapeRegex(String(search)), 'i') } 
             } 
           } 
         }
@@ -364,7 +365,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
             responses: {
               $elemMatch: {
                 fieldId,
-                value: { $regex: new RegExp(String(val), 'i') }
+                value: { $regex: new RegExp(escapeRegex(String(val)), 'i') }
               }
             }
           });
@@ -382,14 +383,14 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
         // Teachers see submissions matching their ID OR their email
         const teacherOr = [
           { userId: req.user._id },
-          { userEmail: { $regex: new RegExp(`^${req.user.email}$`, 'i') } }
+          { userEmail: { $regex: new RegExp(`^${escapeRegex(req.user.email)}$`, 'i') } }
         ];
         if (!query.$and) query.$and = [];
         query.$and.push({ $or: teacherOr });
       } else if (req.user.role === 'functionary') {
         const myNominations = await Nomination.find({ functionary_id: req.user._id });
         const teacherEmails = myNominations.map(n => n.teacher_email).filter(Boolean);
-        const teacherEmailRegexes = teacherEmails.map(email => new RegExp(`^${email}$`, 'i'));
+        const teacherEmailRegexes = teacherEmails.map(email => new RegExp(`^${escapeRegex(email)}$`, 'i'));
 
         if (query.formId) {
           const f = await Form.findById(query.formId).select('settings');
@@ -398,7 +399,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
             : (f?.settings || {});
 
           if (settings.functionary_only) {
-            query.userEmail = { $regex: new RegExp(`^${req.user.email}$`, 'i') };
+            query.userEmail = { $regex: new RegExp(`^${escapeRegex(req.user.email)}$`, 'i') };
           } else {
             // Functionaries see submissions for teachers they nominated
             query.userEmail = { $in: teacherEmailRegexes };
@@ -413,7 +414,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
           }
           if (functionaryOnlyFormIds.length) {
             scoped.push({
-              userEmail: { $regex: new RegExp(`^${req.user.email}$`, 'i') },
+              userEmail: { $regex: new RegExp(`^${escapeRegex(req.user.email)}$`, 'i') },
               formId: { $in: functionaryOnlyFormIds }
             });
           }
@@ -431,7 +432,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
       // For truly anonymous requests (before OTP), we can only filter by email if provided
       // and only if the form is found. But to be safe, we only allow this if user_email is explicitly requested.
       if (!user_email) return res.status(200).json([]);
-      query.userEmail = { $regex: new RegExp(`^${user_email}$`, 'i') };
+      query.userEmail = { $regex: new RegExp(`^${escapeRegex(String(user_email))}$`, 'i') };
     }
 
     const submissions = await Submission.find(query)
