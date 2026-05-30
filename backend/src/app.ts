@@ -6,6 +6,8 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import { rateLimit } from 'express-rate-limit';
 import mongoose from 'mongoose';
+// @ts-ignore - types installed in devDependencies
+import mongoSanitize from 'express-mongo-sanitize';
 
 import authRoutes from './routes/auth.js';
 import formRoutes from './routes/forms.js';
@@ -65,9 +67,17 @@ app.use(cors({
 }));
 
 app.use(cookieParser(process.env.COOKIE_SECRET));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(morgan('dev'));
+
+// Sanitize MongoDB queries — prevents NoSQL injection ($gt, $ne, etc.)
+app.use(mongoSanitize({
+  replaceWith: '_',
+  onSanitize: ({ req, key }: { req: any; key: string }) => {
+    console.warn(`[Security] Blocked NoSQL injection attempt in ${key}`);
+  }
+}));
 
 // Rate Limiting
 const limiter = rateLimit({
@@ -78,6 +88,21 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 app.use('/api', limiter);
+
+// Strict rate limiting on authentication endpoints — prevents brute-force
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'development' ? 1000 : 10, // 10 attempts in prod
+  message: 'Too many authentication attempts, please try again after 15 minutes',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Rate limit by IP + email combo to be more precise
+    const email = req.body?.email || '';
+    return `${req.ip}-${email}`;
+  }
+});
+app.use('/api/v1/auth', authLimiter);
 
 // Static fallback for local uploads (used when Cloudinary is unavailable)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

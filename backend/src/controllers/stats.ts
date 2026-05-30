@@ -5,6 +5,7 @@ import { Submission } from '../models/Submission.js';
 import { Nomination } from '../models/Nomination.js';
 import { Review } from '../models/Review.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { escapeRegExp } from '../utils/security.js';
 
 export const getStats = async (req: AuthRequest, res: Response) => {
   try {
@@ -24,8 +25,8 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     if (role === 'admin') {
       // Admin sees everything
     } else if (role === 'teacher') {
-      subQuery.userEmail = { $regex: new RegExp(`^${email}$`, 'i') };
-      nominationQuery.teacher_email = { $regex: new RegExp(`^${email}$`, 'i') };
+      subQuery.userEmail = { $regex: new RegExp(`^${escapeRegExp(String(email))}$`, 'i') };
+      nominationQuery.teacher_email = { $regex: new RegExp(`^${escapeRegExp(String(email))}$`, 'i') };
     } else if (role === 'functionary') {
       subQuery.schoolCode = req.user?.profile?.schoolCode;
       nominationQuery.school_code = req.user?.profile?.schoolCode;
@@ -41,7 +42,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     let activeFormsQuery: any = { status: 'active' };
     if (role === 'teacher') {
       const myNominations = await Nomination.find({ 
-        teacher_email: { $regex: new RegExp(`^${email}$`, 'i') } 
+        teacher_email: { $regex: new RegExp(`^${escapeRegExp(String(email))}$`, 'i') } 
       });
       const nominatedFormIds = myNominations.map(n => n.form_id);
       activeFormsQuery = { 
@@ -210,7 +211,7 @@ export const getFormAnalytics = async (req: AuthRequest, res: Response) => {
     const subQuery: any = { formId: form_id };
 
     if (role === 'teacher') {
-      subQuery.userEmail = { $regex: new RegExp(`^${email}$`, 'i') };
+      subQuery.userEmail = { $regex: new RegExp(`^${escapeRegExp(String(email))}$`, 'i') };
     } else if (role === 'functionary') {
       subQuery.schoolCode = req.user?.profile?.schoolCode;
     } else if (role === 'reviewer') {

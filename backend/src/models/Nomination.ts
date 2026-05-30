@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 
 const nominationSchema = new mongoose.Schema({
   form_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Form', required: true },
@@ -16,10 +17,10 @@ const nominationSchema = new mongoose.Schema({
   additional_data: { type: mongoose.Schema.Types.Mixed },
 }, { timestamps: true });
 
-// Generate unique token before saving
+// Generate cryptographically secure unique token before saving
 nominationSchema.pre('save', function() {
   if (!this.unique_token) {
-    this.unique_token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    this.unique_token = crypto.randomBytes(24).toString('hex');
   }
 });
 

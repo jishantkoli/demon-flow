@@ -79,6 +79,6 @@ const formSchema = new mongoose.Schema({
     nomination_custom_fields: [mongoose.Schema.Types.Mixed],
     show_advanced_design: Boolean
   }
-}, { timestamps: true, strict: false });
+}, { timestamps: true });
 
 export const Form = mongoose.model('Form', formSchema);

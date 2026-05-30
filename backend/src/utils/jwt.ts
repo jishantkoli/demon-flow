@@ -25,7 +25,7 @@ export const setRefreshTokenCookie = (res: Response, token: string) => {
   res.cookie('refreshToken', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: COOKIE_EXPIRY,
     signed: true
   });

@@ -4,6 +4,7 @@ import { User } from '../models/User.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { sendEmail } from '../utils/email.js';
 import { SystemSetting } from '../models/SystemSetting.js';
+import { escapeRegExp } from '../utils/security.js';
 
 const sendNominationEmails = async (nomination: any, headUser: any) => {
   try {
@@ -69,7 +70,7 @@ export const getNominations = async (req: AuthRequest, res: Response) => {
     if (functionary_id) query.functionary_id = functionary_id;
     if (form_id) query.form_id = form_id;
     if (teacher_email) {
-      query.teacher_email = { $regex: new RegExp(`^${teacher_email}$`, 'i') };
+      query.teacher_email = { $regex: new RegExp(`^${escapeRegExp(String(teacher_email))}$`, 'i') };
     }
     if (school_code) query.school_code = school_code;
     
@@ -83,7 +84,7 @@ export const getNominations = async (req: AuthRequest, res: Response) => {
     } else if (req.user.role === 'functionary') {
       query.functionary_id = req.user._id;
     } else if (req.user.role === 'teacher') {
-      query.teacher_email = { $regex: new RegExp(`^${req.user.email}$`, 'i') };
+      query.teacher_email = { $regex: new RegExp(`^${escapeRegExp(req.user.email)}$`, 'i') };
     }
 
     const nominations = await Nomination.find(query)

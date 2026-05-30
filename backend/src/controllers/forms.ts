@@ -4,6 +4,7 @@ import { Nomination } from '../models/Nomination.js';
 import { Submission } from '../models/Submission.js';
 import { Review } from '../models/Review.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { escapeRegExp, generateSecureSlug } from '../utils/security.js';
 import archiver from 'archiver';
 import axios from 'axios';
 import fs from 'fs';
@@ -82,7 +83,7 @@ export const getForms = async (req: AuthRequest, res: Response) => {
         if (isNominationType && !isDirectAccess) {
           const nomination = await Nomination.findOne({
             form_id: form._id,
-            teacher_email: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
+            teacher_email: { $regex: new RegExp(`^${escapeRegExp(req.user.email)}$`, 'i') }
           });
           if (!nomination) {
             return res.status(403).json({ error: 'You are not authorized to access this form. Please contact your school functionary for assignment.' });
@@ -105,7 +106,7 @@ export const getForms = async (req: AuthRequest, res: Response) => {
     if (req.user?.role === 'teacher') {
       const userEmail = req.user.email;
       const nominations = await Nomination.find({ 
-        teacher_email: { $regex: new RegExp(`^${userEmail}$`, 'i') } 
+        teacher_email: { $regex: new RegExp(`^${escapeRegExp(userEmail)}$`, 'i') } 
       });
       const assignedFormIds = nominations.map(n => n.form_id);
       
@@ -176,7 +177,7 @@ export const createForm = async (req: AuthRequest, res: Response) => {
       delete cloneData.updatedAt;
       cloneData.title = `${cloneData.title} (Clone)`;
       cloneData.status = 'draft';
-      cloneData.shareableLink = Math.random().toString(36).substring(2, 10);
+      cloneData.shareableLink = generateSecureSlug();
       cloneData.adminId = req.user._id;
 
       const clonedForm = await Form.create(cloneData);
@@ -203,7 +204,7 @@ export const createForm = async (req: AuthRequest, res: Response) => {
     if (data.slug) {
       data.shareableLink = data.slug;
     } else {
-      data.shareableLink = Math.random().toString(36).substring(2, 10);
+      data.shareableLink = generateSecureSlug();
     }
     
     const form = await Form.create({
@@ -272,7 +273,7 @@ export const exportZip = async (req: AuthRequest, res: Response) => {
     const selectedFields = fieldsJson ? JSON.parse(fieldsJson as string) : null;
 
     if (status) query.status = status;
-    if (school_code) query.schoolCode = { $regex: new RegExp(`^${school_code}$`, 'i') };
+    if (school_code) query.schoolCode = { $regex: new RegExp(`^${escapeRegExp(String(school_code))}$`, 'i') };
     if (level !== undefined && level !== '') query.currentLevel = Number(level);
 
     // Filter by Shortlisted candidates at a specific level

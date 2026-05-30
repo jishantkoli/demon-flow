@@ -4,6 +4,7 @@ import { Form } from '../models/Form.js';
 import { Review } from '../models/Review.js';
 import { Nomination } from '../models/Nomination.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { escapeRegExp } from '../utils/security.js';
 
 export const submitForm = async (req: AuthRequest, res: Response) => {
   try {
@@ -76,7 +77,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     if (!linkedNomination && searchEmail) {
       linkedNomination = await Nomination.findOne({
         form_id: form._id,
-        teacher_email: { $regex: new RegExp(`^${String(searchEmail).trim()}$`, 'i') }
+        teacher_email: { $regex: new RegExp(`^${escapeRegExp(String(searchEmail).trim())}$`, 'i') }
       });
       if (linkedNomination) {
         console.log('✅ Nomination linked via EMAIL:', searchEmail, '→', linkedNomination._id);
@@ -183,7 +184,7 @@ export const submitForm = async (req: AuthRequest, res: Response) => {
     if (!submissionData.isDraft) {
       const existingSub = await Submission.findOne({
         formId: form._id,
-        userEmail: { $regex: new RegExp(`^${String(submissionData.userEmail || '').trim()}$`, 'i') },
+        userEmail: { $regex: new RegExp(`^${escapeRegExp(String(submissionData.userEmail || '').trim())}$`, 'i') },
         isDraft: false
       });
 
@@ -307,9 +308,9 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
     }
 
     if (user_id) query.userId = user_id;
-    if (user_email) query.userEmail = { $regex: new RegExp(`^${user_email}$`, 'i') };
+    if (user_email) query.userEmail = { $regex: new RegExp(`^${escapeRegExp(String(user_email))}$`, 'i') };
     if (status) query.status = status;
-    if (school_code) query.schoolCode = { $regex: new RegExp(`^${school_code}$`, 'i') };
+    if (school_code) query.schoolCode = { $regex: new RegExp(`^${escapeRegExp(String(school_code))}$`, 'i') };
     
     // Support multiple levels (comma separated)
     if (level !== undefined && level !== '') {
@@ -382,7 +383,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
         // Teachers see submissions matching their ID OR their email
         const teacherOr = [
           { userId: req.user._id },
-          { userEmail: { $regex: new RegExp(`^${req.user.email}$`, 'i') } }
+          { userEmail: { $regex: new RegExp(`^${escapeRegExp(req.user.email)}$`, 'i') } }
         ];
         if (!query.$and) query.$and = [];
         query.$and.push({ $or: teacherOr });
@@ -398,7 +399,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
             : (f?.settings || {});
 
           if (settings.functionary_only) {
-            query.userEmail = { $regex: new RegExp(`^${req.user.email}$`, 'i') };
+            query.userEmail = { $regex: new RegExp(`^${escapeRegExp(req.user.email)}$`, 'i') };
           } else {
             // Functionaries see submissions for teachers they nominated
             query.userEmail = { $in: teacherEmailRegexes };
@@ -413,7 +414,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
           }
           if (functionaryOnlyFormIds.length) {
             scoped.push({
-              userEmail: { $regex: new RegExp(`^${req.user.email}$`, 'i') },
+              userEmail: { $regex: new RegExp(`^${escapeRegExp(req.user.email)}$`, 'i') },
               formId: { $in: functionaryOnlyFormIds }
             });
           }
@@ -431,7 +432,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
       // For truly anonymous requests (before OTP), we can only filter by email if provided
       // and only if the form is found. But to be safe, we only allow this if user_email is explicitly requested.
       if (!user_email) return res.status(200).json([]);
-      query.userEmail = { $regex: new RegExp(`^${user_email}$`, 'i') };
+      query.userEmail = { $regex: new RegExp(`^${escapeRegExp(String(user_email))}$`, 'i') };
     }
 
     const submissions = await Submission.find(query)
@@ -459,7 +460,7 @@ export const getSubmissions = async (req: AuthRequest, res: Response) => {
         user_id: obj.userId,
         user_name: obj.userName && String(obj.userName).trim().toLowerCase() !== 'anonymous' 
           ? obj.userName 
-          : (obj.nominationId?.teacher_name || obj.userName || 'Anonymous'),
+          : ((obj.nominationId as any)?.teacher_name || obj.userName || 'Anonymous'),
         user_email: obj.userEmail,
         nomination_id: obj.nominationId,
         nomination_token: obj.nominationToken || (obj.nominationId as any)?.unique_token || null,

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { User } from '../models/User.js';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { AuthRequest } from '../middleware/auth.js';
 
 export const getUsers = async (req: AuthRequest, res: Response) => {
@@ -64,8 +65,10 @@ export const createUser = async (req: AuthRequest, res: Response) => {
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ error: 'User already exists' });
 
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password_hash || 'School@123', salt);
+    const salt = await bcrypt.genSalt(12);
+    // Use provided password or generate a secure random one (never use a hardcoded default)
+    const rawPassword = password_hash || crypto.randomBytes(12).toString('base64url');
+    const passwordHash = await bcrypt.hash(rawPassword, salt);
 
     const user = await User.create({
       profile: { 
