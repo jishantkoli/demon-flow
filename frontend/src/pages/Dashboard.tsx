@@ -545,25 +545,6 @@ export default function Dashboard({ user }: { user: User }) {
             <p className="text-sm text-slate-500 mt-1">Hello, {user.name}. Centralized platform status, nominations audit trail, and user analytics.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {filteredForms.length > 0 && (
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Filter by Form:</label>
-                <select
-                  value={selectedFormId || ''}
-                  onChange={(e) => handleFormSelect(e.target.value || null)}
-                  className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary cursor-pointer"
-                >
-                  <option value="">All Forms</option>
-                  {filteredForms
-                    .filter((form: any) => user.role !== 'functionary' || isFunctionaryAccessibleForm(form))
-                    .map((form: any) => (
-                      <option key={form._id || form.id} value={form._id || form.id}>
-                        {form.title}
-                      </option>
-                    ))}
-                </select>
-              </div>
-            )}
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-xs font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               All Services Operational
@@ -624,6 +605,27 @@ export default function Dashboard({ user }: { user: User }) {
             </div>
           </button>
         </div>
+
+        {/* Filter by Form Dropdown */}
+        {filteredForms.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Filter by Form:</label>
+            <select
+              value={selectedFormId || ''}
+              onChange={(e) => handleFormSelect(e.target.value || null)}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary cursor-pointer"
+            >
+              <option value="">All Forms</option>
+              {filteredForms
+                .filter((form: any) => user.role !== 'functionary' || isFunctionaryAccessibleForm(form))
+                .map((form: any) => (
+                  <option key={form._id || form.id} value={form._id || form.id}>
+                    {form.title}
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
 
         {/* Crisp Enterprise Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
