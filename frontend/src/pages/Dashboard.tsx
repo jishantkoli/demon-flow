@@ -15,6 +15,7 @@ import {
 export default function Dashboard({ user }: { user: User }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [activeCategory, setActiveCategory] = useState<'normal' | 'quiz'>('normal');
   const [stats, setStats] = useState<any>(null);
   const [allStats, setAllStats] = useState<any>(null);
   const [forms, setForms] = useState<any[]>([]);
@@ -46,7 +47,6 @@ export default function Dashboard({ user }: { user: User }) {
       const subsArr = Array.isArray(subs) ? subs : [];
       setAllSubmissions(subsArr);
       setAllRecentSubs(subsArr.slice(0, 10));
-      setRecentSubs(subsArr.slice(0, 10));
       setForms(Array.isArray(formsList) ? formsList : []);
     } catch (err) {
       console.error('Error fetching dashboard stats:', err);
@@ -54,7 +54,6 @@ export default function Dashboard({ user }: { user: User }) {
       setStats({});
       setForms([]);
       setAllRecentSubs([]);
-      setRecentSubs([]);
     } finally {
       setLoading(false);
     }
@@ -73,8 +72,8 @@ export default function Dashboard({ user }: { user: User }) {
       }
 
       if (!formId) {
-        setStats(allStats);
-        setRecentSubs(allRecentSubs);
+        setStats(categoryStats);
+        setRecentSubs(filteredRecentSubs);
         setFormInsights(null);
         setQuestionAnalytics(null);
         setSelectedFormSubmissions([]);
@@ -136,9 +135,81 @@ export default function Dashboard({ user }: { user: User }) {
     handleFormSelect(String(formId), { skipUrl: true });
   }, [searchParams, forms, allStats, selectedFormId]);
 
+  // Filter data by active category
+  const filteredForms = forms.filter(f => f.form_type === activeCategory);
+  
+  const filteredSubmissions = allSubmissions.filter(sub => {
+    const formId = String((typeof sub?.form_id === 'object' ? sub?.form_id?._id || sub?.form_id?.id : sub?.form_id) || sub?.formId || sub?.formID || '');
+    const form = forms.find(f => String(f._id || f.id) === formId);
+    return form?.form_type === activeCategory;
+  });
+  
+  const filteredRecentSubs = filteredSubmissions.slice(0, 10);
+  
+  // Compute category-specific stats
+  const categoryStats = (() => {
+    const base = allStats || {};
+    
+    // Count forms
+    const activeForms = filteredForms.filter(f => {
+      const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
+      const effectiveStatus = isExpired ? 'expired' : f.status;
+      return effectiveStatus === 'active';
+    }).length;
+    
+    const draftForms = filteredForms.filter(f => f.status === 'draft').length;
+    const expiredForms = filteredForms.filter(f => {
+      const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
+      return isExpired;
+    }).length;
+    
+    // Count submissions
+    const totalSubmissions = filteredSubmissions.length;
+    
+    const submissionsByStatus: Record<string, number> = {
+      submitted: 0,
+      pending: 0,
+      under_review: 0,
+      approved: 0,
+      rejected: 0
+    };
+    filteredSubmissions.forEach(sub => {
+      const status = String(sub.status || 'submitted');
+      submissionsByStatus[status] = (submissionsByStatus[status] || 0) + 1;
+    });
+    
+    const pendingReviews = filteredSubmissions.filter(s => s.status === 'under_review').length;
+    const completedReviews = filteredSubmissions.filter(s => s.status === 'approved' || s.status === 'rejected').length;
+    
+    // Keep original user stats, update form/submission stats
+    return {
+      ...base,
+      activeForms,
+      draftForms,
+      expiredForms,
+      totalSubmissions,
+      submissionsByStatus,
+      pendingReviews,
+      completedReviews,
+      submissionTimeline: {} // Keep empty for now, or we'd need to compute this too
+    };
+  })();
+  
+  // Reset selected form when category changes
+  useEffect(() => {
+    setSelectedFormId(null);
+  }, [activeCategory]);
+  
+  // Update recentSubs when filteredRecentSubs changes and no form is selected
+  useEffect(() => {
+    if (!selectedFormId) {
+      setRecentSubs(filteredRecentSubs);
+    }
+  }, [filteredRecentSubs, selectedFormId]);
+
   if (loading && !stats) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" /></div>;
   
-  const s = stats || {};
+  const s = selectedFormId ? (stats || {}) : categoryStats;
   const anim = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.05, duration: 0.4 } });
   const selectedForm = selectedFormId ? forms.find((f: any) => String(f?._id || f?.id) === String(selectedFormId)) : null;
   const safeDate = (d: any): Date | null => {
@@ -474,7 +545,7 @@ export default function Dashboard({ user }: { user: User }) {
             <p className="text-sm text-slate-500 mt-1">Hello, {user.name}. Centralized platform status, nominations audit trail, and user analytics.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {forms.length > 0 && (
+            {filteredForms.length > 0 && (
               <div className="flex items-center gap-2">
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Filter by Form:</label>
                 <select
@@ -483,7 +554,7 @@ export default function Dashboard({ user }: { user: User }) {
                   className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary cursor-pointer"
                 >
                   <option value="">All Forms</option>
-                  {forms
+                  {filteredForms
                     .filter((form: any) => user.role !== 'functionary' || isFunctionaryAccessibleForm(form))
                     .map((form: any) => (
                       <option key={form._id || form.id} value={form._id || form.id}>
@@ -497,20 +568,66 @@ export default function Dashboard({ user }: { user: User }) {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               All Services Operational
             </div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 text-xs font-semibold">
-              <Activity size={13} className="text-slate-500" />
-              Sync Latency: 12ms
-            </div>
           </div>
+        </div>
+
+        {/* Category Selection Tiles */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <button
+            onClick={() => setActiveCategory('normal')}
+            className={`group p-6 rounded-2xl border-2 transition-all text-left ${
+              activeCategory === 'normal' 
+                ? 'border-primary bg-primary/5 shadow-lg' 
+                : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+            }`}
+          >
+            <div className="flex items-center gap-4">
+              <div className={`w-14 h-14 rounded-xl flex items-center justify-center transition-all ${
+                activeCategory === 'normal' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-primary/10'
+              }`}>
+                <FileText size={28} />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-slate-900">Normal Forms</h3>
+                <p className="text-sm text-slate-500 mt-1">Standard forms like registration, surveys, and feedback</p>
+              </div>
+              {activeCategory === 'normal' && (
+                <div className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center">
+                  <CircleCheck size={16} />
+                </div>
+              )}
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveCategory('quiz')}
+            className={`group p-6 rounded-2xl border-2 transition-all text-left ${
+              activeCategory === 'quiz' 
+                ? 'border-primary bg-primary/5 shadow-lg' 
+                : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+            }`}
+          >
+            <div className="flex items-center gap-4">
+              <div className={`w-14 h-14 rounded-xl flex items-center justify-center transition-all ${
+                activeCategory === 'quiz' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-primary/10'
+              }`}>
+                <Award size={28} />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-slate-900">Reviewer Grading Forms</h3>
+                <p className="text-sm text-slate-500 mt-1">Forms for reviewers to grade and assess submissions</p>
+              </div>
+              {activeCategory === 'quiz' && (
+                <div className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center">
+                  <CircleCheck size={16} />
+                </div>
+              )}
+            </div>
+          </button>
         </div>
 
         {/* Crisp Enterprise Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {(() => {
-            // Calculate form counts by type
-            const normalFormCount = forms.filter((f: any) => f.form_type === 'normal').length;
-            const quizFormCount = forms.filter((f: any) => f.form_type === 'quiz').length;
-            
             const defaultCards = [
               { 
                 label: "Total Users", 
@@ -522,21 +639,12 @@ export default function Dashboard({ user }: { user: User }) {
                 path: "/users" 
               },
               { 
-                label: "Normal Forms", 
-                value: normalFormCount, 
-                subtext: `${forms.filter((f: any) => f.form_type === 'normal' && f.status === 'active').length} Active • ${forms.filter((f: any) => f.form_type === 'normal' && f.status === 'draft').length} Drafts`,
+                label: "Active Forms", 
+                value: s.activeForms || 0, 
+                subtext: `${s.draftForms || 0} Drafts • ${s.expiredForms || 0} Expired`,
                 icon: FileText, 
                 color: "text-emerald-600 bg-emerald-50 border-emerald-100/50",
-                cta: "View Normal Forms", 
-                path: "/forms" 
-              },
-              { 
-                label: "Reviewer Grading Forms", 
-                value: quizFormCount, 
-                subtext: `${forms.filter((f: any) => f.form_type === 'quiz' && f.status === 'active').length} Active • ${forms.filter((f: any) => f.form_type === 'quiz' && f.status === 'draft').length} Drafts`,
-                icon: Award, 
-                color: "text-amber-600 bg-amber-50 border-amber-100/50",
-                cta: "View Grading Forms", 
+                cta: "Configure Forms", 
                 path: "/forms" 
               },
               { 
@@ -547,6 +655,15 @@ export default function Dashboard({ user }: { user: User }) {
                 color: "text-indigo-600 bg-indigo-50 border-indigo-100/50",
                 cta: "Browse Records", 
                 path: "/submissions" 
+              },
+              { 
+                label: "Pending Reviews", 
+                value: s.pendingReviews || 0, 
+                subtext: `${s.completedReviews || 0} Gradings Completed`,
+                icon: SquareCheck, 
+                color: "text-amber-600 bg-amber-50 border-amber-100/50",
+                cta: "Process Reviews", 
+                path: "/reviews" 
               }
             ];
 
