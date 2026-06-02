@@ -31,9 +31,11 @@ export default function Forms({ user }: { user: User }) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [tab, setTab] = useState<'active' | 'draft' | 'expired'>('active');
+  const [activeCategory, setActiveCategory] = useState<'normal' | 'quiz'>('normal');
   const [recentSubs, setRecentSubs] = useState<any[]>([]);
 
   // Modals
+  const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showFieldBuilder, setShowFieldBuilder] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -115,6 +117,7 @@ export default function Forms({ user }: { user: User }) {
 
     if (effectiveStatus !== tab) return false;
     if (typeFilter && f.form_type !== typeFilter) return false;
+    if (f.form_type !== activeCategory) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!f.title?.toLowerCase().includes(q) && !f.form_type?.toLowerCase().includes(q)) return false;
@@ -145,8 +148,13 @@ export default function Forms({ user }: { user: User }) {
   };
 
   // CRUD
-  const openCreateModal = (type?: string) => {
-    navigate(`/forms/new?type=${type || 'normal'}`);
+  const openCreateModal = () => {
+    setShowTypeSelector(true);
+  };
+
+  const selectTypeAndNavigate = (type: string) => {
+    setShowTypeSelector(false);
+    navigate(`/forms/new?type=${type}`);
   };
 
   const openEditModal = (row: any) => {
@@ -262,36 +270,69 @@ export default function Forms({ user }: { user: User }) {
 
       {/* Tabs + Search + Filter */}
       {(forms.length > 0 || isAdmin) && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex flex-col gap-4">
+          {/* Category Tabs (Normal / Reviewer Grading) */}
           <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
-            {(['active', 'draft', 'expired'] as const)
-              .filter(t => !((user.role === 'functionary' || user.role === 'teacher') && t === 'draft'))
-              .map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${
-                  tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
-                }`}>
-                {t} <span className="ml-1 opacity-60">({
-                  forms.filter(f => {
-                    // APPLY ROLE FILTERING TO COUNT TOO
-                    if (user.role === 'functionary' && !isFunctionaryAccessibleForm(f)) return false;
-                    if (user.role === 'teacher' && !teacherNominationLinks[String(f.id)]) return false;
-                    
-                    const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
-                    let finalStatus = f.status;
-                    if (isExpired) finalStatus = 'expired';
-                    return finalStatus === t;
-                  }).length
-                })</span>
-              </button>
-            ))}
+            <button key="normal" onClick={() => setActiveCategory('normal')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeCategory === 'normal' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+              }`}>
+              Normal Forms
+              <span className="ml-1 opacity-60">({
+                forms.filter(f => {
+                  if (user.role === 'functionary' && !isFunctionaryAccessibleForm(f)) return false;
+                  if (user.role === 'teacher' && !teacherNominationLinks[String(f.id)]) return false;
+                  return f.form_type === 'normal';
+                }).length
+              })</span>
+            </button>
+            <button key="quiz" onClick={() => setActiveCategory('quiz')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeCategory === 'quiz' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+              }`}>
+              Reviewer Grading Forms
+              <span className="ml-1 opacity-60">({
+                forms.filter(f => {
+                  if (user.role === 'functionary' && !isFunctionaryAccessibleForm(f)) return false;
+                  if (user.role === 'teacher' && !teacherNominationLinks[String(f.id)]) return false;
+                  return f.form_type === 'quiz';
+                }).length
+              })</span>
+            </button>
           </div>
-          <div className="flex-1" />
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 min-w-[180px]">
-              <Search size={14} className="text-slate-500 flex-shrink-0" />
-              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search forms..."
-                className="bg-transparent text-sm outline-none w-full placeholder-muted text-slate-900" />
+          {/* Status Tabs */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+              {(['active', 'draft', 'expired'] as const)
+                .filter(t => !((user.role === 'functionary' || user.role === 'teacher') && t === 'draft'))
+                .map(t => (
+                <button key={t} onClick={() => setTab(t)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${
+                    tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                  }`}>
+                  {t} <span className="ml-1 opacity-60">({
+                    forms.filter(f => {
+                      // APPLY ROLE FILTERING TO COUNT TOO
+                      if (user.role === 'functionary' && !isFunctionaryAccessibleForm(f)) return false;
+                      if (user.role === 'teacher' && !teacherNominationLinks[String(f.id)]) return false;
+                      if (f.form_type !== activeCategory) return false;
+                      
+                      const isExpired = f.expires_at && new Date(f.expires_at) < new Date();
+                      let finalStatus = f.status;
+                      if (isExpired) finalStatus = 'expired';
+                      return finalStatus === t;
+                    }).length
+                  })</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex-1" />
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 min-w-[180px]">
+                <Search size={14} className="text-slate-500 flex-shrink-0" />
+                <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search forms..."
+                  className="bg-transparent text-sm outline-none w-full placeholder-muted text-slate-900" />
+              </div>
             </div>
           </div>
         </div>
@@ -315,7 +356,7 @@ export default function Forms({ user }: { user: User }) {
                   : `There are no forms in the ${tab} category.`}
             </p>
             {isAdmin && tab === 'active' && (
-              <button onClick={() => openCreateModal()} className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover shadow-sm transition-all">
+              <button onClick={() => setShowTypeSelector(true)} className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover shadow-sm transition-all">
                 <Plus size={16} /> Create Your First Form
               </button>
             )}
@@ -475,6 +516,35 @@ export default function Forms({ user }: { user: User }) {
           })}
         </div>
       )}
+
+      {/* ═══ Form Type Selector Modal ═══ */}
+      <Modal open={showTypeSelector} onClose={() => setShowTypeSelector(false)} title="Select Form Type" size="lg">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6">
+          {/* Normal Form Tile */}
+          <button onClick={() => selectTypeAndNavigate('normal')}
+            className="group p-8 bg-white border-2 border-slate-200 rounded-2xl hover:border-primary hover:shadow-xl transition-all text-left">
+            <div className="w-16 h-16 bg-accent-blue/10 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-primary/10 transition-colors">
+              <FileText size={32} className="text-accent-blue group-hover:text-primary transition-colors" />
+            </div>
+            <h3 className="text-lg font-bold font-heading text-slate-900 mb-2">Normal Form</h3>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              Create a standard form with fields like text, number, email, date, dropdown, radio buttons, and file uploads.
+            </p>
+          </button>
+
+          {/* Reviewer Grading Form Tile */}
+          <button onClick={() => selectTypeAndNavigate('quiz')}
+            className="group p-8 bg-white border-2 border-slate-200 rounded-2xl hover:border-primary hover:shadow-xl transition-all text-left">
+            <div className="w-16 h-16 bg-accent-orange/10 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-primary/10 transition-colors">
+              <Award size={32} className="text-accent-orange group-hover:text-primary transition-colors" />
+            </div>
+            <h3 className="text-lg font-bold font-heading text-slate-900 mb-2">Reviewer Grading Form</h3>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              Create a form for reviewers to grade submissions with multiple-choice questions, scoring, and passing marks.
+            </p>
+          </button>
+        </div>
+      </Modal>
 
       {/* ═══ Create / Edit Settings Modal ═══ */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title={editForm ? 'Form Settings' : `Create ${typeLabels[form.form_type] || 'Form'}`} size="xl">

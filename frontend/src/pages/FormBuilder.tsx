@@ -338,39 +338,41 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
                 </div>
               )}
 
-              <div className="pt-2 border-t border-border/30 mt-2">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-primary">Enable Reviewer Grading</span>
-                  <Toggle 
-                    checked={f.reviewer_max_marks !== undefined} 
-                    onChange={v => updateField(activeSection, f.id, { reviewer_max_marks: v ? 10 : undefined })} 
-                  />
-                </div>
-                {f.reviewer_max_marks !== undefined && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-2"
-                  >
-                    <label className="text-xs block mb-1 font-medium text-muted">Reviewer Max Marks</label>
-                    <input 
-                      type="number" 
-                      className="input !py-1.5 border-primary/30 focus:border-primary w-full"
-                      placeholder="e.g. 10"
-                      value={f.reviewer_max_marks === null ? '' : (f.reviewer_max_marks ?? '')}
-                      onChange={e => {
-                        const raw = e.target.value;
-                        if (raw === '') { 
-                          updateField(activeSection, f.id, { reviewer_max_marks: null as any }); 
-                        } else { 
-                          const n = parseFloat(raw); 
-                          updateField(activeSection, f.id, { reviewer_max_marks: Number.isFinite(n) ? n : null as any }); 
-                        }
-                      }} 
+              {form.form_type === 'quiz' && (
+                <div className="pt-2 border-t border-border/30 mt-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-primary">Enable Reviewer Grading</span>
+                    <Toggle 
+                      checked={f.reviewer_max_marks !== undefined} 
+                      onChange={v => updateField(activeSection, f.id, { reviewer_max_marks: v ? 10 : undefined })} 
                     />
-                  </motion.div>
-                )}
-              </div>
+                  </div>
+                  {f.reviewer_max_marks !== undefined && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-2"
+                    >
+                      <label className="text-xs block mb-1 font-medium text-muted">Reviewer Max Marks</label>
+                      <input 
+                        type="number" 
+                        className="input !py-1.5 border-primary/30 focus:border-primary w-full"
+                        placeholder="e.g. 10"
+                        value={f.reviewer_max_marks === null ? '' : (f.reviewer_max_marks ?? '')}
+                        onChange={e => {
+                          const raw = e.target.value;
+                          if (raw === '') { 
+                            updateField(activeSection, f.id, { reviewer_max_marks: null as any }); 
+                          } else { 
+                            const n = parseFloat(raw); 
+                            updateField(activeSection, f.id, { reviewer_max_marks: Number.isFinite(n) ? n : null as any }); 
+                          }
+                        }} 
+                      />
+                    </motion.div>
+                  )}
+                </div>
+              )}
 
               {f.type === 'file' && (
                 <div className="grid grid-cols-2 gap-2">
