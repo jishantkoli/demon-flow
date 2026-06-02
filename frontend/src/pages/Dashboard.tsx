@@ -507,6 +507,10 @@ export default function Dashboard({ user }: { user: User }) {
         {/* Crisp Enterprise Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {(() => {
+            // Calculate form counts by type
+            const normalFormCount = forms.filter((f: any) => f.form_type === 'normal').length;
+            const quizFormCount = forms.filter((f: any) => f.form_type === 'quiz').length;
+            
             const defaultCards = [
               { 
                 label: "Total Users", 
@@ -518,12 +522,21 @@ export default function Dashboard({ user }: { user: User }) {
                 path: "/users" 
               },
               { 
-                label: "Active Forms", 
-                value: s.activeForms || 0, 
-                subtext: `${s.draftForms || 0} Drafts • ${s.expiredForms || 0} Expired`,
+                label: "Normal Forms", 
+                value: normalFormCount, 
+                subtext: `${forms.filter((f: any) => f.form_type === 'normal' && f.status === 'active').length} Active • ${forms.filter((f: any) => f.form_type === 'normal' && f.status === 'draft').length} Drafts`,
                 icon: FileText, 
                 color: "text-emerald-600 bg-emerald-50 border-emerald-100/50",
-                cta: "Configure Forms", 
+                cta: "View Normal Forms", 
+                path: "/forms" 
+              },
+              { 
+                label: "Reviewer Grading Forms", 
+                value: quizFormCount, 
+                subtext: `${forms.filter((f: any) => f.form_type === 'quiz' && f.status === 'active').length} Active • ${forms.filter((f: any) => f.form_type === 'quiz' && f.status === 'draft').length} Drafts`,
+                icon: Award, 
+                color: "text-amber-600 bg-amber-50 border-amber-100/50",
+                cta: "View Grading Forms", 
                 path: "/forms" 
               },
               { 
@@ -534,15 +547,6 @@ export default function Dashboard({ user }: { user: User }) {
                 color: "text-indigo-600 bg-indigo-50 border-indigo-100/50",
                 cta: "Browse Records", 
                 path: "/submissions" 
-              },
-              { 
-                label: "Pending Reviews", 
-                value: s.pendingReviews || 0, 
-                subtext: `${s.completedReviews || 0} Gradings Completed`,
-                icon: SquareCheck, 
-                color: "text-amber-600 bg-amber-50 border-amber-100/50",
-                cta: "Process Reviews", 
-                path: "/reviews" 
               }
             ];
 
