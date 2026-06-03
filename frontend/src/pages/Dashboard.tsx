@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User } from '../lib/auth';
 import { api } from '../lib/api';
 import StatCard from '../components/StatCard';
@@ -65,10 +65,14 @@ export default function Dashboard({ user }: { user: User }) {
       setLoading(true);
       
       if (!opts?.skipUrl) {
-        const next = new URLSearchParams(searchParams);
-        if (formId) next.set('form_id', String(formId));
-        else next.delete('form_id');
-        setSearchParams(next, { replace: true });
+        const currentFormId = searchParams.get('form_id');
+        const needsUpdate = (formId && currentFormId !== formId) || (!formId && currentFormId);
+        if (needsUpdate) {
+          const next = new URLSearchParams(searchParams);
+          if (formId) next.set('form_id', String(formId));
+          else next.delete('form_id');
+          setSearchParams(next, { replace: true });
+        }
       }
 
       if (!formId) {
@@ -135,19 +139,19 @@ export default function Dashboard({ user }: { user: User }) {
     handleFormSelect(String(formId), { skipUrl: true });
   }, [searchParams, forms, allStats, selectedFormId]);
 
-  // Filter data by active category
-  const filteredForms = forms.filter(f => f.form_type === activeCategory);
+  // Filter data by active category - memoize to avoid new arrays on every render
+  const filteredForms = useMemo(() => forms.filter(f => f.form_type === activeCategory), [forms, activeCategory]);
   
-  const filteredSubmissions = allSubmissions.filter(sub => {
+  const filteredSubmissions = useMemo(() => allSubmissions.filter(sub => {
     const formId = String((typeof sub?.form_id === 'object' ? sub?.form_id?._id || sub?.form_id?.id : sub?.form_id) || sub?.formId || sub?.formID || '');
     const form = forms.find(f => String(f._id || f.id) === formId);
     return form?.form_type === activeCategory;
-  });
+  }), [allSubmissions, forms, activeCategory]);
   
-  const filteredRecentSubs = filteredSubmissions.slice(0, 10);
+  const filteredRecentSubs = useMemo(() => filteredSubmissions.slice(0, 10), [filteredSubmissions]);
   
-  // Compute category-specific stats
-  const categoryStats = (() => {
+  // Compute category-specific stats - memoize too
+  const categoryStats = useMemo(() => {
     const base = allStats || {};
     
     // Count forms
@@ -193,7 +197,7 @@ export default function Dashboard({ user }: { user: User }) {
       completedReviews,
       submissionTimeline: {} // Keep empty for now, or we'd need to compute this too
     };
-  })();
+  }, [allStats, filteredForms, filteredSubmissions]);
   
   // Reset selected form when category changes
   useEffect(() => {

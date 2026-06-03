@@ -32,7 +32,7 @@ export default function Reviews({ user }: { user: User }) {
         api.get(rUrl), api.get('/submissions'), api.get('/review-levels'),
         api.get('/users?role=reviewer'), api.get('/forms')
       ]);
-      setReviews(r); setSubmissions(s); setLevels(l); setReviewers(u); setForms(f);
+      setReviews(r); setSubmissions(s); setLevels(l); setReviewers(u); setForms(Array.isArray(f) ? f.filter((fm: any) => fm.form_type === 'quiz') : []);
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
   useEffect(() => { fetchData(); }, [statusFilter]);
@@ -195,6 +195,9 @@ export default function Reviews({ user }: { user: User }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div><label className="text-xs font-semibold text-slate-500 mb-1.5 block">Overall Score (0-100)</label>
                     <input type="number" min={0} max={100} value={overallScore} 
+                      onWheel={e => {
+                        e.currentTarget.blur();
+                      }}
                       onChange={e => {
                         const raw = e.target.value;
                         if (raw === '') {

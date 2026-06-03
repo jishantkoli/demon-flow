@@ -6,7 +6,7 @@ import { getCleanFileName } from '../lib/utils';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
-import { Eye, MessageSquare, Filter, Send, FileDown, Inbox, ExternalLink, Archive, User as UserIcon, Mail, Hash, School, Fingerprint, Search, X, SlidersHorizontal, Info, ChevronDown, CheckCircle, Layers, Printer, Download } from 'lucide-react';
+import { Eye, MessageSquare, Filter, Send, FileDown, Inbox, ExternalLink, Archive, User as UserIcon, Mail, Hash, School, Fingerprint, Search, X, SlidersHorizontal, Info, ChevronDown, CheckCircle, Layers, Printer, Download, FileText, Award } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 
@@ -31,6 +31,7 @@ export default function Submissions({ user }: { user: User }) {
   const [newComment, setNewComment] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [forms, setForms] = useState<any[]>([]);
+  const [activeCategory, setActiveCategory] = useState<'normal' | 'quiz'>('normal');
   const [formFilter, setFormFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState<number[]>([]);
   const [showLevelFilterDropdown, setShowLevelFilterDropdown] = useState(false);
@@ -220,19 +221,38 @@ export default function Submissions({ user }: { user: User }) {
       ]);
 
       const fetchedForms = Array.isArray(f) ? f : [];
-      let mappedSubs = (Array.isArray(subs) ? subs : []).map((s: any) => ({
-        ...s,
-        id: s._id || s.id,
-        form_id: s.formId || s.form_id,
-        nomination_id: s.nominationId || s.nomination_id,
-        nomination_token: s.unique_token || s.nominationToken || s.nomination_token,
-        unique_token: s.unique_token || s.nominationToken || s.nomination_token,
-        user_email: s.userEmail || s.user_email,
-        user_name: s.userName || s.user_name,
-        school_code: s.schoolCode || s.school_code,
-        form_title: s.formTitle || s.form_title,
-        submitted_at: s.createdAt || s.submitted_at
-      }));
+      // Filter forms based on activeCategory: normal (all except quiz) or quiz
+      const filteredForms = fetchedForms.filter((form: any) => {
+        if (activeCategory === 'quiz') {
+          return form.form_type === 'quiz';
+        }
+        return form.form_type !== 'quiz';
+      });
+      
+      let mappedSubs = (Array.isArray(subs) ? subs : [])
+        .filter((sub: any) => {
+          // Find the form for this submission
+          const formId = String(typeof sub.form_id === 'object' ? (sub.form_id?._id || sub.form_id?.id) : sub.form_id || sub.formId || '');
+          const form = fetchedForms.find((f: any) => String(f.id || f._id) === formId);
+          // Filter submission based on activeCategory
+          if (activeCategory === 'quiz') {
+            return form?.form_type === 'quiz';
+          }
+          return form?.form_type !== 'quiz';
+        })
+        .map((s: any) => ({
+          ...s,
+          id: s._id || s.id,
+          form_id: s.formId || s.form_id,
+          nomination_id: s.nominationId || s.nomination_id,
+          nomination_token: s.unique_token || s.nominationToken || s.nomination_token,
+          unique_token: s.unique_token || s.nominationToken || s.nomination_token,
+          user_email: s.userEmail || s.user_email,
+          user_name: s.userName || s.user_name,
+          school_code: s.schoolCode || s.school_code,
+          form_title: s.formTitle || s.form_title,
+          submitted_at: s.createdAt || s.submitted_at
+        }));
 
       const selectedForm = formFilter
         ? fetchedForms.find((form: any) => String(form.id || form._id) === String(formFilter))
@@ -309,7 +329,7 @@ export default function Submissions({ user }: { user: User }) {
       }
 
       setSubmissions(mappedSubs);
-      setForms(fetchedForms);
+      setForms(filteredForms);
 
       // Identify and load nomination forms
       const nomFormIds = new Set<string>();
@@ -388,7 +408,7 @@ export default function Submissions({ user }: { user: User }) {
       fetchData();
     }, 300);
     return () => clearTimeout(timer);
-  }, [statusFilter, formFilter, levelFilter, schoolFilter, search]);
+  }, [statusFilter, formFilter, levelFilter, schoolFilter, search, activeCategory]);
 
   const getFilterableFields = () => {
     if (!formFilter) return [];
@@ -1358,6 +1378,49 @@ export default function Submissions({ user }: { user: User }) {
             <button onClick={exportZIP} className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-hover shadow-sm"><Archive size={16} /> Export ZIP</button>
           </div>
         )}
+      </div>
+
+      {/* Category Selection Buttons */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <button
+          onClick={() => { setActiveCategory('normal'); setFormFilter(''); setVisibleFields([]); }}
+          className={`group p-5 rounded-2xl border-2 transition-all text-left ${activeCategory === 'normal' ? 'border-primary bg-primary/5 shadow-lg' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'}`}
+        >
+          <div className="flex items-center gap-4">
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${activeCategory === 'normal' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-primary/10'}`}>
+              <FileText size={24} />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-slate-900">Normal Forms</h3>
+              <p className="text-sm text-slate-500 mt-1">View submissions for standard forms</p>
+            </div>
+            {activeCategory === 'normal' && (
+              <div className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center">
+                <CheckCircle size={16} />
+              </div>
+            )}
+          </div>
+        </button>
+
+        <button
+          onClick={() => { setActiveCategory('quiz'); setFormFilter(''); setVisibleFields([]); }}
+          className={`group p-5 rounded-2xl border-2 transition-all text-left ${activeCategory === 'quiz' ? 'border-primary bg-primary/5 shadow-lg' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'}`}
+        >
+          <div className="flex items-center gap-4">
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${activeCategory === 'quiz' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-primary/10'}`}>
+              <Award size={24} />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-slate-900">Reviewer Grading Forms</h3>
+              <p className="text-sm text-slate-500 mt-1">View submissions for forms with reviewer grading</p>
+            </div>
+            {activeCategory === 'quiz' && (
+              <div className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center">
+                <CheckCircle size={16} />
+              </div>
+            )}
+          </div>
+        </button>
       </div>
 
       <DataTable columns={columns} data={submissions} loading={loading}

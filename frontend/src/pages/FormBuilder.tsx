@@ -359,13 +359,19 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
                         className="input !py-1.5 border-primary/30 focus:border-primary w-full"
                         placeholder="e.g. 10"
                         value={f.reviewer_max_marks === null ? '' : (f.reviewer_max_marks ?? '')}
+                        min="0"
+                        step="1"
+                        onWheel={e => {
+                          e.currentTarget.blur();
+                        }}
                         onChange={e => {
                           const raw = e.target.value;
                           if (raw === '') { 
                             updateField(activeSection, f.id, { reviewer_max_marks: null as any }); 
                           } else { 
-                            const n = parseFloat(raw); 
-                            updateField(activeSection, f.id, { reviewer_max_marks: Number.isFinite(n) ? n : null as any }); 
+                            let n = parseFloat(raw);
+                            if (!Number.isFinite(n) || n < 0) n = 0;
+                            updateField(activeSection, f.id, { reviewer_max_marks: n }); 
                           }
                         }} 
                       />
@@ -382,7 +388,21 @@ function DraggableField({ f, i, activeSection, activeField, setActiveField, upda
                   </label>
                   <label className="text-xs">
                     <span className="text-muted">Max size MB</span>
-                    <input type="number" className="input !py-1.5 mt-1" value={f.maxSizeMB || 5} onChange={e => updateField(activeSection, f.id, { maxSizeMB: +e.target.value })} />
+                    <input 
+                      type="number" 
+                      className="input !py-1.5 mt-1" 
+                      value={f.maxSizeMB || 5} 
+                      min="0"
+                      step="1"
+                      onWheel={e => {
+                        e.currentTarget.blur();
+                      }}
+                      onChange={e => {
+                        let val = +e.target.value;
+                        if (isNaN(val) || val < 0) val = 0;
+                        updateField(activeSection, f.id, { maxSizeMB: val });
+                      }} 
+                    />
                   </label>
                 </div>
               )}

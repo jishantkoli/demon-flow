@@ -25,6 +25,7 @@ export default function ReviewSystem({ user }: { user: User }) {
 
   const navigate = useNavigate();
   const [forms, setForms] = useState<any[]>([]);
+  const [allForms, setAllForms] = useState<any[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<string>('');
   const [shortlistData, setShortlistData] = useState<any>(null);
   const [levels, setLevels] = useState<any[]>([]);
@@ -98,6 +99,15 @@ export default function ReviewSystem({ user }: { user: User }) {
 
   // Export states
   const [showExportConfig, setShowExportConfig] = useState(false);
+
+  // Convert Normal Form to Reviewer Grading Form states
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [selectedNormalFormId, setSelectedNormalFormId] = useState('');
+  const [selectedNormalForm, setSelectedNormalForm] = useState<any>(null);
+  const [normalFormSchema, setNormalFormSchema] = useState<any>(null);
+  const [questionReviewerMarks, setQuestionReviewerMarks] = useState<Record<string, number>>({});
+  const [loadingConvertForm, setLoadingConvertForm] = useState(false);
+  const [savingConversion, setSavingConversion] = useState(false);
   const [showCsvConfig, setShowCsvConfig] = useState(false);
   const [csvSelectedFields, setCsvSelectedFields] = useState<string[]>([]);
   const [exportNamingStrategy, setExportNamingStrategy] = useState('email');
@@ -192,12 +202,15 @@ export default function ReviewSystem({ user }: { user: User }) {
       api.get('/review-levels').catch(() => [])
     ])
       .then(([f, u, l]) => {
-        setForms(Array.isArray(f) ? f.filter((fm: any) => fm.status === 'active' || fm.status === 'expired') : []);
+        const allFormsData = Array.isArray(f) ? f : [];
+        setAllForms(allFormsData);
+        setForms(allFormsData.filter((fm: any) => (fm.status === 'active' || fm.status === 'expired') && fm.form_type === 'quiz'));
         setReviewers(Array.isArray(u) ? u : []);
         setLevels(Array.isArray(l) ? l : []);
       })
       .catch(err => {
         console.error('Error initializing ReviewSystem:', err);
+        setAllForms([]);
         setForms([]);
         setReviewers([]);
         setLevels([]);
@@ -291,6 +304,112 @@ export default function ReviewSystem({ user }: { user: User }) {
       }
     } catch (err) { console.error(err); }
     finally { setLoadingSubs(false); }
+  };
+
+  // Convert Normal Form handlers
+  const handleOpenConvertModal = () => {
+    setShowConvertModal(true);
+    setSelectedNormalFormId('');
+    setSelectedNormalForm(null);
+    setNormalFormSchema(null);
+    setQuestionReviewerMarks({});
+  };
+
+  const handleSelectNormalForm = async (formId: string) => {
+    setSelectedNormalFormId(formId);
+    if (!formId) {
+      setSelectedNormalForm(null);
+      setNormalFormSchema(null);
+      setQuestionReviewerMarks({});
+      return;
+    }
+
+    setLoadingConvertForm(true);
+    try {
+      const formData = await api.get(`/forms?id=${formId}`);
+      const form = Array.isArray(formData) ? formData[0] : formData;
+      setSelectedNormalForm(form);
+
+      // Parse schema
+      const schemaSource = form?.form_schema || form?.schema;
+      let parsedSchema = null;
+      if (schemaSource) {
+        parsedSchema = typeof schemaSource === 'string' ? JSON.parse(schemaSource) : schemaSource;
+      }
+      setNormalFormSchema(parsedSchema);
+
+      // Initialize question marks with existing values if any
+      const initialMarks: Record<string, number> = {};
+      const walkFields = (fields: any[]) => {
+        fields.forEach(field => {
+          if (field?.id && field?.reviewer_max_marks) {
+            initialMarks[field.id] = Number(field.reviewer_max_marks);
+          }
+          if (field?.children && Array.isArray(field.children)) {
+            walkFields(field.children);
+          }
+        });
+      };
+      if (parsedSchema?.sections) {
+        parsedSchema.sections.forEach((s: any) => walkFields(s.fields || []));
+      } else if (parsedSchema?.fields) {
+        walkFields(parsedSchema.fields);
+      } else if (Array.isArray(parsedSchema)) {
+        walkFields(parsedSchema);
+      }
+      setQuestionReviewerMarks(initialMarks);
+    } catch (err) {
+      console.error('Error loading form:', err);
+    } finally {
+      setLoadingConvertForm(false);
+    }
+  };
+
+  const handleSaveConversion = async () => {
+    if (!selectedNormalFormId || !normalFormSchema) return;
+    setSavingConversion(true);
+    try {
+      // Update the schema with reviewer_max_marks
+      const updatedSchema = JSON.parse(JSON.stringify(normalFormSchema));
+      const walkAndUpdateFields = (fields: any[]) => {
+        fields.forEach(field => {
+          if (field?.id) {
+            field.reviewer_max_marks = questionReviewerMarks[field.id] || 0;
+          }
+          if (field?.children && Array.isArray(field.children)) {
+            walkAndUpdateFields(field.children);
+          }
+        });
+      };
+
+      if (updatedSchema?.sections) {
+        updatedSchema.sections.forEach((s: any) => walkAndUpdateFields(s.fields || []));
+      } else if (updatedSchema?.fields) {
+        walkAndUpdateFields(updatedSchema.fields);
+      } else if (Array.isArray(updatedSchema)) {
+        walkAndUpdateFields(updatedSchema);
+      }
+
+      // Update the form
+      await api.put(`/forms/${selectedNormalFormId}`, {
+        form_type: 'quiz',
+        form_schema: typeof normalFormSchema === 'string' ? JSON.stringify(updatedSchema) : updatedSchema
+      });
+
+      alert('Form successfully converted to Reviewer Grading Form!');
+      setShowConvertModal(false);
+      
+      // Refresh forms list
+      const [f] = await Promise.all([api.get('/forms').catch(() => [])]);
+      const allFormsData = Array.isArray(f) ? f : [];
+      setAllForms(allFormsData);
+      setForms(allFormsData.filter((fm: any) => (fm.status === 'active' || fm.status === 'expired') && fm.form_type === 'quiz'));
+    } catch (err) {
+      console.error('Error converting form:', err);
+      alert('Failed to convert form. Please try again.');
+    } finally {
+      setSavingConversion(false);
+    }
   };
 
   const getFormFilterFields = () => {
@@ -816,11 +935,13 @@ export default function ReviewSystem({ user }: { user: User }) {
     const processItem = (fieldId: string, value: any) => {
       if (activeSectionId && !sectionFieldIds.has(String(fieldId))) return null;
       const cfg = fieldMap[fieldId];
+      const reviewerMaxMarks = cfg?.reviewerMaxMarks || 0;
+      if (reviewerMaxMarks <= 0) return null; // Only include questions that need reviewer grading
       return {
         fieldId,
         label: cfg?.label || fieldId,
         value,
-        reviewerMaxMarks: cfg?.reviewerMaxMarks || 0,
+        reviewerMaxMarks,
       };
     };
 
@@ -1774,34 +1895,42 @@ export default function ReviewSystem({ user }: { user: User }) {
             <h1 className="text-xl font-bold font-heading">Review & Shortlisting</h1>
             <p className="text-sm text-slate-500">Manage teacher selection process in 3 simple steps</p>
           </div>
-          {selectedFormId && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={exportCSV}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 shadow-sm transition-all"
-              >
-                <FileDown size={16} /> Export Excel (XLSX)
-              </button>
-              <button
-                onClick={exportZIP}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-hover shadow-sm transition-all"
-              >
-                <Archive size={16} /> Export ZIP
-              </button>
-              <button
-                onClick={zipBulkProfiles}
-                disabled={isBulkZipping}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-xl text-sm font-medium hover:bg-slate-800 shadow-sm transition-all disabled:opacity-50"
-              >
-                {isBulkZipping ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Download size={16} />
-                )}
-                <span>{isBulkZipping ? 'Preparing ZIP...' : 'ZIP Profiles'}</span>
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleOpenConvertModal}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 shadow-sm transition-all"
+            >
+              <Award size={16} /> Convert Normal Form
+            </button>
+            {selectedFormId && (
+              <>
+                <button
+                  onClick={exportCSV}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 shadow-sm transition-all"
+                >
+                  <FileDown size={16} /> Export Excel (XLSX)
+                </button>
+                <button
+                  onClick={exportZIP}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-hover shadow-sm transition-all"
+                >
+                  <Archive size={16} /> Export ZIP
+                </button>
+                <button
+                  onClick={zipBulkProfiles}
+                  disabled={isBulkZipping}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-xl text-sm font-medium hover:bg-slate-800 shadow-sm transition-all disabled:opacity-50"
+                >
+                  {isBulkZipping ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Download size={16} />
+                  )}
+                  <span>{isBulkZipping ? 'Preparing ZIP...' : 'ZIP Profiles'}</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* STEP 1: Form Selection */}
@@ -2964,6 +3093,195 @@ export default function ReviewSystem({ user }: { user: User }) {
             </div>
           </div>
         </Modal>
+
+        {/* Convert Normal Form to Reviewer Grading Form Modal */}
+        <Modal open={showConvertModal} onClose={() => setShowConvertModal(false)}>
+          <div className="space-y-6">
+            <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 space-y-4">
+              <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 shadow-inner">
+                <Award size={28} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-slate-900 tracking-tight">Convert Normal Form to Reviewer Grading</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Select a form and configure which questions require reviewer grading. The form type will be updated to Reviewer Grading (Quiz).
+                </p>
+              </div>
+            </div>
+
+            {/* Form Selection */}
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block">Select Normal Form</label>
+              <select
+                value={selectedNormalFormId}
+                onChange={e => handleSelectNormalForm(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all"
+                disabled={loadingConvertForm}
+              >
+                <option value="">Choose a normal form...</option>
+                {allForms
+                  .filter(f => f.form_type !== 'quiz')
+                  .map(f => (
+                    <option key={f.id} value={f.id}>
+                      {f.title} ({f.status})
+                    </option>
+                  ))}
+              </select>
+              {loadingConvertForm && (
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                  Loading form questions...
+                </div>
+              )}
+            </div>
+
+            {/* Question List */}
+            {normalFormSchema && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Configure Reviewer Questions</h4>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const newMarks: Record<string, number> = {};
+                        const walkFields = (fields: any[]) => {
+                          fields.forEach(field => {
+                            if (field?.id) {
+                              newMarks[field.id] = 10;
+                            }
+                            if (field?.children && Array.isArray(field.children)) {
+                              walkFields(field.children);
+                            }
+                          });
+                        };
+                        if (normalFormSchema?.sections) {
+                          normalFormSchema.sections.forEach((s: any) => walkFields(s.fields || []));
+                        } else if (normalFormSchema?.fields) {
+                          walkFields(normalFormSchema.fields);
+                        } else if (Array.isArray(normalFormSchema)) {
+                          walkFields(normalFormSchema);
+                        }
+                        setQuestionReviewerMarks(newMarks);
+                      }}
+                      className="text-[9px] font-black text-emerald-600 hover:underline uppercase tracking-tighter"
+                    >
+                      Enable All (10 marks each)
+                    </button>
+                    <span className="text-slate-300 text-[9px]">|</span>
+                    <button
+                      onClick={() => setQuestionReviewerMarks({})}
+                      className="text-[9px] font-black text-rose-500 hover:underline uppercase tracking-tighter"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="max-h-[400px] overflow-y-auto space-y-3 px-1">
+                  {(() => {
+                    const allFields: any[] = [];
+                    const walkFields = (fields: any[]) => {
+                      fields.forEach(field => {
+                        if (field?.id) {
+                          allFields.push(field);
+                        }
+                        if (field?.children && Array.isArray(field.children)) {
+                          walkFields(field.children);
+                        }
+                      });
+                    };
+                    if (normalFormSchema?.sections) {
+                      normalFormSchema.sections.forEach((s: any) => walkFields(s.fields || []));
+                    } else if (normalFormSchema?.fields) {
+                      walkFields(normalFormSchema.fields);
+                    } else if (Array.isArray(normalFormSchema)) {
+                      walkFields(normalFormSchema);
+                    }
+
+                    if (allFields.length === 0) {
+                      return (
+                        <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                          <FileText size={32} className="mx-auto text-slate-300 mb-2 opacity-50" />
+                          <p className="text-xs text-slate-500 italic font-medium">No questions found in this form.</p>
+                        </div>
+                      );
+                    }
+
+                    return allFields.map((field, idx) => {
+                      const hasMarks = (questionReviewerMarks[field.id] || 0) > 0;
+                      return (
+                        <div
+                          key={field.id}
+                          className={`p-4 rounded-xl border-2 transition-all ${hasMarks ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200'}`}
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className="flex-1">
+                              <p className="text-sm font-bold text-slate-800">{field.label || `Question ${idx + 1}`}</p>
+                              {field.type && (
+                                <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider">
+                                  Type: {field.type}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2">
+                                <label className="text-[10px] font-bold text-slate-500">Max Marks</label>
+                                <input
+                                  type="number"
+                                  value={questionReviewerMarks[field.id] || ''}
+                                  onChange={e => {
+                                    let val = Number(e.target.value);
+                                    if (isNaN(val) || val < 0) val = 0;
+                                    setQuestionReviewerMarks(prev => ({
+                                      ...prev,
+                                      [field.id]: val
+                                    }));
+                                  }}
+                                  onWheel={e => {
+                                    e.currentTarget.blur();
+                                  }}
+                                  placeholder="0"
+                                  min="0"
+                                  step="1"
+                                  className="w-20 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium outline-none focus:border-emerald-500"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-4 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setShowConvertModal(false)}
+                className="flex-1 py-3.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveConversion}
+                disabled={!selectedNormalFormId || savingConversion}
+                className="flex-[2] py-3.5 bg-emerald-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingConversion ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} /> Convert Form
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </Modal>
       </div>
     );
   }
@@ -3272,7 +3590,11 @@ export default function ReviewSystem({ user }: { user: User }) {
                                     type="number"
                                     min={0}
                                     max={q.reviewerMaxMarks > 0 ? q.reviewerMaxMarks : undefined}
+                                    step="0.01"
                                     value={questionScores[q.fieldId] ?? questionScores[q.label] ?? ''}
+                                    onWheel={e => {
+                                      e.currentTarget.blur();
+                                    }}
                                     onChange={e => {
                                       const raw = e.target.value;
                                       if (raw === '') {
@@ -3325,7 +3647,11 @@ export default function ReviewSystem({ user }: { user: User }) {
                     type="number"
                     min={0}
                     max={100}
+                    step="0.01"
                     value={overallScore}
+                    onWheel={e => {
+                      e.currentTarget.blur();
+                    }}
                     onChange={e => {
                       if (selectedReview.scoring_type === 'question_level') return;
                       const raw = e.target.value;
