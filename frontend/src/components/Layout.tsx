@@ -163,8 +163,8 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
       {/* ===== SIDEBAR — CISCE Deep Blue ===== */}
       <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-[260px] bg-gradient-to-b from-sidebar-light to-sidebar text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="p-4 flex items-center justify-center border-b border-white/10 bg-white/[0.03] relative">
-          <div className="w-20 h-20 flex items-center justify-center overflow-hidden shrink-0">
-            <img src="/logo-sidebar.png" alt="Logo" className="w-20 h-20 object-contain" onError={(e) => {
+          <div className="w-28 h-28 flex items-center justify-center overflow-hidden shrink-0">
+            <img src="/logo-sidebar.png" alt="Logo" className="w-full h-full object-contain" onError={(e) => {
               e.currentTarget.style.display = 'none';
               e.currentTarget.parentElement!.innerHTML = '<span class="text-white font-extrabold text-xs">CISCE</span>';
             }} />
