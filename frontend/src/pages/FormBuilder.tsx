@@ -960,239 +960,237 @@ export default function FormBuilder() {
             </div>
           </Card>
 
-          {activeSection === 0 && (
-            <div className="space-y-4">
-              <Card>
-                <div className="flex items-center gap-2 mb-3"><Settings2 size={16}/><div className="font-semibold">Settings</div></div>
-                <label className="block text-xs"><span className="text-muted">Description</span>
-                  <textarea rows={2} className="textarea mt-1" value={form.description} onChange={e => patch({ description: e.target.value })} placeholder="Form description…" /></label>
-                <div className="grid grid-cols-2 gap-2 mt-3">
-                  <label className="text-xs"><span className="text-muted">Expires</span>
-                    <input type="datetime-local" className="input !py-1.5 mt-1" value={form.expires_at?.slice(0,16) || ''} onChange={e => patch({ expires_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label>
-                  <label className="text-xs block mt-3"><span className="text-muted">Status</span>
-                    <select className="select mt-1" value={form.status} onChange={e => patch({ status: e.target.value as FormState['status'] })}>
-                      <option value="draft">Draft</option><option value="active">Active</option><option value="expired">Expired</option>
-                    </select></label>
-                </div>
+          <div className="space-y-4">
+            <Card>
+              <div className="flex items-center gap-2 mb-3"><Settings2 size={16}/><div className="font-semibold">Settings</div></div>
+              <label className="block text-xs"><span className="text-muted">Description</span>
+                <textarea rows={2} className="textarea mt-1" value={form.description} onChange={e => patch({ description: e.target.value })} placeholder="Form description…" /></label>
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <label className="text-xs"><span className="text-muted">Expires</span>
+                  <input type="datetime-local" className="input !py-1.5 mt-1" value={form.expires_at?.slice(0,16) || ''} onChange={e => patch({ expires_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label>
+                <label className="text-xs block mt-3"><span className="text-muted">Status</span>
+                  <select className="select mt-1" value={form.status} onChange={e => patch({ status: e.target.value as FormState['status'] })}>
+                    <option value="draft">Draft</option><option value="active">Active</option><option value="expired">Expired</option>
+                  </select></label>
+              </div>
 
-                {(form.form_type === 'quiz' || form.form_type === 'multi' || true) && (
-                  <div className="mt-3 pt-3 border-t border-border space-y-2">
-                    <div className="text-xs font-semibold text-ink">Quiz Settings</div>
-                    <label className="text-xs"><span className="text-muted">Time limit (minutes)</span>
-                      <input type="number" className="input !py-1.5 mt-1" value={(form.settings.time_limit_min as string | number | undefined) ?? ''} onChange={e => patchSettings({ time_limit_min: e.target.value === '' ? undefined : (+e.target.value || 30) })} placeholder="30" /></label>
-                    {form.schema.sections.some(s => s.fields.some(f => f.type === 'mcq')) && (
-                      <div className="flex items-center justify-between"><span className="text-sm">Shuffle options</span><Toggle checked={!!form.settings.shuffle} onChange={v => patchSettings({ shuffle: v })} /></div>
-                    )}
-                  </div>
-                )}
-
+              {(form.form_type === 'quiz' || form.form_type === 'multi' || true) && (
                 <div className="mt-3 pt-3 border-t border-border space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-semibold text-ink">School Functionary Only</div>
-                    <Toggle
-                      checked={!!form.settings.functionary_only}
-                      onChange={v => {
-                        patchSettings({ functionary_only: v });
-                        if (v && form.form_type === 'nomination') {
-                          patch({ form_type: 'normal' });
-                        }
-                      }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-muted leading-tight">Enable this to make the form visible and fillable only inside school functionary My Forms.</p>
+                  <div className="text-xs font-semibold text-ink">Quiz Settings</div>
+                  <label className="text-xs"><span className="text-muted">Time limit (minutes)</span>
+                    <input type="number" className="input !py-1.5 mt-1" value={(form.settings.time_limit_min as string | number | undefined) ?? ''} onChange={e => patchSettings({ time_limit_min: e.target.value === '' ? undefined : (+e.target.value || 30) })} placeholder="30" /></label>
+                  {form.schema.sections.some(s => s.fields.some(f => f.type === 'mcq')) && (
+                    <div className="flex items-center justify-between"><span className="text-sm">Shuffle options</span><Toggle checked={!!form.settings.shuffle} onChange={v => patchSettings({ shuffle: v })} /></div>
+                  )}
                 </div>
+              )}
 
-                <div className="mt-3 pt-3 border-t border-border space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-semibold text-ink">Nomination Mode</div>
-                    <Toggle 
-                      checked={form.form_type === 'nomination'} 
-                      onChange={v => {
-                        patch({ form_type: v ? 'nomination' : 'normal' });
-                        // Automatically switch auth_mode based on nomination mode
-                        patchSettings({ auth_mode: v ? 'otp' : 'anonymous', functionary_only: v ? false : !!form.settings.functionary_only });
-                      }} 
-                    />
-                  </div>
-                  <p className="text-[10px] text-muted leading-tight">Enable this to use this form for school-based teacher nominations.</p>
+              <div className="mt-3 pt-3 border-t border-border space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold text-ink">School Functionary Only</div>
+                  <Toggle
+                    checked={!!form.settings.functionary_only}
+                    onChange={v => {
+                      patchSettings({ functionary_only: v });
+                      if (v && form.form_type === 'nomination') {
+                        patch({ form_type: 'normal' });
+                      }
+                    }}
+                  />
+                </div>
+                <p className="text-[10px] text-muted leading-tight">Enable this to make the form visible and fillable only inside school functionary My Forms.</p>
+              </div>
+
+              <div className="mt-3 pt-3 border-t border-border space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold text-ink">Nomination Mode</div>
+                  <Toggle 
+                    checked={form.form_type === 'nomination'} 
+                    onChange={v => {
+                      patch({ form_type: v ? 'nomination' : 'normal' });
+                      // Automatically switch auth_mode based on nomination mode
+                      patchSettings({ auth_mode: v ? 'otp' : 'anonymous', functionary_only: v ? false : !!form.settings.functionary_only });
+                    }} 
+                  />
+                </div>
+                <p className="text-[10px] text-muted leading-tight">Enable this to use this form for school-based teacher nominations.</p>
+                
+                <div className="flex items-center justify-between pt-2">
+                  <span className="text-[10px] font-bold text-muted uppercase tracking-tight">Access Mode</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                    (form.settings.auth_mode as string) === 'otp' 
+                      ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                      : 'bg-slate-50 text-slate-500 border-slate-100'
+                  }`}>
+                    {(form.settings.auth_mode as string) === 'otp' ? 'OTP Verification' : 'Direct Access'}
+                  </span>
+                </div>
+              </div>
+
+              {(form.form_type === 'nomination') && (
+                <div className="mt-3 pt-3 border-t border-border space-y-4">
+                  <div className="text-xs font-semibold text-ink">Nomination Settings</div>
                   
-                  <div className="flex items-center justify-between pt-2">
-                    <span className="text-[10px] font-bold text-muted uppercase tracking-tight">Access Mode</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
-                      (form.settings.auth_mode as string) === 'otp' 
-                        ? 'bg-blue-50 text-blue-600 border-blue-100' 
-                        : 'bg-slate-50 text-slate-500 border-slate-100'
-                    }`}>
-                      {(form.settings.auth_mode as string) === 'otp' ? 'OTP Verification' : 'Direct Access'}
-                    </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-xs"><span className="text-muted">Limit (per school)</span>
+                      <input 
+                        type="number" 
+                        className="input !py-1.5 mt-1" 
+                        value={(form.settings.nomination_limit as string | number | undefined) ?? ''} 
+                        placeholder="5"
+                        onChange={e => {
+                          const raw = e.target.value;
+                          if (raw === '') {
+                            patchSettings({ nomination_limit: undefined });
+                          } else {
+                            const num = parseFloat(raw);
+                            patchSettings({ nomination_limit: Number.isFinite(num) ? num : undefined });
+                          }
+                        }} 
+                      />
+                    </label>
+                    <label className="text-xs block"><span className="text-muted">Login Type</span>
+                      <select className="select mt-1" value={(form.settings.teacher_login as string) || 'otp'} onChange={e => patchSettings({ teacher_login: e.target.value })}>
+                        <option value="otp">OTP via Link</option>
+                        <option value="direct">Direct Access</option>
+                      </select></label>
                   </div>
-                </div>
+                  
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Email</span><Toggle checked={form.settings.require_email !== false} onChange={v => patchSettings({ require_email: v })} /></div>
+                    <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Phone</span><Toggle checked={!!form.settings.require_phone} onChange={v => patchSettings({ require_phone: v })} /></div>
+                  </div>
 
-                {(form.form_type === 'nomination') && (
-                  <div className="mt-3 pt-3 border-t border-border space-y-4">
-                    <div className="text-xs font-semibold text-ink">Nomination Settings</div>
-                    
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="text-xs"><span className="text-muted">Limit (per school)</span>
-                        <input 
-                          type="number" 
-                          className="input !py-1.5 mt-1" 
-                          value={(form.settings.nomination_limit as string | number | undefined) ?? ''} 
-                          placeholder="5"
-                          onChange={e => {
-                            const raw = e.target.value;
-                            if (raw === '') {
-                              patchSettings({ nomination_limit: undefined });
-                            } else {
-                              const num = parseFloat(raw);
-                              patchSettings({ nomination_limit: Number.isFinite(num) ? num : undefined });
-                            }
-                          }} 
-                        />
-                      </label>
-                      <label className="text-xs block"><span className="text-muted">Login Type</span>
-                        <select className="select mt-1" value={(form.settings.teacher_login as string) || 'otp'} onChange={e => patchSettings({ teacher_login: e.target.value })}>
-                          <option value="otp">OTP via Link</option>
-                          <option value="direct">Direct Access</option>
-                        </select></label>
+                  <div className="pt-2 border-t border-border">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-[10px] font-bold uppercase text-muted">Custom Nomination Fields</div>
+                      <button 
+                        onClick={() => {
+                          const current = (form.settings.nomination_custom_fields as any[]) || [];
+                          patchSettings({ 
+                            nomination_custom_fields: [
+                              ...current, 
+                              { id: `cf_${Date.now()}`, label: '', type: 'text', required: false }
+                            ] 
+                          });
+                        }}
+                        className="text-[10px] text-primary hover:underline font-bold"
+                      >
+                        + Add Field
+                      </button>
                     </div>
                     
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Email</span><Toggle checked={form.settings.require_email !== false} onChange={v => patchSettings({ require_email: v })} /></div>
-                      <div className="flex items-center justify-between"><span className="text-sm">Require Teacher Phone</span><Toggle checked={!!form.settings.require_phone} onChange={v => patchSettings({ require_phone: v })} /></div>
-                    </div>
-
-                    <div className="pt-2 border-t border-border">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-[10px] font-bold uppercase text-muted">Custom Nomination Fields</div>
-                        <button 
-                          onClick={() => {
-                            const current = (form.settings.nomination_custom_fields as any[]) || [];
-                            patchSettings({ 
-                              nomination_custom_fields: [
-                                ...current, 
-                                { id: `cf_${Date.now()}`, label: '', type: 'text', required: false }
-                              ] 
-                            });
-                          }}
-                          className="text-[10px] text-primary hover:underline font-bold"
-                        >
-                          + Add Field
-                        </button>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        {((form.settings.nomination_custom_fields as any[]) || []).map((cf, cfi) => (
-                          <div key={cf.id || cfi} className="flex flex-col gap-1.5 p-2 bg-slate-50 rounded-lg border border-slate-200">
-                            <div className="flex items-center gap-2">
-                              <input className="input !py-1 flex-1 text-xs" placeholder="Field Label" value={cf.label} 
-                                onChange={e => {
-                                  const newFields = [...(form.settings.nomination_custom_fields as any[])];
-                                  newFields[cfi] = { ...cf, label: e.target.value };
-                                  patchSettings({ nomination_custom_fields: newFields });
-                                }} />
-                              <button onClick={() => {
-                                const newFields = (form.settings.nomination_custom_fields as any[]).filter((_, i) => i !== cfi);
+                    <div className="space-y-2">
+                      {((form.settings.nomination_custom_fields as any[]) || []).map((cf, cfi) => (
+                        <div key={cf.id || cfi} className="flex flex-col gap-1.5 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                          <div className="flex items-center gap-2">
+                            <input className="input !py-1 flex-1 text-xs" placeholder="Field Label" value={cf.label} 
+                              onChange={e => {
+                                const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                                newFields[cfi] = { ...cf, label: e.target.value };
                                 patchSettings({ nomination_custom_fields: newFields });
-                              }} className="text-rose-500 p-1 hover:bg-rose-50 rounded"><Trash2 size={12} /></button>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <select className="select !py-1 text-[10px] flex-1" value={cf.type} 
-                                onChange={e => {
-                                  const newFields = [...(form.settings.nomination_custom_fields as any[])];
-                                  newFields[cfi] = { ...cf, type: e.target.value };
-                                  patchSettings({ nomination_custom_fields: newFields });
-                                }}>
-                                <option value="text">Text</option>
-                                <option value="textarea">Paragraph</option>
-                                <option value="number">Number</option>
-                                <option value="date">Date</option>
-                                <option value="file">File Upload</option>
-                                <option value="dropdown">Dropdown</option>
-                              </select>
-                              <label className="flex items-center gap-1 text-[10px] cursor-pointer">
-                                <input type="checkbox" checked={cf.required} onChange={e => {
-                                  const newFields = [...(form.settings.nomination_custom_fields as any[])];
-                                  newFields[cfi] = { ...cf, required: e.target.checked };
-                                  patchSettings({ nomination_custom_fields: newFields });
-                                }} /> Req
-                              </label>
-                            </div>
-                            {['dropdown', 'radio', 'checkbox'].includes(cf.type) && (
-                              <input className="input !py-1 text-[10px]" placeholder="Options (comma separated)" value={cf.optionsInput ?? (cf.options?.join(', ') || '')} 
-                                onChange={e => {
-                                  const newFields = [...(form.settings.nomination_custom_fields as any[])];
-                                  const raw = e.target.value;
-                                  newFields[cfi] = { ...cf, optionsInput: raw, options: raw.split(',').map(s => s.trim()).filter(Boolean) };
-                                  patchSettings({ nomination_custom_fields: newFields });
-                                }} />
-                            )}
+                              }} />
+                            <button onClick={() => {
+                              const newFields = (form.settings.nomination_custom_fields as any[]).filter((_, i) => i !== cfi);
+                              patchSettings({ nomination_custom_fields: newFields });
+                            }} className="text-rose-500 p-1 hover:bg-rose-50 rounded"><Trash2 size={12} /></button>
                           </div>
-                        ))}
-                        {((form.settings.nomination_custom_fields as any[]) || []).length === 0 && (
-                          <p className="text-[10px] text-muted text-center py-2 italic">No custom fields added yet.</p>
-                        )}
-                      </div>
+                          <div className="flex items-center gap-2">
+                            <select className="select !py-1 text-[10px] flex-1" value={cf.type} 
+                              onChange={e => {
+                                const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                                newFields[cfi] = { ...cf, type: e.target.value };
+                                patchSettings({ nomination_custom_fields: newFields });
+                              }}>
+                              <option value="text">Text</option>
+                              <option value="textarea">Paragraph</option>
+                              <option value="number">Number</option>
+                              <option value="date">Date</option>
+                              <option value="file">File Upload</option>
+                              <option value="dropdown">Dropdown</option>
+                            </select>
+                            <label className="flex items-center gap-1 text-[10px] cursor-pointer">
+                              <input type="checkbox" checked={cf.required} onChange={e => {
+                                const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                                newFields[cfi] = { ...cf, required: e.target.checked };
+                                patchSettings({ nomination_custom_fields: newFields });
+                              }} /> Req
+                            </label>
+                          </div>
+                          {['dropdown', 'radio', 'checkbox'].includes(cf.type) && (
+                            <input className="input !py-1 text-[10px]" placeholder="Options (comma separated)" value={cf.optionsInput ?? (cf.options?.join(', ') || '')} 
+                              onChange={e => {
+                                const newFields = [...(form.settings.nomination_custom_fields as any[])];
+                                const raw = e.target.value;
+                                newFields[cfi] = { ...cf, optionsInput: raw, options: raw.split(',').map(s => s.trim()).filter(Boolean) };
+                                patchSettings({ nomination_custom_fields: newFields });
+                              }} />
+                          )}
+                        </div>
+                      ))}
+                      {((form.settings.nomination_custom_fields as any[]) || []).length === 0 && (
+                        <p className="text-[10px] text-muted text-center py-2 italic">No custom fields added yet.</p>
+                      )}
                     </div>
                   </div>
-                )}
-              </Card>
+                </div>
+              )}
+            </Card>
 
-              {/* 🏁 Thank You Page Settings */}
-              <Card>
-                <div className="flex items-center gap-2 mb-3">
-                  {SuccessIcon && <SuccessIcon size={16}/>}
-                  <div className="font-semibold">Thank You Page</div>
+            {/* 🏁 Thank You Page Settings */}
+            <Card>
+              <div className="flex items-center gap-2 mb-3">
+                {SuccessIcon && <SuccessIcon size={16}/>}
+                <div className="font-semibold">Thank You Page</div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Heading</label>
+                  <input 
+                    type="text" 
+                    className="input !py-1.5 text-sm" 
+                    value={form.settings.thank_you_heading as string || 'Thank You!'} 
+                    onChange={e => patchSettings({ thank_you_heading: e.target.value })}
+                    placeholder="Thank You!"
+                  />
                 </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Heading</label>
-                    <input 
-                      type="text" 
-                      className="input !py-1.5 text-sm" 
-                      value={form.settings.thank_you_heading as string || 'Thank You!'} 
-                      onChange={e => patchSettings({ thank_you_heading: e.target.value })}
-                      placeholder="Thank You!"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Message</label>
-                    <textarea 
-                      className="textarea text-sm" 
-                      rows={2} 
-                      value={form.settings.thank_you_message as string || ''} 
-                      onChange={e => patchSettings({ thank_you_message: e.target.value })}
-                      placeholder="Your response has been recorded."
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Redirect URL (optional)</label>
-                    <input 
-                      type="text" 
-                      className="input !py-1.5 text-sm" 
-                      value={form.settings.redirect_url as string || ''} 
-                      onChange={e => patchSettings({ redirect_url: e.target.value })}
-                      placeholder="https://your-website.com"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] font-semibold text-ink">Show score after submit</span>
-                    <Toggle 
-                      checked={form.settings.show_score_after_submit !== false} 
-                      onChange={v => patchSettings({ show_score_after_submit: v })} 
-                    />
-                  </div>
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] font-semibold text-ink">Allow edit response</span>
-                    <Toggle 
-                      checked={!!form.allowEdit} 
-                      onChange={v => patch({ allowEdit: v })} 
-                    />
-                  </div>
+                <div>
+                  <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Message</label>
+                  <textarea 
+                    className="textarea text-sm" 
+                    rows={2} 
+                    value={form.settings.thank_you_message as string || ''} 
+                    onChange={e => patchSettings({ thank_you_message: e.target.value })}
+                    placeholder="Your response has been recorded."
+                  />
                 </div>
-              </Card>
-            </div>
-          )}
+                <div>
+                  <label className="text-[10px] font-bold text-muted uppercase mb-1 block">Redirect URL (optional)</label>
+                  <input 
+                    type="text" 
+                    className="input !py-1.5 text-sm" 
+                    value={form.settings.redirect_url as string || ''} 
+                    onChange={e => patchSettings({ redirect_url: e.target.value })}
+                    placeholder="https://your-website.com"
+                  />
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] font-semibold text-ink">Show score after submit</span>
+                  <Toggle 
+                    checked={form.settings.show_score_after_submit !== false} 
+                    onChange={v => patchSettings({ show_score_after_submit: v })} 
+                  />
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] font-semibold text-ink">Allow edit response</span>
+                  <Toggle 
+                    checked={!!form.allowEdit} 
+                    onChange={v => patch({ allowEdit: v })} 
+                  />
+                </div>
+              </div>
+            </Card>
+          </div>
 
           <Card>
             <div className="font-semibold mb-2 flex items-center gap-2"><Link2 size={15}/> Share</div>
