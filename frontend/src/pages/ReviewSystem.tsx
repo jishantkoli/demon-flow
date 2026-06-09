@@ -3094,7 +3094,7 @@ export default function ReviewSystem({ user }: { user: User }) {
           </div>
         </Modal>
 
-        {/* Convert Normal Form to Reviewer Grading Form Modal */}
+        {/* Convert Normal Form to Reviewer Grading Form Modal - Vercel Fix */}
         <Modal open={showConvertModal} onClose={() => setShowConvertModal(false)} title="Convert Normal Form to Reviewer Grading">
           <div className="space-y-6">
             <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 space-y-4">
