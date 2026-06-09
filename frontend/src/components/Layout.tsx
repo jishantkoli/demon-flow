@@ -193,7 +193,7 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
                     ? 'bg-white text-primary shadow-lg shadow-black/10'
                     : 'text-white/70 hover:bg-white/10 hover:text-white'
                 }`}>
-                <item.icon size={17} className={active ? 'text-primary' : 'text-white/50'} />
+                <item.icon size={24} className={active ? 'text-primary' : 'text-white/50'} />
                 {(sidebarExpanded || sidebarOpen) && <span className="whitespace-nowrap">{item.label}</span>}
               </Link>
             );
