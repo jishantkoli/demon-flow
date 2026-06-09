@@ -146,7 +146,7 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
 
   return (
     <div className="min-h-screen bg-surface text-fg flex">
-      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden cursor-pointer" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {sessionWarning && (
         <div className="fixed top-0 left-0 right-0 z-[200] bg-warning text-white px-4 py-2 text-center text-sm font-bold flex items-center justify-center gap-2">
@@ -170,7 +170,7 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
         onMouseLeave={() => setSidebarExpanded(false)}
       >
         <div className="p-4 flex items-center gap-3 border-b border-white/10 bg-white/[0.03]">
-          <div className="w-10 h-10 lg:w-20 lg:h-20 flex items-center justify-center overflow-hidden shrink-0">
+          <div className="w-14 h-14 flex items-center justify-center overflow-hidden shrink-0">
             <img src="/logo-sidebar.png" alt="Logo" className="w-full h-full object-contain" onError={(e) => {
               e.currentTarget.style.display = 'none';
               e.currentTarget.parentElement!.innerHTML = '<span class="text-white font-extrabold text-xs">CISCE</span>';
