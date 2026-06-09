@@ -146,7 +146,7 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
 
   return (
     <div className="min-h-screen bg-surface text-fg flex">
-      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden cursor-pointer" onClick={() => setSidebarOpen(false)} />}
 
       {sessionWarning && (
         <div className="fixed top-0 left-0 right-0 z-[200] bg-warning text-white px-4 py-2 text-center text-sm font-bold flex items-center justify-center gap-2">
