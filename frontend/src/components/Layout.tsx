@@ -173,23 +173,18 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
       <aside 
         className={`fixed top-0 left-0 z-50 h-screen bg-gradient-to-b from-sidebar-light to-sidebar text-white flex flex-col transition-all duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 w-[280px] lg:w-auto ${sidebarExpanded ? 'lg:w-[260px]' : 'lg:w-[96px]'}`}
+        } lg:translate-x-0 w-[280px] lg:w-auto ${sidebarExpanded ? 'lg:w-[260px]' : 'lg:w-[112px]'}`}
         onMouseEnter={() => setSidebarExpanded(true)}
         onMouseLeave={() => setSidebarExpanded(false)}
       >
-        <div className="p-4 flex items-center gap-3 border-b border-white/10 bg-white/[0.03]">
-          <div className="w-16 h-16 flex items-center justify-center overflow-hidden shrink-0">
+        <div className="p-4 flex items-center justify-center border-b border-white/10 bg-white/[0.03]">
+          <div className="w-20 h-20 flex items-center justify-center overflow-hidden shrink-0">
             <img src="/logo-sidebar.png" alt="CISCE Logo" className="w-full h-full object-contain" onError={(e) => {
               e.currentTarget.style.display = 'none';
               e.currentTarget.parentElement!.innerHTML = '<span class="text-white font-extrabold text-xs">CISCE</span>';
             }} />
           </div>
-          {/* Always show title on mobile */}
-          <div className="flex-1 min-w-0">
-            <h1 className="font-heading font-bold text-[15px] leading-tight tracking-tight text-white">CISCE Portal</h1>
-            <p className="text-[9px] text-white/60 uppercase tracking-[0.15em]">Official System</p>
-          </div>
-          <button className="lg:hidden text-white/60 hover:text-white" onClick={() => setSidebarOpen(false)}><X size={20} /></button>
+          <button className="lg:hidden absolute top-4 right-4 text-white/60 hover:text-white" onClick={() => setSidebarOpen(false)}><X size={20} /></button>
         </div>
 
         {/* Always show school code on mobile if present */}
