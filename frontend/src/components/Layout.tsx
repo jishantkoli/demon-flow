@@ -49,7 +49,6 @@ function getNav(role: string) {
 
 export default function Layout({ user, onLogout, children }: { user: User; onLogout: () => void; children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarExpanded, setSidebarExpanded] = useState(false); // New state for desktop hover
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -146,7 +145,7 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
 
   return (
     <div className="min-h-screen bg-surface text-fg flex">
-
+      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {sessionWarning && (
         <div className="fixed top-0 left-0 right-0 z-[200] bg-warning text-white px-4 py-2 text-center text-sm font-bold flex items-center justify-center gap-2">
@@ -162,33 +161,22 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
       )}
 
       {/* ===== SIDEBAR — CISCE Deep Blue ===== */}
-      {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      
-      <aside 
-        className={`fixed top-0 left-0 z-50 h-screen bg-gradient-to-b from-sidebar-light to-sidebar text-white flex flex-col transition-all duration-300 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 w-[280px] lg:w-auto ${sidebarExpanded ? 'lg:w-[260px]' : 'lg:w-[112px]'}`}
-        onMouseEnter={() => setSidebarExpanded(true)}
-        onMouseLeave={() => setSidebarExpanded(false)}
-      >
-        <div className="p-4 flex items-center justify-center border-b border-white/10 bg-white/[0.03]">
+      <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-[260px] bg-gradient-to-b from-sidebar-light to-sidebar text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="p-4 flex items-center gap-3 border-b border-white/10 bg-white/[0.03]">
           <div className="w-20 h-20 flex items-center justify-center overflow-hidden shrink-0">
-            <img src="/logo-sidebar.png" alt="CISCE Logo" className="w-full h-full object-contain" onError={(e) => {
+            <img src="/logo-sidebar.png" alt="Logo" className="w-20 h-20 object-contain" onError={(e) => {
               e.currentTarget.style.display = 'none';
               e.currentTarget.parentElement!.innerHTML = '<span class="text-white font-extrabold text-xs">CISCE</span>';
             }} />
           </div>
-          <button className="lg:hidden absolute top-4 right-4 text-white/60 hover:text-white" onClick={() => setSidebarOpen(false)}><X size={20} /></button>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-heading font-bold text-[15px] leading-tight tracking-tight text-white">CISCE Portal</h1>
+            <p className="text-[9px] text-white/60 uppercase tracking-[0.15em]">Official System</p>
+          </div>
+          <button className="lg:hidden text-white/60 hover:text-white" onClick={() => setSidebarOpen(false)}><X size={20} /></button>
         </div>
 
-        {/* Always show school code on mobile if present */}
-        {(sidebarOpen || sidebarExpanded) && schoolCode && (
+        {schoolCode && (
           <div className="mx-4 mt-3 px-3 py-2 rounded-xl bg-white/10 border border-white/10">
             <p className="text-[9px] text-white/60 uppercase tracking-wider font-bold">School Code</p>
             <p className="text-sm font-bold text-white">{schoolCode}</p>
@@ -200,27 +188,25 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
             const active = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
             return (
               <Link key={item.path} to={item.path} onClick={() => setSidebarOpen(false)}
-                className={`flex items-center ${sidebarOpen || sidebarExpanded ? 'gap-3 px-3' : 'justify-center px-1'} py-2.5 rounded-xl text-[13px] font-medium transition-all ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all ${
                   active
                     ? 'bg-white text-primary shadow-lg shadow-black/10'
                     : 'text-white/70 hover:bg-white/10 hover:text-white'
                 }`}>
                 <item.icon size={17} className={active ? 'text-primary' : 'text-white/50'} />
-                {(sidebarOpen || sidebarExpanded) && <span className="whitespace-nowrap">{item.label}</span>}
+                {item.label}
               </Link>
             );
           })}
         </nav>
 
         <div className="p-4 border-t border-white/10">
-          <div className={`flex items-center ${sidebarOpen || sidebarExpanded ? 'gap-3' : 'justify-center'}`}>
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold text-white border border-white/10 shrink-0">{user.name?.charAt(0)?.toUpperCase()}</div>
-            {(sidebarOpen || sidebarExpanded) && (
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate text-white">{user.name}</p>
-                <p className="text-[10px] text-white/40 capitalize">{user.role}{schoolCode ? ` · ${schoolCode}` : ''}</p>
-              </div>
-            )}
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold text-white border border-white/10">{user.name?.charAt(0)?.toUpperCase()}</div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium truncate text-white">{user.name}</p>
+              <p className="text-[10px] text-white/40 capitalize">{user.role}{schoolCode ? ` · ${schoolCode}` : ''}</p>
+            </div>
           </div>
         </div>
       </aside>
