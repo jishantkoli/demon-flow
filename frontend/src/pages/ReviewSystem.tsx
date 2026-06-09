@@ -3581,53 +3581,51 @@ export default function ReviewSystem({ user }: { user: User }) {
                               </div>
                             )}
 
-                            {/* Right: Current Reviewer Input */}
-                            <div className="space-y-2">
-                              <label className="text-[9px] font-black text-primary uppercase tracking-widest block px-1">Your Score</label>
-                              <div className="bg-primary/5 rounded-xl border border-primary/10 p-3 flex items-center gap-4">
-                                <div className="flex-1">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={q.reviewerMaxMarks > 0 ? q.reviewerMaxMarks : undefined}
-                                    step="0.01"
-                                    value={questionScores[q.fieldId] ?? questionScores[q.label] ?? ''}
-                                    onWheel={e => {
-                                      e.currentTarget.blur();
-                                    }}
-                                    onChange={e => {
-                                      const raw = e.target.value;
-                                      if (raw === '') {
-                                        const newScores = { ...questionScores, [q.fieldId]: '' };
-                                        setQuestionScores(newScores);
-                                        return;
-                                      }
-                                      
-                                      // Only allow numbers
-                                      if (!/^\d*\.?\d*$/.test(raw)) return;
-                                      
-                                      const rawVal = parseFloat(raw);
-                                      if (isNaN(rawVal)) return;
+                            {/* Right: Current Reviewer Input - Only show if reviewerMaxMarks is set */}
+                            {q.reviewerMaxMarks != null && q.reviewerMaxMarks > 0 && (
+                              <div className="space-y-2">
+                                <label className="text-[9px] font-black text-primary uppercase tracking-widest block px-1">Your Score</label>
+                                <div className="bg-primary/5 rounded-xl border border-primary/10 p-3 flex items-center gap-4">
+                                  <div className="flex-1">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={q.reviewerMaxMarks}
+                                      step="0.01"
+                                      value={questionScores[q.fieldId] ?? questionScores[q.label] ?? ''}
+                                      onWheel={e => {
+                                        e.currentTarget.blur();
+                                      }}
+                                      onChange={e => {
+                                        const raw = e.target.value;
+                                        if (raw === '') {
+                                          const newScores = { ...questionScores, [q.fieldId]: '' };
+                                          setQuestionScores(newScores);
+                                          return;
+                                        }
+                                        
+                                        // Only allow numbers
+                                        if (!/^\d*\.?\d*$/.test(raw)) return;
+                                        
+                                        const rawVal = parseFloat(raw);
+                                        if (isNaN(rawVal)) return;
 
-                                      // Hard validation: 0 to max_marks (or 100 if no max_marks)
-                                      const maxLimit = q.reviewerMaxMarks > 0 ? q.reviewerMaxMarks : 100;
-                                      const cappedVal = Math.min(maxLimit, Math.max(0, rawVal));
-                                      
-                                      const newScores = { ...questionScores, [q.fieldId]: cappedVal };
-                                      setQuestionScores(newScores);
-                                    }}
-                                    className="w-full bg-white px-4 py-2.5 rounded-lg border border-primary/20 text-lg font-black text-primary outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
-                                    placeholder="Enter marks"
-                                  />
-                                </div>
-                                {q.reviewerMaxMarks > 0 && (
+                                        const cappedVal = Math.min(q.reviewerMaxMarks, Math.max(0, rawVal));
+                                        
+                                        const newScores = { ...questionScores, [q.fieldId]: cappedVal };
+                                        setQuestionScores(newScores);
+                                      }}
+                                      className="w-full bg-white px-4 py-2.5 rounded-lg border border-primary/20 text-lg font-black text-primary outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
+                                      placeholder="Enter marks"
+                                    />
+                                  </div>
                                   <div className="text-right flex flex-col justify-center">
                                     <span className="text-[8px] font-bold text-slate-400 uppercase leading-none mb-1">Max Limit</span>
                                     <span className="text-xs font-black text-slate-600 leading-none">{q.reviewerMaxMarks}</span>
                                   </div>
-                                )}
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         )}
                       </div>
