@@ -165,13 +165,13 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
       <aside 
         className={`fixed lg:sticky top-0 left-0 z-50 h-screen bg-gradient-to-b from-sidebar-light to-sidebar text-white flex flex-col transition-all duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 ${sidebarExpanded ? 'lg:w-[260px]' : 'lg:w-[80px]'}`}
+        } lg:translate-x-0 ${sidebarExpanded ? 'lg:w-[260px]' : 'lg:w-[96px]'}`}
         onMouseEnter={() => setSidebarExpanded(true)}
         onMouseLeave={() => setSidebarExpanded(false)}
       >
         <div className="p-4 flex items-center gap-3 border-b border-white/10 bg-white/[0.03]">
-          <div className="w-14 h-14 flex items-center justify-center overflow-hidden shrink-0">
-            <img src="/logo-sidebar.png" alt="Logo" className="w-full h-full object-contain" onError={(e) => {
+          <div className="w-16 h-16 flex items-center justify-center overflow-hidden shrink-0">
+            <img src="/logo-sidebar.png" alt="CISCE Logo" className="w-full h-full object-contain" onError={(e) => {
               e.currentTarget.style.display = 'none';
               e.currentTarget.parentElement!.innerHTML = '<span class="text-white font-extrabold text-xs">CISCE</span>';
             }} />
@@ -197,7 +197,7 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
             const active = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
             return (
               <Link key={item.path} to={item.path} onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all ${
+                className={`flex items-center ${sidebarExpanded ? 'gap-3 px-3' : 'justify-center px-1'} py-2.5 rounded-xl text-[13px] font-medium transition-all ${
                   active
                     ? 'bg-white text-primary shadow-lg shadow-black/10'
                     : 'text-white/70 hover:bg-white/10 hover:text-white'
@@ -210,7 +210,7 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
         </nav>
 
         <div className="p-4 border-t border-white/10">
-          <div className="flex items-center gap-3">
+          <div className={`flex items-center ${sidebarExpanded ? 'gap-3' : 'justify-center'}`}>
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold text-white border border-white/10 shrink-0">{user.name?.charAt(0)?.toUpperCase()}</div>
             {sidebarExpanded && (
               <div className="flex-1 min-w-0">
