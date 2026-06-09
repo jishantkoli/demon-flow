@@ -162,12 +162,12 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
       )}
 
       {/* ===== SIDEBAR — CISCE Deep Blue ===== */}
-      <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen bg-gradient-to-b from-sidebar-light to-sidebar text-white flex flex-col transition-all duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} ${sidebarExpanded ? 'lg:w-[260px]' : 'lg:w-[120px]'}`}
+      <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen bg-gradient-to-b from-sidebar-light to-sidebar text-white flex flex-col transition-all duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} ${sidebarExpanded ? 'lg:w-[260px]' : 'lg:w-[80px]'}`}
              onMouseEnter={() => setSidebarExpanded(true)}
              onMouseLeave={() => setSidebarExpanded(false)}
       >
         <div className="p-4 flex items-center justify-center border-b border-white/10 bg-white/[0.03] relative">
-          <div className="w-20 h-20 flex items-center justify-center overflow-hidden shrink-0">
+          <div className={`flex items-center justify-center overflow-hidden shrink-0 ${sidebarExpanded || sidebarOpen ? 'w-20 h-20' : 'w-10 h-10'}`}>
             <img src="/logo-sidebar.png" alt="Logo" className="w-full h-full object-contain" style={{ filter: 'none', mixBlendMode: 'normal' }} onError={(e) => {
               e.currentTarget.style.display = 'none';
               e.currentTarget.parentElement!.innerHTML = '<span class="text-white font-extrabold text-xs">CISCE</span>';
@@ -193,7 +193,7 @@ export default function Layout({ user, onLogout, children }: { user: User; onLog
                     ? 'bg-white text-primary shadow-lg shadow-black/10'
                     : 'text-white/70 hover:bg-white/10 hover:text-white'
                 }`}>
-                <item.icon size={24} className={active ? 'text-primary' : 'text-white/50'} />
+                <item.icon size={17} className={active ? 'text-primary' : 'text-white/50'} />
                 {(sidebarExpanded || sidebarOpen) && <span className="whitespace-nowrap">{item.label}</span>}
               </Link>
             );
